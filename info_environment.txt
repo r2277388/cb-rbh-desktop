@@ -1,0 +1,20 @@
+How to change directories:
+cd /mnt/e
+to change anaconda prompt to E --> E:
+
+To activate an env:
+conda activate [name of environment]
+	spyder-env
+	base
+
+Install pyodbc
+conda install -c conda-forge pyodbc
+
+Make a New Environment
+conda create -n new-env python=3.9
+conda activate new-env
+conda install -c conda-forge pyodbc
+
+Updating conda:
+conda update conda
+

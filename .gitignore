@@ -1,0 +1,26 @@
+amazon_po/.venv
+amazon_preorders/.venv
+pickle_raw_data/.venv
+ssr_daily_summary/.venv
+
+# Ignore the virtual environment in the misc/amazon_roi directory
+misc/amazon_roi/.venv
+
+# Ignore all CSV files in the xgboost directory
+xgboost/*.csv
+
+# Ignore the virtual environment in the xgboost directory
+xgboost/.venv
+
+# Ignore all CSV files in the root directory
+/*.csv
+
+# Ignore specific CSV files in the root directory
+pgrp_flbl_forecasts.csv
+pgrp_forecasts.csv
+
+# Ignore specific cache files in the reprint_project/cache directory
+reprint_project/cache/saldet_cache.pkl
+reprint_project/cache/hachette_order_status_cache.pkl
+reprint_project/cache/inventory_cache.pkl
+reprint_project/cache/osd_cache.pkl
