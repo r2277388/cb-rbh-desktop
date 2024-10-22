@@ -7,50 +7,7 @@ from asin_isbn_converter import asin_isbn_conversion
 
 def calculate_rev_units():
     df = uploader_weeklysales()
-    
-    df['or_pp'] = np.where(
-        df['Ordered Revenue - Prior Period'] == 0,
-        df['Ordered Revenue'],  # If 'Ordered Revenue - Prior Period' is 0
-        np.where(
-            df['Ordered Revenue - Prior Period'].isnull(),
-            0,  # If 'Ordered Revenue - Prior Period' is NaN
-            np.divide(df['Ordered Revenue'], (1 + df['Ordered Revenue - Prior Period']))  # Else
-        )
-    )
-    
-    # Fix for 'Ordered Revenue - Same Period Last Year'
-    df['or_ly'] = np.where(
-        df['Ordered Revenue - Same Period Last Year'] == 0,
-        df['Ordered Revenue'],  # If 'Ordered Revenue - Same Period Last Year' is 0
-        np.where(
-            df['Ordered Revenue - Same Period Last Year'].isnull(),
-            0,  # If 'Ordered Revenue - Same Period Last Year' is NaN
-            np.divide(df['Ordered Revenue'], (1 + df['Ordered Revenue - Same Period Last Year']))  # Else
-        )
-    )
-    
-    # Fix for 'Ordered Units - Prior Period'
-    df['ou_pp'] = np.where(
-        df['Ordered Units - Prior Period'] == 0,
-        df['Ordered Units'],  # If 'Ordered Units - Prior Period' is 0
-        np.where(
-            df['Ordered Units - Prior Period'].isnull(),
-            0,  # If 'Ordered Units - Prior Period' is NaN
-            np.divide(df['Ordered Units'], (1 + df['Ordered Units - Prior Period']))  # Else
-        )
-    )
-    
-    # Fix for 'Ordered Units - Same Period Last Year'
-    df['ou_ly'] = np.where(
-        df['Ordered Units - Same Period Last Year'] == 0,
-        df['Ordered Units'],  # If 'Ordered Units - Same Period Last Year' is 0
-        np.where(
-            df['Ordered Units - Same Period Last Year'].isnull(),
-            0,  # If 'Ordered Units - Same Period Last Year' is NaN
-            np.divide(df['Ordered Units'], (1 + df['Ordered Units - Same Period Last Year']))  # Else
-        )
-    )
-    
+        
     drop_list = ['Ordered Revenue - Prior Period','Ordered Revenue - Same Period Last Year'
                  ,'Ordered Units - Prior Period','Ordered Units - Same Period Last Year'
                  ]
@@ -78,6 +35,7 @@ def div():
     return df
 
 def summarize_by_div(df):
+    # Grouping by 'div' and aggregating relevant columns
     summary = df.groupby('div').agg({
         'Ordered Revenue': 'sum',
         'Ordered Units': 'sum',
@@ -87,23 +45,65 @@ def summarize_by_div(df):
         'or_ly': 'sum'
     }).reset_index()
 
-    summary['OR_PP_PCT'] = ((summary['or_pp']-summary['Ordered Revenue']) / summary['Ordered Revenue'] * 100).round(2).astype(str) + '%'
-    summary['OR_LY_PCT'] = ((summary['or_ly']-summary['Ordered Revenue']) / summary['Ordered Revenue'] * 100).round(2).astype(str) + '%'
-    summary['OU_PP_PCT'] = ((summary['ou_pp']-summary['Ordered Units']) / summary['Ordered Units'] * 100).round(2).astype(str) + '%'
-    summary['OU_LY_PCT'] = ((summary['ou_ly']-summary['Ordered Units']) / summary['Ordered Units'] * 100).round(2).astype(str) + '%'
+    # Calculating percentage changes with division by zero handling
+    summary['OR_PP_PCT'] = np.where(
+        summary['Ordered Revenue'] == 0,
+        '0%',
+        ((summary['Ordered Revenue'] - summary['or_pp']) / summary['Ordered Revenue'] * 100).round(2).astype(str) + '%'
+    )
 
+    summary['OR_LY_PCT'] = np.where(
+        summary['Ordered Revenue'] == 0,
+        '0%',
+        ((summary['Ordered Revenue'] - summary['or_ly']) / summary['Ordered Revenue'] * 100).round(2).astype(str) + '%'
+    )
+
+    summary['OU_PP_PCT'] = np.where(
+        summary['Ordered Units'] == 0,
+        '0%',
+        ((summary['Ordered Units'] - summary['ou_pp']) / summary['Ordered Units'] * 100).round(2).astype(str) + '%'
+    )
+
+    summary['OU_LY_PCT'] = np.where(
+        summary['Ordered Units'] == 0,
+        '0%',
+        ((summary['Ordered Units'] - summary['ou_ly']) / summary['Ordered Units'] * 100).round(2).astype(str) + '%'
+    )
+
+    # Calculating total row
     total = summary[['Ordered Revenue', 'Ordered Units', 'ou_pp', 'ou_ly', 'or_pp', 'or_ly']].sum()
     total['div'] = 'Total'
-    total['OR_PP_PCT'] = str(round(total['or_pp'] / total['Ordered Revenue'] * 100, 2)) + '%'
-    total['OR_LY_PCT'] = str(round(total['or_ly'] / total['Ordered Revenue'] * 100, 2)) + '%'
-    total['OU_PP_PCT'] = str(round(total['ou_pp'] / total['Ordered Units'] * 100, 2)) + '%'
-    total['OU_LY_PCT'] = str(round(total['ou_ly'] / total['Ordered Units'] * 100, 2)) + '%'
 
-    total = pd.DataFrame(total).T
+    # Handling division by zero in the total row
+    total['OR_PP_PCT'] = (
+        '0%' if total['Ordered Revenue'] == 0 
+        else str(round((total['Ordered Revenue'] - total['or_pp']) / total['Ordered Revenue'] * 100, 2)) + '%'
+        )
+
+    total['OR_LY_PCT'] = (
+        '0%' if total['Ordered Revenue'] == 0 
+        else str(round((total['Ordered Revenue'] - total['or_ly']) / total['Ordered Revenue'] * 100, 2)) + '%'
+        )
+
+    total['OU_PP_PCT'] = (
+        '0%' if total['Ordered Units'] == 0 
+        else str(round((total['Ordered Units'] - total['ou_pp'] ) / total['Ordered Units'] * 100, 2)) + '%'
+        )
+
+    total['OU_LY_PCT'] = (
+        '0%' if total['Ordered Units'] == 0 
+        else str(round((total['Ordered Units'] - total['ou_ly']) / total['Ordered Units'] * 100, 2)) + '%'
+        )
+
+    # Convert total row to a DataFrame and concatenate with the summary
+    total = pd.DataFrame([total])
     summary = pd.concat([summary, total], ignore_index=True)
+
+    # Dropping intermediate columns no longer needed
     summary.drop(columns=['ou_pp', 'ou_ly', 'or_pp', 'or_ly'], inplace=True)
 
-    return summary  
+    return summary
+
 
 def stats_cb():
     df = div()
