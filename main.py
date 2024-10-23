@@ -1,4 +1,3 @@
-import os
 import getpass
 import subprocess
 from datetime import datetime
@@ -36,10 +35,8 @@ def display_options():
         "1. Amazon PO Report", 
         "2. Amazon PreOrders",
         "3. Amazon Customer Orders",
-        "4. Pickle Raw Data",
-        "5. XGBoost Forecast",
-        "6. SSR Daily Summary",
-        "7. Exit"
+        "4. SSR Daily Summary",
+        "5. Exit"
     ]
     print("\nWhat would you like to run?")
     for option in options:
@@ -56,10 +53,8 @@ def display_info(choice):
         Save the relevant data file to the appropriate location before running.""",
         '3': """Amazon Customer Orders: Generates a report for Amazon Customer Orders.
         Save the relevant data file to the appropriate location before running.""",
-        '4': "Pickle Raw Data: Updates the ebs.sales datadump pickle file. Please run before running the XGBoost Forecast.",
-        '5': "XGBoost Forecast: Runs a machine learning model to forecast future data trends using XGBoost.",
-        '6': "SSR Daily Summary: Prepares the data for the SSR Daily Summary email.",
-        '7': "Exit: Exits the program."
+        '4': "SSR Daily Summary: Prepares the data for the SSR Daily Summary email.",
+        '5': "Exit: Exits the program."
     }
     return info.get(choice, "Invalid choice. No information available.")
 
@@ -69,9 +64,7 @@ def run_program(choice):
         '1': ("Amazon PO Report", "amazon_po/main.py"),
         '2': ("Amazon NYP PreOrders", "amazon_preorders/main.py"),
         '3': ("Amazon Customer Orders", "amazon_customer_orders/main.py"),
-        '4': ("Pickle Raw Data", "pickle_raw_data/main.py"),
-        '5': ("XGBoost Forecast", "xgboost/main.py"),
-        '6': ("SSR Daily Summary", "ssr_daily_summary/main.py")
+        '4': ("SSR Daily Summary", "ssr_daily_summary/main.py")
     }
 
     if choice in reports:
@@ -79,7 +72,7 @@ def run_program(choice):
         print(f"Running the {report_name}... Please wait.")
         subprocess.run(["python", script_path])
         print(f"The {report_name} is now ready.")
-    elif choice == '7':
+    elif choice == '5':
         print(get_farewell_message())
     else:
         print("Invalid choice. Please select a valid option.")
@@ -96,7 +89,7 @@ def main():
             print(display_info(choice_info))
             continue  # Return to the options list after displaying info
 
-        if choice == '7':  # Option '7' to exit
+        if choice == '5':  # Option '7' to exit
             run_program(choice)
             break  # Exit the while loop to end the program
 
