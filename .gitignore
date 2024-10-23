@@ -11,6 +11,17 @@ xgboost/*.csv
 
 # Ignore the virtual environment in the xgboost directory
 xgboost/.venv
+# Ignore Python cache and virtual environments
+__pycache__/
+*.pyc
+.venv/
+env/
+venv/
+
+# Ignore logs and temporary files
+*.log
+*.tmp
+.DS_Store
 
 # Ignore all CSV files in the root directory
 /*.csv
