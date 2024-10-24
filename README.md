@@ -3,6 +3,8 @@
 ### Github Info
 Using the following email: r2277388+github@gmail.com
 Github Username: r2277388
+SSH: git@github.com:r2277388/cb-rbh-desktop.git
+HTTPS: https://github.com/r2277388/cb-rbh-desktop.git
 
 ### Pulling and Pushing Changes
 
