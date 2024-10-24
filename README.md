@@ -1,5 +1,16 @@
 ## Getting Started
 
+
+### Pulling and Pushing Changes
+
+To begin using this app, first activate the virtual environment:
+
+```bash
+source venv/Scripts/activate
+git push origin main
+git pull origin main
+```
+
 ### Setting up the Virtual Environment
 
 To begin using this app, first activate the virtual environment:
