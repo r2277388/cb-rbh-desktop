@@ -1,5 +1,8 @@
 ## Getting Started
 
+### Github Info
+Using the following email: r2277388+github@gmail.com
+Github Username: r2277388
 
 ### Pulling and Pushing Changes
 
