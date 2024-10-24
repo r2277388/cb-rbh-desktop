@@ -70,8 +70,11 @@ def run_program(choice):
     if choice in reports:
         report_name, script_path = reports[choice]
         print(f"Running the {report_name}... Please wait.")
-        subprocess.run(["python", script_path])
-        print(f"The {report_name} is now ready.")
+        try:
+            subprocess.run(["venv/Scripts/python", script_path], check=True)
+            print(f"The {report_name} is now ready.")
+        except subprocess.CalledProcessError as e:
+            print(f"An error occurred while running the {script_path}.")
     elif choice == '5':
         print(get_farewell_message())
     else:
