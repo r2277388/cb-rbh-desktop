@@ -10,6 +10,11 @@ def load_sales_data(folder_path: Path, file_glob_pattern: str, columns: list) ->
     df = pd.read_csv(most_recent_file, skiprows=1, na_values='—', usecols=columns)
     return df
 
+def map_columns(df: pd.DataFrame, column_mapping: dict) -> pd.DataFrame:
+    """Rename columns using the provided mapping dictionary."""
+    df = df.rename(columns=column_mapping)
+    return df
+
 def clean_and_convert_columns(df: pd.DataFrame) -> pd.DataFrame:
     df['Ordered Revenue'] = df['Ordered Revenue'].replace(r'[$,]', '', regex=True).fillna(0).astype(float)
     df['Ordered Revenue - Prior Period'] = df['Ordered Revenue - Prior Period'].replace(r'[%,]', '', regex=True).fillna(0).astype(float) / 100
@@ -36,10 +41,23 @@ def uploader_weeklysales() -> pd.DataFrame:
     folder_path = Path(r'G:\SALES\Amazon\RBH\DOWNLOADED_FILES')
     file_glob_sales_weekly = r'\*Sales*Weekly*csv'
     cols_sales_weekly = [
-        'ASIN', 'Ordered Revenue', 'Ordered Revenue - Prior Period', 'Ordered Revenue - Same Period Last Year',
-        'Ordered Units', 'Ordered Units - Prior Period', 'Ordered Units - Same Period Last Year'
+        'ASIN', 'Ordered Revenue', 'Ordered Revenue - Prior Period (%)', 'Ordered Revenue - Same Period Last Year (%)',
+        'Ordered Units', 'Ordered Units - Prior Period (%)', 'Ordered Units - Same Period Last Year (%)'
     ]
+    
+    # When Vendor Central makes updates to the columns, update the mapping here
+    column_mapping = {
+        'ASIN': 'ASIN',
+        'Ordered Revenue': 'Ordered Revenue',
+        'Ordered Revenue - Prior Period (%)': 'Ordered Revenue - Prior Period',
+        'Ordered Revenue - Same Period Last Year (%)': 'Ordered Revenue - Same Period Last Year',
+        'Ordered Units': 'Ordered Units',
+        'Ordered Units - Prior Period (%)': 'Ordered Units - Prior Period',
+        'Ordered Units - Same Period Last Year (%)': 'Ordered Units - Same Period Last Year'
+    }
+    
     df_sales_weekly = load_sales_data(folder_path, file_glob_sales_weekly, cols_sales_weekly)
+    df_sales_weekly = map_columns(df_sales_weekly, column_mapping)
     df_sales_weekly = clean_and_convert_columns(df_sales_weekly)
 
     # Apply your custom logic to set values to 0 where needed

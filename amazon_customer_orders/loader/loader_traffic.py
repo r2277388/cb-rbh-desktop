@@ -9,6 +9,13 @@ folder_path = Path(r'G:\SALES\Amazon\RBH\DOWNLOADED_FILES')
 # Define the pattern to match the traffic files
 file_glob_traffic = r'*Traffic*csv'
 
+column_mapping = {
+    'ASIN': 'ASIN',
+    'Glance Views': 'Glance Views',
+    'Glance Views - Prior Period (%)': 'Glance Views - Prior Period',
+    'Glance Views - Same Period Last Year (%)': 'Glance Views - Same Period Last Year'
+    }
+
 # Find all files matching the pattern
 files = glob.glob(str(folder_path / file_glob_traffic))
 
@@ -16,13 +23,16 @@ files = glob.glob(str(folder_path / file_glob_traffic))
 file_traffic = max(files, key=os.path.getctime)
 
 # Define the columns you want to load from the traffic file
-cols_traffic = ['ASIN','Glance Views','Glance Views - Prior Period','Glance Views - Same Period Last Year']  # Replace with actual column names
+cols_traffic = ['ASIN','Glance Views','Glance Views - Prior Period (%)','Glance Views - Same Period Last Year (%)']  # Replace with actual column names
 
 def upload_traffic():
     df = pd.read_csv(file_traffic,
                              skiprows=1,  # Adjust if needed
                              na_values='—',
                              usecols=cols_traffic)
+    
+    # Map the column names
+    df = df.rename(columns=column_mapping)
     
     df['Glance Views'] = (
         df['Glance Views']
