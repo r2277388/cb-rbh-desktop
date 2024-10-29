@@ -17,7 +17,14 @@ def calculate_est_ship_date_regular(df):
         return adjust_to_weekday(estimated_date)
     
     
-    elif (df.SSR_Row == 'Readerlink') and (df.WMSDoNotDeliverAfter is not None) and (df.STATE == 'IL'):  
-        return df.WMSDoNotDeliverAfter + pd.DateOffset(days=6)
+    # Barnes & Noble holds
+    elif (df.SSR_Row == 'Barnes & Noble') and (df.WMSDoNotDeliverAfter is not None) and (df.STATE == 'NJ'):
+        estimated_date = df.WMSDoNotDeliverAfter - pd.DateOffset(days=2) # 2 day shipping
+        return adjust_to_weekday(estimated_date)
+    elif (df.SSR_Row == 'Barnes & Noble') and (df.WMSDoNotDeliverAfter is not None) and (df.STATE == 'NV'):
+        estimated_date = df.WMSDoNotDeliverAfter - pd.DateOffset(days=4) # 4 day shipping to Nevada warehouse
+        return adjust_to_weekday(estimated_date)
+    
+    # Everything else
     else:
-        return df.release_date - pd.DateOffset(days=5)
+        return adjust_to_weekday(df.release_date)
