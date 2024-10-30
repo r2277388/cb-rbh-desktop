@@ -46,7 +46,6 @@ def ho_sql():
         and ho.EnteredDate > (GETDATE() -180)
         and i.PRICE_AMOUNT > 0
         and ho.OrderTypeCode = 'RELEASED'
-        AND ssr_row.Description = 'Readerlink'
     GROUP BY                                             
         chan.Description
         ,subchan.Description
@@ -82,10 +81,22 @@ def get_connection():
     engine = create_engine('mssql+pyodbc://sql-2-db/CBQ2?driver=SQL+Server')
     return engine
 
+def remove_consignment(df):
+    countries_to_exclude = ['Australia', 'Canada']
+    df = df[~df['SSR_Row'].isin(countries_to_exclude)]
+    return df
+
+def remove_rows(df):
+    rows_to_exclude = ['Author/Individual']
+    df = df[~df['SSR_Row'].isin(rows_to_exclude)]
+    return df
+
 def upload_ho() -> pd.DataFrame:
     engine = get_connection()
     with engine.connect() as connection:
         df = pd.read_sql_query(ho_sql(), connection)
+        df = remove_consignment(df)
+        df = remove_rows(df)
     return df
 
 def main():
