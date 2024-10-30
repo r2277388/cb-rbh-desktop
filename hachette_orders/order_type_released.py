@@ -13,7 +13,7 @@ def calculate_est_ship_date_released(df):
         return adjust_to_weekday(estimated_date)
     
     elif (df.osd > todays_date) and (df.STATE in ['CA','WA']) and (df.SSR_Row in big_box_stores):
-        estimated_date =  df.osd - pd.DateOffset(days=6) 
+        estimated_date =  df.osd - pd.DateOffset(days=7) 
         return adjust_to_weekday(estimated_date)
     
     # Rules for Not Big Box Stores
