@@ -1,18 +1,13 @@
 import pandas as pd
 from loader.load_ho import upload_ho
+from list_provider import bn_and_ps_shipping_days, readerlink_shipping_days,bn_list
 from function import adjust_to_weekday, next_three_days,summarize_by_estimate_date
 
 def calculate_est_ship_date_regular(df):
     todays_date = pd.Timestamp('today').normalize()
     
     # READERLINK RELEASED
-    readerlink_shipping_days = {
-        'IL': 6,   # 1 day shipping
-        'VA': 5,   # 2 day shipping
-        'TX': 4,   # 3 day shipping
-        'GA': 4,   # 3 day shipping
-        'UT': 3    # 4 day shipping
-    }
+
     if (df.SSR_Row == 'Readerlink') and pd.notnull(df.WMSDoNotDeliverAfter):
         if df.STATE in readerlink_shipping_days:
             days_offset = readerlink_shipping_days[df.STATE]
@@ -20,12 +15,8 @@ def calculate_est_ship_date_regular(df):
             return adjust_to_weekday(estimated_date)
     
     # Barnes & Noble and Paper Source Released
-    bn_and_ps_shipping_days = {
-        'IL': 1,   # 1 day shipping
-        'NJ': 2,   # 2 day shipping
-        'NV': 4    # 4 day shipping
-    }
-    if df.SSR_Row in ['Barnes & Noble', 'Barnes & Noble College', 'Paper Source']:
+
+    if df.SSR_Row in bn_list:
         if pd.notnull(df.WMSDoNotDeliverAfter):
             if df.STATE in bn_and_ps_shipping_days:
                 days_offset = bn_and_ps_shipping_days[df.STATE]

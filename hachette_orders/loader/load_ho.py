@@ -56,6 +56,7 @@ def ho_sql():
         ,ho.ReleaseDate
         ,ho.OrderCancelDate
         ,ho.OrderTypeCode
+        ,ho.HoldReason
         ,ho.WMSDoNotDeliverAfter
         ,ho.WMSDoNotDeliverBefore
         ,ho.WMSDoNotShipAfter
@@ -76,6 +77,7 @@ def ho_sql():
             AND i.PUBLISHING_GROUP not IN('MKT')                 
             and ho.EnteredDate > (GETDATE() -180)
             and i.PRICE_AMOUNT > 0
+            AND ho.OrderTypeCode <> 'DELETED'
     GROUP BY                                             
         ho.PONumber
         ,chan.Description
@@ -93,14 +95,15 @@ def ho_sql():
         ,i.AMORTIZATION_DATE
         ,osd.osd
         ,case
-                when ho.Discount is null then .54
-                when ho.Discount = 0 then 0.54
-                else Discount
+            when ho.Discount is null then .54
+            when ho.Discount = 0 then 0.54
+            else Discount
         end
         ,ho.EnteredDate
         ,ho.ReleaseDate
         ,ho.OrderCancelDate
         ,ho.OrderTypeCode
+        ,ho.HoldReason
         ,ho.WMSDoNotDeliverAfter
         ,ho.WMSDoNotDeliverBefore
         ,ho.WMSDoNotShipAfter
@@ -135,7 +138,7 @@ def strip_spaces(df):
     Returns:
     pd.DataFrame: The modified DataFrame with stripped spaces in specified columns.
     """
-    columns = ['OrderTypeCode','SSR_Row','STATE']
+    columns = ['OrderTypeCode','SSR_Row','STATE','HoldReason']
     for col in columns:
         if col in df.columns:
             df[col] = df[col].str.strip()
