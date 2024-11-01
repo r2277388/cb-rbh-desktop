@@ -12,7 +12,24 @@ def ho_sql():
     Where
         tt.date_desc = 'On Sale Date'
         AND tt.active_datevalue is not null
-        AND tt.printingnumber = 1)
+        AND tt.printingnumber = 1),
+        
+    reprints as (
+        SELECT
+            i.ISBN
+            ,min(id.EstETAWHSE) [EstDate]
+
+        FROM
+            dbo.vInventoryDashboard AS id
+            INNER JOIN ebs.Item as i on i.isbn = id.ISBN
+        WHERE 
+            i.PUBLISHER_CODE = 'Chronicle'
+            AND i.PRODUCT_TYPE IN('BK','FT')
+            AND id.EstETAWHSE is not null AND id.EstETAWHSE > getdate()
+            AND id.Total_Ordered is not null
+        GROUP BY
+            i.ISBN
+            )
                                         
     SELECT                                   
         ho.PONumber
@@ -39,12 +56,12 @@ def ho_sql():
         ,ho.ReleaseDate
         ,ho.OrderCancelDate
         ,ho.OrderTypeCode
-        ,ho.PONumber
         ,ho.WMSDoNotDeliverAfter
         ,ho.WMSDoNotDeliverBefore
         ,ho.WMSDoNotShipAfter
         ,ho.WMSDoNotShipBefore
         ,sum(ho.Quantity) qty
+        ,reprints.estdate ReprintDate
     FROM                                           
         hachette.HachetteOrders ho
         inner join ebs.item i on i.ITEM_TITLE = ho.isbn     
@@ -53,6 +70,7 @@ def ho_sql():
         inner join ssr.Channel chan on chan.ChannelID = subchan.ChannelID        
         left join ebs.Customer shipto on shipto.PARTYSITENUMBER = ho.StoreNumber
         left join osd on ho.ISBN = osd.ISBN
+        left join reprints on ho.ISBN = reprints.ISBN
     WHERE                        
             i.PUBLISHER_CODE = 'Chronicle'
             AND i.PUBLISHING_GROUP not IN('MKT')                 
@@ -87,6 +105,7 @@ def ho_sql():
         ,ho.WMSDoNotDeliverBefore
         ,ho.WMSDoNotShipAfter
         ,ho.WMSDoNotShipBefore
+        ,reprints.estdate
     ORDER BY
         osd.osd,ssr_row.Description  asc
     '''
