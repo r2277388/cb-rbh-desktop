@@ -1,10 +1,10 @@
 import pandas as pd
 from loader.load_ho import upload_ho
 from function import summarize_by_estimate_date
-from hachette_orders.ordertype_reg import calculate_est_ship_date_regular
-from hachette_orders.ordertype_bo import calculate_est_ship_date_backordered
-from hachette_orders.ordertype_rel_sal_rush import calculate_est_ship_date_released
-from hachette_orders.ordertype_hold import calculate_est_ship_date_hold
+from ordertype_reg import calculate_est_ship_date_regular
+from ordertype_bo import calculate_est_ship_date_backordered
+from ordertype_rel_sal_rush import calculate_est_ship_date_released
+from ordertype_hold import calculate_est_ship_date_hold
 
 pd.set_option('display.max_columns', None)
 
@@ -23,16 +23,16 @@ def main():
     convert_faire_credit_hold(df)
     
     # Generate the individual DataFrames
-    df_reg = df.loc[df.OrderTypeCode == 'REGULAR']
+    df_reg = df.loc[df.OrderTypeCode == 'REGULAR'].copy()
     df_reg['EstimateDate'] = df_reg.apply(calculate_est_ship_date_regular, axis=1)
   
-    df_rel = df.loc[df.OrderTypeCode.isin(['RELEASED', 'SOFT ALLOCATED','RUSH EDI AM'])]
+    df_rel = df.loc[df.OrderTypeCode.isin(['RELEASED', 'SOFT ALLOCATED','RUSH EDI AM'])].copy()
     df_rel['EstimateDate'] = df_rel.apply(calculate_est_ship_date_released, axis=1)
     
-    df_hol = df.loc[df.OrderTypeCode =='HOLD']
+    df_hol = df.loc[df.OrderTypeCode =='HOLD'].copy()
     df_hol['EstimateDate'] = df_hol.apply(calculate_est_ship_date_hold, axis=1)
     
-    df_bo = df.loc[df.OrderTypeCode == 'BACKORDERED']
+    df_bo = df.loc[df.OrderTypeCode == 'BACKORDERED'].copy()
     df_bo['EstimateDate'] = df_bo.apply(calculate_est_ship_date_backordered, axis=1)
     
     df_ch = df.loc[df['OrderTypeCode'] == 'CREDIT HOLD'].copy()
@@ -42,8 +42,8 @@ def main():
     df_combined = pd.concat([df_reg, df_rel, df_hol, df_bo,df_ch], ignore_index=True)
     
     # Print the combined DataFrame info for verification
-    print(df_combined.info())
-    print(df_combined.head())
+    # print(df_combined.info())
+    # print(df_combined.head())
     
     # Summarize the "val" field by EstimateDate
     daily_summary, summary = summarize_by_estimate_date(df_combined)
