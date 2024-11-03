@@ -9,10 +9,12 @@ pd.set_option('display.max_columns', None)
 def calculate_est_ship_date_released(df):
     todays_date = pd.Timestamp('today').normalize()
     
+    if (df.OrderTypeCode == 'RUSH EDI AM'):
+        return adjust_to_weekday(todays_date)
     ######################
     # PRE-OSD Rules
     ######################
-    if pd.notnull(df.osd) and (df.osd > todays_date) and (df.SSR_Row in big_box_stores):
+    elif pd.notnull(df.osd) and (df.osd > todays_date) and (df.SSR_Row in big_box_stores):
         if (df.STATE in hbg_tier1):
             estimated_date = df.osd - pd.DateOffset(days=10)
             return adjust_to_weekday(estimated_date)
@@ -117,14 +119,17 @@ def calculate_est_ship_date_released(df):
     else:
         return pd.NaT
 
-def get_released_soft_allocated(df):
-    df = df.loc[df.OrderTypeCode.isin(['RELEASED', 'SOFT ALLOCATED'])]
+def get_released_softallocated(df):
+    '''
+    FILTER for the following OrderTypeCodes: 'RELEASED', 'SOFT ALLOCATED','RUSH EDI AM'
+    '''
+    df = df.loc[df.OrderTypeCode.isin(['RELEASED', 'SOFT ALLOCATED','RUSH EDI AM'])]
     df['EstimateDate'] = df.apply(calculate_est_ship_date_released, axis=1)
     return df
 
 def main():
     df = upload_ho()
-    df = get_released_soft_allocated(df)
+    df = get_released_softallocated(df)
     print(df.info())
     print(df.head())
     print()

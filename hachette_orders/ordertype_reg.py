@@ -59,9 +59,8 @@ def calculate_est_ship_date_regular(df):
     else:
         return pd.NaT
    
-    
 def get_regular(df):
-        df = df.loc[df.OrderTypeCode.isin(['REGULAR'])]
+        df = df.loc[df.OrderTypeCode == 'REGULAR']
         df['EstimateDate'] = df.apply(calculate_est_ship_date_regular, axis=1)
         return df
 

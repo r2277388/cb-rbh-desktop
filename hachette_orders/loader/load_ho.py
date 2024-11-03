@@ -40,6 +40,7 @@ def ho_sql():
         ,ho.ISBN
         ,i.SHORT_TITLE Title
         ,i.PRICE_AMOUNT Price
+        i.PUBLISHER_CODE Publisher
         ,case
                 when i.PUBLISHING_GROUP in('FWN','LIF') then 'FLS'
                 else i.PUBLISHING_GROUP
@@ -87,6 +88,7 @@ def ho_sql():
         ,ho.ISBN
         ,i.SHORT_TITLE
         ,i.PRICE_AMOUNT
+        i.PUBLISHER_CODE
         ,case
                 when i.PUBLISHING_GROUP in('FWN','LIF') then 'FLS'
                 else i.PUBLISHING_GROUP

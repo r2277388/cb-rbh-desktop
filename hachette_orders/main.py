@@ -1,15 +1,62 @@
 import pandas as pd
 from loader.load_ho import upload_ho
+from function import summarize_by_estimate_date
 from hachette_orders.ordertype_reg import calculate_est_ship_date_regular
 from hachette_orders.ordertype_bo import calculate_est_ship_date_backordered
-from hachette_orders.ordertype_rel_sal import calculate_est_ship_date_released
+from hachette_orders.ordertype_rel_sal_rush import calculate_est_ship_date_released
 from hachette_orders.ordertype_hold import calculate_est_ship_date_hold
 
+pd.set_option('display.max_columns', None)
+
+def convert_faire_credit_hold(df):
+    # Replace 'CREDIT HOLD' with 'REGULAR' in the 'OrderTypeCode' column for rows where SSR_Row is 'FAIRE WHOLESALE INC'
+    # Jeff said the credit hold for Faire Warehouse only happens for a day or two and changes to regular.
+    df.loc[(df['OrderTypeCode'] == 'CREDIT HOLD') & (df['SSR_Row'] == 'FAIRE WHOLESALE INC'), 'OrderTypeCode'] = 'REGULAR'
+    return df
+
 def main():
-    df = upload_ho()    
+    # Load and copy the original DataFrame
+    df_raw = upload_ho()    
+    df = df_raw.copy()
+    
+    # Modify the DataFrame as needed
+    convert_faire_credit_hold(df)
+    
+    # Generate the individual DataFrames
+    df_reg = df.loc[df.OrderTypeCode == 'REGULAR']
+    df_reg['EstimateDate'] = df_reg.apply(calculate_est_ship_date_regular, axis=1)
+  
+    df_rel = df.loc[df.OrderTypeCode.isin(['RELEASED', 'SOFT ALLOCATED','RUSH EDI AM'])]
+    df_rel['EstimateDate'] = df_rel.apply(calculate_est_ship_date_released, axis=1)
+    
+    df_hol = df.loc[df.OrderTypeCode =='HOLD']
+    df_hol['EstimateDate'] = df_hol.apply(calculate_est_ship_date_hold, axis=1)
+    
+    df_bo = df.loc[df.OrderTypeCode == 'BACKORDERED']
+    df_bo['EstimateDate'] = df_bo.apply(calculate_est_ship_date_backordered, axis=1)
+    
+    df_ch = df.loc[df['OrderTypeCode'] == 'CREDIT HOLD'].copy()
+    df_ch['EstimateDate'] = pd.NaT
+    
+    # Concatenate all DataFrames into one
+    df_combined = pd.concat([df_reg, df_rel, df_hol, df_bo,df_ch], ignore_index=True)
+    
+    # Print the combined DataFrame info for verification
+    print(df_combined.info())
+    print(df_combined.head())
+    
+    # Summarize the "val" field by EstimateDate
+    daily_summary, summary = summarize_by_estimate_date(df_combined)
+    
+    # Print daily summary
+    print("Daily Summary for the Next 5 Days:")
+    for index, row in daily_summary.iterrows():
+        print(f"Date: {row['EstimateDate'].date()}, Value: {row['val']}")
+    
+    # Print overall summary
+    print("\nOverall Summary:")
+    for key, value in summary.items():
+        print(f"{key}: {value}")
 
-#  TREAT CREDIT HOLD for FAIRE as REGULAR AND NaT for the rest.
-
-if __name__ == str:
+if __name__ == "__main__":
     main()
-# Load the DataFrame
