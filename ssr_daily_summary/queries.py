@@ -13,7 +13,7 @@ def query1(prior_day,tp,tply):
 
     '''
 
-    return '''
+    return f'''
         SELECT
             case
                 when i.PUBLISHER_CODE = 'Chronicle' then 'CB'
@@ -277,21 +277,21 @@ def query6(prior_day):
     '''
 
     return f'''
-    SELECT top 10                             
+    SELECT top 10
         chan.Description channel
         ,ssr_row.Description SSR_Row
         ,sum(ho.Quantity) qty
-    FROM                                           
+    FROM
         hachette.HachetteOrders ho
-            inner join ebs.item i on i.ITEM_TITLE = ho.isbn     
+            inner join ebs.item i on i.ITEM_TITLE = ho.isbn
             inner join ssr.SSRRow ssr_row on ssr_row.SSRRowID = ho.SSRRowID
             inner join ssr.SubChannel subchan on subchan.SubChannelID = ssr_row.SubChannelID
-            inner join ssr.Channel chan on chan.ChannelID = subchan.ChannelID                
-    WHERE                        
+            inner join ssr.Channel chan on chan.ChannelID = subchan.ChannelID
+    WHERE
         i.PRICE_AMOUNT > 0
         and ho.EnteredDate = '{prior_day}' 
         and i.PUBLISHER_CODE = 'Chronicle'
-        GROUP BY                                             
+        GROUP BY
         chan.Description
         ,ssr_row.Description
     ORDER BY
@@ -307,21 +307,21 @@ def query7(prior_day):
     '''
 
     return f'''
-    SELECT top 10                             
+    SELECT top 10
         chan.Description channel
         ,ssr_row.Description SSR_Row
         ,sum(ho.Quantity) qty
-    FROM                                           
+    FROM
         hachette.HachetteOrders ho
-            inner join ebs.item i on i.ITEM_TITLE = ho.isbn     
+            inner join ebs.item i on i.ITEM_TITLE = ho.isbn
             inner join ssr.SSRRow ssr_row on ssr_row.SSRRowID = ho.SSRRowID
             inner join ssr.SubChannel subchan on subchan.SubChannelID = ssr_row.SubChannelID
-            inner join ssr.Channel chan on chan.ChannelID = subchan.ChannelID                
-    WHERE                        
+            inner join ssr.Channel chan on chan.ChannelID = subchan.ChannelID
+    WHERE
         i.PRICE_AMOUNT > 0
         and ho.EnteredDate = '{prior_day}' 
         and i.PUBLISHER_CODE != 'Chronicle'
-        GROUP BY                                             
+        GROUP BY
         chan.Description
         ,ssr_row.Description
     ORDER BY
@@ -337,23 +337,23 @@ def query8(prior_day):
     '''
     return f'''
     
-    SELECT top 10                          
+    SELECT top 10
         i.PUBLISHING_GROUP pgrp
         ,i.ISBN
         ,i.SHORT_TITLE
         ,sum(ho.Quantity) qty
-    FROM                                           
-        hachette.HachetteOrders ho
-            inner join ebs.item i on i.ITEM_TITLE = ho.isbn     
-            inner join ssr.SSRRow ssr_row on ssr_row.SSRRowID = ho.SSRRowID
-            inner join ssr.SubChannel subchan on subchan.SubChannelID = ssr_row.SubChannelID
-            inner join ssr.Channel chan on chan.ChannelID = subchan.ChannelID                
-    WHERE                        
+    FROM
+        hachette.HachetteOrders ho
+        inner join ebs.item i on i.ITEM_TITLE = ho.isbn
+        inner join ssr.SSRRow ssr_row on ssr_row.SSRRowID = ho.SSRRowID
+        inner join ssr.SubChannel subchan on subchan.SubChannelID = ssr_row.SubChannelID
+        inner join ssr.Channel chan on chan.ChannelID = subchan.ChannelID
+    WHERE
         i.PRICE_AMOUNT > 0
         AND i.PUBLISHER_CODE = 'Chronicle'
         and ho.EnteredDate = '{prior_day}' 
     
-    GROUP BY                                             
+    GROUP BY
         i.PUBLISHING_GROUP
         ,i.ISBN
         ,i.SHORT_TITLE
@@ -370,22 +370,22 @@ def query9(prior_day):
     '''
 
     return f'''
-    SELECT top 10                          
+    SELECT top 10
         i.PUBLISHER_CODE pub
         ,i.ISBN
         ,i.SHORT_TITLE
         ,sum(ho.Quantity) qty
-    FROM                                           
-        hachette.HachetteOrders ho
-            inner join ebs.item i on i.ITEM_TITLE = ho.isbn     
-            inner join ssr.SSRRow ssr_row on ssr_row.SSRRowID = ho.SSRRowID
-            inner join ssr.SubChannel subchan on subchan.SubChannelID = ssr_row.SubChannelID
-            inner join ssr.Channel chan on chan.ChannelID = subchan.ChannelID                
-    WHERE                        
+    FROM
+        hachette.HachetteOrders ho
+        inner join ebs.item i on i.ITEM_TITLE = ho.isbn
+        inner join ssr.SSRRow ssr_row on ssr_row.SSRRowID = ho.SSRRowID
+        inner join ssr.SubChannel subchan on subchan.SubChannelID = ssr_row.SubChannelID
+        inner join ssr.Channel chan on chan.ChannelID = subchan.ChannelID
+    WHERE
         i.PRICE_AMOUNT > 0
         AND i.PUBLISHER_CODE != 'Chronicle'
         and ho.EnteredDate = '{prior_day}' 
-    GROUP BY                                             
+    GROUP BY
         i.PUBLISHER_CODE
         ,i.ISBN
         ,i.SHORT_TITLE
