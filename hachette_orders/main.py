@@ -13,17 +13,37 @@ def create_pickle_file(df):
     df.to_pickle(filename)
     print(f"File saved as {filename}")
     
+
+def issues_search(df):
+    df_reg_issues = df.loc[
+    (df.OrderTypeCode == 'REGULAR') &
+    (df.EstimateDate == pd.Timestamp.today().normalize())
+    ]
+    print(df_reg_issues.head())
+    
+def sum_val_next_5_days(df):
+    todays_date = pd.Timestamp.today().normalize()
+    next_5_days = todays_date + pd.DateOffset(days=5)
+    
+    # Filter the DataFrame for the next 5 days
+    df_next_5_days = df[(df.EstimateDate >= todays_date) & (df.EstimateDate <= next_5_days)]
+    
+    # Group by Publisher and EstimateDate, and sum the val field
+    summary = df_next_5_days.groupby(['Publisher', 'EstimateDate'])['val'].sum().reset_index()
+    
+    # Print the summary
+    print("Sum of 'val' for the next 5 days for each Publisher:")
+    for index, row in summary.iterrows():
+        print(f"Publisher: {row['Publisher']}, Date: {row['EstimateDate'].date()}, Value: {row['val']:,}")
+    
+    return summary
     
 def main():
-    #create_pickle_file(df)
-    file_name = r'C:\Users\rbh\code\hachette_orders\ho_20241104_1558.pkl'
+    # create_pickle_file(df)
+    file_name = r'C:\Users\rbh\code\hachette_orders\ho_20241104_1704.pkl'
     df = pd.read_pickle(file_name)
     
-    df_reg_issues = df.loc[
-        (df.OrderTypeCode == 'REGULAR') &
-        (df.EstimateDate == pd.Timestamp.today().normalize())
-        ]
-    print(df_reg_issues.head())
+    sum_val_next_5_days(df)   
 
 if __name__ == "__main__":
     main()

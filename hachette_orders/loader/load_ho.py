@@ -74,11 +74,10 @@ def ho_sql():
         left join osd on ho.ISBN = osd.ISBN
         left join reprints on ho.ISBN = reprints.ISBN
     WHERE                        
-            i.PUBLISHER_CODE = 'Chronicle'
-            AND i.PUBLISHING_GROUP not IN('MKT')                 
-            and ho.EnteredDate > (GETDATE() -180)
-            and i.PRICE_AMOUNT > 0
-            AND ho.OrderTypeCode <> 'DELETED'
+        i.PUBLISHING_GROUP not IN('MKT')                 
+        and ho.EnteredDate > (GETDATE() -180)
+        and i.PRICE_AMOUNT > 0
+        AND ho.OrderTypeCode <> 'DELETED'
     GROUP BY                                             
         ho.PONumber
         ,chan.Description
