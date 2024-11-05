@@ -31,7 +31,7 @@ def asin_isbn_conversion() -> pd.DataFrame:
     df_ypticod = get_cleaned_ypticod()
     df_ypticod = df_ypticod[['ASIN', 'ISBN', 'Release Date']]
     df_combined = pd.concat([df_ypticod,df], ignore_index=True)
-    df_combined = df_combined.drop_duplicates(subset=['ASIN','ISBN','Release Date'], keep='first')
+    df_combined = df_combined.drop_duplicates(subset=['ASIN','ISBN'], keep='first')
 
     return df_combined
 
