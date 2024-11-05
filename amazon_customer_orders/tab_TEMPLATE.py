@@ -6,16 +6,11 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 
-def top_titles(publisher=None, flbl=None, num_rows=None):
-	df_weeklysales = uploader_weeklysales()
-	
-	df_converter = asin_isbn_conversion()
+def top_titles(df_weeklysales, df_converter, df_item, df_glance, publisher=None, flbl=None, num_rows=None):
+
 	df = df_weeklysales.merge(df_converter, on='ASIN', how='left')
-	
-	df_item = upload_item()
 	df = df.merge(df_item, on='ISBN', how='left')
 	
-	df_glance = upload_traffic()
 	df_glance = df_glance[['ASIN', 'Glance Views']]
 	df = df.merge(df_glance, on='ASIN', how='left')
 	
@@ -50,7 +45,13 @@ def top_titles(publisher=None, flbl=None, num_rows=None):
 
 def main():
 	# Example usage
-	df = top_titles(publisher="!Chronicle", flbl="FL", num_rows=10)
+	df_weeklysales = uploader_weeklysales()	
+	df_converter = asin_isbn_conversion()
+	df_item = upload_item()
+	df_glance = upload_traffic()
+ 
+	df = top_titles(df_weeklysales, df_converter, df_item, df_glance,\
+                	publisher="!Chronicle", flbl="FL", num_rows=10)
 	
 	print(df.info())
 	print(df.head())
