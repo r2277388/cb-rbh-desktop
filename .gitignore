@@ -31,6 +31,7 @@ pgrp_flbl_forecasts.csv
 pgrp_forecasts.csv
 
 # Ignore specific cache files in the reprint_project/cache directory
+*.pkl
 reprint_project/cache/saldet_cache.pkl
 reprint_project/cache/hachette_order_status_cache.pkl
 reprint_project/cache/inventory_cache.pkl
