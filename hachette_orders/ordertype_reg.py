@@ -5,8 +5,8 @@ from function import adjust_to_weekday, next_three_days,summarize_by_estimate_da
 
 def calculate_est_ship_date_regular(df):
     todays_date = pd.Timestamp('today').normalize()
-    
-    # READERLINK RELEASED
+    min_estimated_date = adjust_to_weekday(todays_date + pd.DateOffset(days=3))
+    # READERLINK REGULAR
 
     if (df.SSR_Row == 'Readerlink') and pd.notnull(df.WMSDoNotDeliverAfter):
         if df.STATE in readerlink_shipping_days:
@@ -14,7 +14,7 @@ def calculate_est_ship_date_regular(df):
             estimated_date = df.WMSDoNotDeliverAfter + pd.DateOffset(days=days_offset)
             return adjust_to_weekday(estimated_date)
     
-    # Barnes & Noble and Paper Source Released
+    # Barnes & Noble and Paper Source REGULAR
 
     if df.SSR_Row in bn_list:
         if pd.notnull(df.WMSDoNotDeliverAfter):
@@ -28,16 +28,15 @@ def calculate_est_ship_date_regular(df):
         elif pd.notnull(df.ReleaseDate) and (df.ReleaseDate > todays_date):
             return adjust_to_weekday(df.ReleaseDate)
         elif pd.notnull(df.ReleaseDate) and (df.ReleaseDate <= todays_date):
-            return next_three_days()
-    
+            estimated_date = next_three_days()+pd.DateOffset(days=3) # regular orders need at least 3 days to ship
+            return adjust_to_weekday(estimated_date)
+        
     # Orders with ReleaseDate and OrderCancelDate
-    if pd.notnull(df.ReleaseDate) and pd.notnull(df.OrderCancelDate):
-        estimated_date = df.OrderCancelDate - pd.DateOffset(days=7)
-        return adjust_to_weekday(estimated_date)
-    
-    # No ReleaseDate but an OrderCancelDate
-    if pd.isnull(df.ReleaseDate) and pd.notnull(df.OrderCancelDate):
-        estimated_date = df.OrderCancelDate - pd.DateOffset(days=7)
+    if pd.notnull(df.OrderCancelDate):
+        estimated_date = df.OrderCancelDate - pd.DateOffset(days=7)        
+        if estimated_date < min_estimated_date:
+            estimated_date = min_estimated_date
+        
         return adjust_to_weekday(estimated_date)
     
     # No ReleaseDate and no OrderCancelDate
@@ -47,14 +46,19 @@ def calculate_est_ship_date_regular(df):
             return pd.NaT  # Return NaT if EnteredDate is more than 15 days old
         else:
             estimated_date = df.EnteredDate + pd.DateOffset(days=10)
+            if estimated_date < min_estimated_date:
+                estimated_date = min_estimated_date
             return adjust_to_weekday(estimated_date)  # Return 10 days after EnteredDate
     
     # General case for ReleaseDate
     if pd.notnull(df.ReleaseDate) and (df.ReleaseDate > todays_date):
+        if df.ReleaseDate < min_estimated_date:
+            return min_estimated_date
         return adjust_to_weekday(df.ReleaseDate)
     
     elif pd.notnull(df.ReleaseDate) and (df.ReleaseDate <= todays_date):
-        return next_three_days()
+        estimated_date = next_three_days()+pd.DateOffset(days=3) # regular orders need at least 3 days to ship
+        return adjust_to_weekday(estimated_date)
     
     else:
         return pd.NaT

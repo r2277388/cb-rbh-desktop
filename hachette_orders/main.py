@@ -18,7 +18,12 @@ def main():
     #create_pickle_file(df)
     file_name = r'C:\Users\rbh\code\hachette_orders\ho_20241104_1558.pkl'
     df = pd.read_pickle(file_name)
-    df.info() 
+    
+    df_reg_issues = df.loc[
+        (df.OrderTypeCode == 'REGULAR') &
+        (df.EstimateDate == pd.Timestamp.today().normalize())
+        ]
+    print(df_reg_issues.head())
 
 if __name__ == "__main__":
     main()
