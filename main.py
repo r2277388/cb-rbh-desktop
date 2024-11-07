@@ -2,6 +2,19 @@ import getpass
 import subprocess
 from datetime import datetime
 
+def get_full_name():
+    # Dictionary to map usernames to real names
+    USER_NAMES = {
+    "kbs": "Kate Breiting Schmitz",
+    "dag": "Desirae Grier",
+    "sdm": "Sam Mariucci",
+    "RBH": "Barrett Hooper",  # Add more as needed
+    }
+    
+    username = getpass.getuser()
+    full_name = USER_NAMES.get(username, username)
+    return full_name
+
 def greet_user():
     """Greet the user based on the time of day and day of the week."""
     current_datetime = datetime.now()
@@ -14,20 +27,23 @@ def greet_user():
         greeting = "Good afternoon"
     else:
         greeting = "Good evening"
-
-    username = getpass.getuser()
-    return f"\n{greeting}, {username}! Happy {current_day}!"
+    
+    full_name = get_full_name()
+    
+    return f"\n{greeting}, {full_name}! Happy {current_day}!"
 
 def get_farewell_message():
     """Return a farewell message based on the time of day."""
     current_hour = datetime.now().hour
+    
+    full_name = get_full_name()
 
     if 12 <= current_hour < 17:
-        return "Have a great afternoon!"
+        return f"\nHave a great afternoon, {full_name}!"
     elif 17 <= current_hour < 24:
-        return "Good evening!"
+        return f"\nGood evening, {full_name}!"
     else:
-        return "Have a great day!"
+        return f"\nHave a great day, {full_name}!"
 
 def display_options():
     """Display the available program options."""
@@ -36,7 +52,8 @@ def display_options():
         "2. Amazon PreOrders",
         "3. Amazon Customer Orders",
         "4. SSR Daily Summary",
-        "5. Exit"
+        "5. UK Rolling File Combining",
+        "6. Exit"
     ]
     print("\nWhat would you like to run?")
     for option in options:
@@ -54,7 +71,8 @@ def display_info(choice):
         '3': """Amazon Customer Orders: Generates a report for Amazon Customer Orders.
         Save the relevant data file to the appropriate location before running.""",
         '4': "SSR Daily Summary: Prepares the data for the SSR Daily Summary email.",
-        '5': "Exit: Exits the program."
+        '5': "UK Rolling File Combining: This combines the sales, reserve and midas files together.",
+        '6': "Exit: Exits the program."
     }
     return info.get(choice, "Invalid choice. No information available.")
 
@@ -64,7 +82,8 @@ def run_program(choice):
         '1': ("Amazon PO Report", "amazon_po/main.py"),
         '2': ("Amazon NYP PreOrders", "amazon_preorders/main.py"),
         '3': ("Amazon Customer Orders", "amazon_customer_orders/main.py"),
-        '4': ("SSR Daily Summary", "ssr_daily_summary/main.py")
+        '4': ("SSR Daily Summary", "ssr_daily_summary/main.py"),
+        '5': ("UK Rolling File Combining", "UK_Rolling_File_Combining/main.py")
     }
 
     if choice in reports:
@@ -75,7 +94,7 @@ def run_program(choice):
             print(f"The {report_name} is now ready.")
         except subprocess.CalledProcessError as e:
             print(f"An error occurred while running the {script_path}.")
-    elif choice == '5':
+    elif choice == '6':
         print(get_farewell_message())
     else:
         print("Invalid choice. Please select a valid option.")
@@ -92,7 +111,7 @@ def main():
             print(display_info(choice_info))
             continue  # Return to the options list after displaying info
 
-        if choice == '5':  # Option '7' to exit
+        if choice == '6':  # Option '7' to exit
             run_program(choice)
             break  # Exit the while loop to end the program
 
