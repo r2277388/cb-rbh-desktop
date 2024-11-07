@@ -3,7 +3,29 @@ import pandas as pd
 import load_sales
 import load_reserve
 import load_midas
-from paths import output_path
+from paths import output_path, folder_path
+import tkinter as tk
+from tkinter import messagebox
+
+def check_paths():
+    """Display a confirmation popup to the user for path verification."""
+    # Create a simple tkinter root window
+    root = tk.Tk()
+    root.withdraw()  # Hide the main window
+
+    # Prepare the confirmation message
+    message = (
+        "This code will only run successfully if the following files are correct:\n\n"
+        f"Data folder path: {folder_path}\n"
+        f"Output path: {output_path}\n\n"
+        "Otherwise, update these links.\n\n"
+        "Do you want to proceed?"
+    )
+    
+    # Show a Yes/No message box
+    user_confirmation = messagebox.askyesno("Path Confirmation", message)
+    root.destroy()  # Close the tkinter window
+    return user_confirmation
 
 def combine_data():
     """Combines sales, reserve, and Midas data into a single DataFrame."""
@@ -36,6 +58,12 @@ def save_to_excel(df_combined):
         df_combined.to_excel(writer, sheet_name='uk_weekly', index=True)
 
 def main():
+    # Check paths with user confirmation
+    if not check_paths():
+        print("Operation cancelled. Please update the paths in paths.py if needed.")
+        return  # Exit if the user chooses 'No'
+    
+    # Proceed with data combination and saving
     df_combined = combine_data()
     save_to_excel(df_combined)
     print("Data successfully combined and saved to Excel.")
