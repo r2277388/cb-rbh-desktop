@@ -13,15 +13,7 @@ def convert_faire_credit_hold(df):
     # Replace 'CREDIT HOLD' with 'REGULAR' in the 'OrderTypeCode' column for rows where SSR_Row is 'FAIRE WHOLESALE INC'
     # Jeff said the credit hold for Faire Warehouse only happens for a day or two and changes to regular.
     df.loc[(df['OrderTypeCode'] == 'CREDIT HOLD') & (df['SSR_Row'] == 'FAIRE WHOLESALE INC'), 'OrderTypeCode'] = 'REGULAR'
-    return df
-
-def issues_search(df):
-    # for any regular orders that are supposed to ship today, all orders need at least 3 days. So they'll be pushed out.
-    df_reg_issues = df.loc[
-    (df.OrderTypeCode == 'REGULAR') &
-    (df.EstimateDate == pd.Timestamp.today().normalize())
-    ]
-    print(df_reg_issues.head())
+    return df 
 
 def create_estimate_dates():
     # Load and copy the original DataFrame

@@ -68,6 +68,17 @@ def get_regular(df):
         df['EstimateDate'] = df.apply(calculate_est_ship_date_regular, axis=1)
         return df
 
+def issues_search(df):
+    # Push out the EstimateDate by 3 days only for REGULAR orders scheduled to ship today
+    today = pd.Timestamp.today().normalize()
+    
+    # Apply the 3-day offset only to rows that match both conditions
+    df.loc[
+        (df['OrderTypeCode'] == 'REGULAR') & (df['EstimateDate'] == today),
+        'EstimateDate'
+    ] += pd.DateOffset(days=3)
+    
+    return df
 def main():
     df = upload_ho()
     df = get_regular(df)

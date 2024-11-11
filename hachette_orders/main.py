@@ -1,6 +1,7 @@
 import pandas as pd
 from datetime import datetime
 from ordertype_estimates_combined import create_estimate_dates
+from function import sum_val_next_5_days_by_ssr_row
 
 def create_pickle_file(df):
     # Generate filename with current date and time
@@ -31,8 +32,11 @@ def sum_val_next_5_days(df):
 def main():
     df = create_estimate_dates()
     
-    create_pickle_file(df)   
-    sum_val_next_5_days(df)   
+    # This saves off the df to a pickle file
+    create_pickle_file(df)  
+    print()
+    print('Next 5 Day Estimate')
+    sum_val_next_5_days_by_ssr_row(df)
 
 if __name__ == "__main__":
     main()

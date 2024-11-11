@@ -59,3 +59,31 @@ def summarize_by_estimate_date(df):
     }
 
     return daily_summary, summary
+
+def sum_val_next_5_days_by_ssr_row(df):
+    # Get today's date and the date 5 days from now
+    todays_date = pd.Timestamp.today().normalize()
+    next_5_days = todays_date + pd.DateOffset(days=5)
+    
+    # Filter the DataFrame for the next 5 days
+    df_next_5_days = df[(df['EstimateDate'] >= todays_date) & (df['EstimateDate'] < next_5_days)]
+    
+    # Group by SSR_Row and EstimateDate, and sum the 'val' column
+    summary = df_next_5_days.groupby(['SSR_Row', 'EstimateDate'])['val'].sum().unstack(fill_value=0)
+    
+    # Format the column headers (EstimateDate) to only show yyyy-mm-dd
+    summary.columns = [col.strftime('%Y-%m-%d') for col in summary.columns]
+    
+    # Sort by the first date column in descending order
+    first_date_column = summary.columns[0]
+    summary = summary.sort_values(by=first_date_column, ascending=False)
+    
+    # Round the numbers, remove decimals, and format with commas using apply on each column
+    summary = summary.round(0).astype(int).apply(lambda col: col.map(lambda x: f"{x:,}"))
+    
+    # Print only the top 20 rows
+    top_20 = summary.head(20)
+    print("Top 20 SSR_Rows by 'val' in the first EstimateDate column:")
+    print(top_20)
+    
+    return top_20
