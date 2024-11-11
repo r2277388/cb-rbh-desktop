@@ -63,22 +63,36 @@ def calculate_est_ship_date_regular(df):
     else:
         return pd.NaT
    
-def get_regular(df):
-        df = df.loc[df.OrderTypeCode == 'REGULAR']
-        df['EstimateDate'] = df.apply(calculate_est_ship_date_regular, axis=1)
-        return df
-
 def issues_search(df):
-    # Push out the EstimateDate by 3 days only for REGULAR orders scheduled to ship today
+    # Define today's date and the next two days
     today = pd.Timestamp.today().normalize()
+    tomorrow = today + pd.DateOffset(days=1)
+    day_after_tomorrow = today + pd.DateOffset(days=2)
     
-    # Apply the 3-day offset only to rows that match both conditions
-    df.loc[
-        (df['OrderTypeCode'] == 'REGULAR') & (df['EstimateDate'] == today),
-        'EstimateDate'
-    ] += pd.DateOffset(days=3)
+    # Define a function to calculate the adjusted date based on each row's current EstimateDate
+    def adjust_date(row):
+        if row['OrderTypeCode'] == 'REGULAR' and row['EstimateDate'] in [today, tomorrow, day_after_tomorrow]:
+            # Only proceed if today, tomorrow, or day after tomorrow is a weekday (Mon-Fri)
+            if row['EstimateDate'].weekday() < 5:
+                # Push the EstimateDate out by at least 3 days from the respective date
+                return row['EstimateDate'] + pd.DateOffset(days=3)
+        return row['EstimateDate']  # Return original date if conditions are not met
+    
+    # Apply the adjustment function row-wise
+    df['EstimateDate'] = df.apply(adjust_date, axis=1)
     
     return df
+
+def get_regular(df):
+    # Filter for REGULAR orders and use .loc[] for assignment to avoid SettingWithCopyWarning
+    regular_df = df.loc[df['OrderTypeCode'] == 'REGULAR'].copy()
+    regular_df.loc[:, 'EstimateDate'] = regular_df.apply(calculate_est_ship_date_regular, axis=1)
+    
+    # Apply issues_search on the filtered DataFrame
+    regular_df = issues_search(regular_df)
+    
+    return regular_df
+
 def main():
     df = upload_ho()
     df = get_regular(df)

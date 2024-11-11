@@ -42,8 +42,6 @@ def create_estimate_dates():
     # Concatenate all DataFrames into one
     df_combined = pd.concat([df_reg, df_rel, df_hol, df_bo,df_ch], ignore_index=True)
     
-    issues_search(df_combined)
-    
     return df_combined
 
 def main(): 
