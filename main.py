@@ -53,7 +53,8 @@ def display_options():
         "3. Amazon Customer Orders",
         "4. SSR Daily Summary",
         "5. UK Rolling File Combining",
-        "6. Exit"
+        "6. Hachette Orders - Shipping Estimates",
+        "7. Exit"
     ]
     print("\nWhat would you like to run?")
     for option in options:
@@ -72,7 +73,8 @@ def display_info(choice):
         Save the relevant data file to the appropriate location before running.""",
         '4': "SSR Daily Summary: Prepares the data for the SSR Daily Summary email.",
         '5': "UK Rolling File Combining: This combines the sales, reserve and midas files together.",
-        '6': "Exit: Exits the program."
+        '6': "Hachette Orders - Shipping Estimates: Generates a report for Hachette Orders.",
+        '7': "Exit: Exits the program."
     }
     return info.get(choice, "Invalid choice. No information available.")
 
@@ -83,7 +85,8 @@ def run_program(choice):
         '2': ("Amazon NYP PreOrders", "amazon_preorders/main.py"),
         '3': ("Amazon Customer Orders", "amazon_customer_orders/main.py"),
         '4': ("SSR Daily Summary", "ssr_daily_summary/main.py"),
-        '5': ("UK Rolling File Combining", "UK_Rolling_File_Combining/main.py")
+        '5': ("UK Rolling File Combining", "UK_Rolling_File_Combining/main.py"),
+        '6': ("Hachette Orders - Shipping Estimates", "hachette_orders/main.py")
     }
 
     if choice in reports:
@@ -94,7 +97,7 @@ def run_program(choice):
             print(f"The {report_name} is now ready.")
         except subprocess.CalledProcessError as e:
             print(f"An error occurred while running the {script_path}.")
-    elif choice == '6':
+    elif choice == '7':
         print(get_farewell_message())
     else:
         print("Invalid choice. Please select a valid option.")
@@ -111,7 +114,7 @@ def main():
             print(display_info(choice_info))
             continue  # Return to the options list after displaying info
 
-        if choice == '6':  # Option '7' to exit
+        if choice == '7':  # Option '7' to exit
             run_program(choice)
             break  # Exit the while loop to end the program
 

@@ -1,16 +1,30 @@
 import pandas as pd
+import os
 from datetime import datetime
+
 from ordertype_estimates_combined import create_estimate_dates
 from function import sum_val_next_5_days_by_ssr_row
 
-def create_pickle_file(df):
-    # Generate filename with current date and time
-    current_time = datetime.now().strftime('%Y%m%d_%H%M')
-    filename = f'ho_{current_time}.pkl'
+import os
+from datetime import datetime
 
-    # Save the combined DataFrame to a pickle file
-    df.to_pickle(filename)
-    print(f"File saved as {filename}")
+def create_pickle_file(df):
+    # Ask the user if they want to save the file as a pickle
+    should_pickle = input("Do you want to save the file as a pickle? (yes/no): ").strip().lower()
+    
+    if should_pickle == 'yes':
+        # Generate filename with current date and time
+        current_time = datetime.now().strftime('%Y%m%d_%H%M')
+        filename = f'ho_{current_time}.pkl'
+        
+        # Save the combined DataFrame to a pickle file
+        df.to_pickle(filename)
+        
+        # Get the absolute path of the saved file
+        file_path = os.path.abspath(filename)
+        print(f"File saved at {file_path}")
+    else:
+        print("File not saved as a pickle.")
     
 def sum_val_next_5_days(df):
     todays_date = pd.Timestamp.today().normalize()
