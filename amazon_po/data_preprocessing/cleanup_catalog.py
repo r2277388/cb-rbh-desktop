@@ -9,7 +9,12 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 # File
 # Path components
 base_dir = Path(fr'G:\SALES\Amazon\RBH\DOWNLOADED_FILES')
-file_name = 'Catalog_Manufacturing_UnitedStates.csv'
+
+# Find the file that starts with "Catalog"
+catalog_files = list(base_dir.glob("Catalog*.csv"))
+if not catalog_files:
+    raise FileNotFoundError(f"No 'csv' file starting with 'Catalog' found in the following folder {base_dir}.")
+file_name = catalog_files[0] # finding the catalog file as long as it starts with Catalog.
 
 CAT_FILE_PATH = base_dir / file_name
 

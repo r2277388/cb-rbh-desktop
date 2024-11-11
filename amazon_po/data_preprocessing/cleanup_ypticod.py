@@ -8,7 +8,12 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 # Path components
 base_dir = Path(fr'\\sierra\groups\READTHIS\FINANCE\SALES\23sales')
 file_name = 'Oracle YPTICOD.xlsx'
-    
+
+ypticod_list = list(base_dir.glob("Oracle YPTICOD*.xlsx"))
+if not ypticod_list:
+    raise FileNotFoundError(f"No 'xlsx' file found that starts with 'Oracle Ypticode' in {base_dir}.")
+file_name = ypticod_list[0]  # Get the first match
+
 # File paths and connection strings
 YPTICOD_FILE_PATH = base_dir / file_name
 

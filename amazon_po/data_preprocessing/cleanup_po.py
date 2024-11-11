@@ -10,8 +10,14 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 # Note that the downloaded file must be saved to this location
 
 # Path components
-base_dir = Path(r'G:\SALES\Amazon\PURCHASE ORDERS\atelier\po_analysis')
+base_dir = Path(rf'G:\SALES\Amazon\PURCHASE ORDERS\atelier\po_analysis')
 file_name = 'PurchaseOrderItems.csv'
+
+po_list = list(base_dir.glob("PurchaseOrderItems*.csv"))
+if not po_list:
+    raise FileNotFoundError(f"No 'csv' file starting with 'PurchaseOrderItems' found in the following folder {base_dir}.")
+file_name = po_list[0]  # Get the first match
+
 PO_FILE_PATH = base_dir / file_name
 
 def upload_po(file=PO_FILE_PATH) -> pd.DataFrame:

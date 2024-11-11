@@ -11,6 +11,12 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 base_dir = Path(fr'G:\OPS\Inventory\Daily\Finance_Only')
 file_name = 'Inventory Detail.xlsx'
 
+# Find the file that starts with "Catalog"
+inventory_files = list(base_dir.glob("Inventory*.xlsx"))
+if not inventory_files:
+    raise FileNotFoundError(f"No 'excel' (xslx) file starting with 'Inventory' found in the following folder {base_dir}.")
+file_name = inventory_files[0]  # Get the first match
+
 AVAIL_FILE_PATH = base_dir / file_name
 
 def upload_inventory_detail():
