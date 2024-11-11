@@ -2,8 +2,6 @@ import pandas as pd
 from datetime import datetime
 from ordertype_estimates_combined import create_estimate_dates
 
-df = create_estimate_dates()
-
 def create_pickle_file(df):
     # Generate filename with current date and time
     current_time = datetime.now().strftime('%Y%m%d_%H%M')
@@ -12,14 +10,6 @@ def create_pickle_file(df):
     # Save the combined DataFrame to a pickle file
     df.to_pickle(filename)
     print(f"File saved as {filename}")
-    
-
-def issues_search(df):
-    df_reg_issues = df.loc[
-    (df.OrderTypeCode == 'REGULAR') &
-    (df.EstimateDate == pd.Timestamp.today().normalize())
-    ]
-    print(df_reg_issues.head())
     
 def sum_val_next_5_days(df):
     todays_date = pd.Timestamp.today().normalize()
@@ -39,10 +29,9 @@ def sum_val_next_5_days(df):
     return summary
     
 def main():
-    # create_pickle_file(df)
-    file_name = r'C:\Users\rbh\code\hachette_orders\ho_20241104_1704.pkl'
-    df = pd.read_pickle(file_name)
+    df = create_estimate_dates()
     
+    create_pickle_file(df)   
     sum_val_next_5_days(df)   
 
 if __name__ == "__main__":

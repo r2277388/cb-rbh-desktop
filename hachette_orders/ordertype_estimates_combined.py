@@ -15,6 +15,14 @@ def convert_faire_credit_hold(df):
     df.loc[(df['OrderTypeCode'] == 'CREDIT HOLD') & (df['SSR_Row'] == 'FAIRE WHOLESALE INC'), 'OrderTypeCode'] = 'REGULAR'
     return df
 
+def issues_search(df):
+    # for any regular orders that are supposed to ship today, all orders need at least 3 days. So they'll be pushed out.
+    df_reg_issues = df.loc[
+    (df.OrderTypeCode == 'REGULAR') &
+    (df.EstimateDate == pd.Timestamp.today().normalize())
+    ]
+    print(df_reg_issues.head())
+
 def create_estimate_dates():
     # Load and copy the original DataFrame
     df_raw = upload_ho()    
@@ -41,6 +49,8 @@ def create_estimate_dates():
     
     # Concatenate all DataFrames into one
     df_combined = pd.concat([df_reg, df_rel, df_hol, df_bo,df_ch], ignore_index=True)
+    
+    issues_search(df_combined)
     
     return df_combined
 
