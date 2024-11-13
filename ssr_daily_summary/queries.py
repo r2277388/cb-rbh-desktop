@@ -393,7 +393,7 @@ def query9(prior_day):
         sum(ho.Quantity) desc
         '''
 
-def query10():
+def query10(typ1):
     '''
     Returns
     -------
@@ -433,7 +433,7 @@ def query10():
         [summary].TitleMonthlySales ims                 
                 inner join ebs.Item i on ims.ITEM_ID = i.ITEM_ID              
     WHERE                      
-        ims.PERIOD >= '202401'              
+        ims.PERIOD >= '{typ1}'              
         AND ims.SALETYPECODE = 'N'               
         AND i.PRODUCT_TYPE in ('BK','FT','CP','RP','DI','PZ')  
         and i.PUBLISHING_GROUP not in('MKT','PQB','GLM')
@@ -466,7 +466,7 @@ def query10():
         end
     '''
 
-def query10_b():
+def query10_b(typ1):
     '''
     Returns
     -------
@@ -509,7 +509,7 @@ def query10_b():
             INNER JOIN ebs.Item i on i.ITEM_ID = sd.ITEM_ID
     
         WHERE
-            Sd.PERIOD >= '202401'
+            Sd.PERIOD >= '{typ1}'
             AND sd.INVOICE_LINE_TYPE='SALE'
             AND cbq2.dbo.fnSaleTypeCode(SD.AR_TRX_TYPE_ID)='N'
             AND i.PRODUCT_TYPE in ('BK','FT','CP','RP','DI','PZ')  
@@ -543,7 +543,7 @@ def query10_b():
         end
         '''
 
-def query11():
+def query11(typ1):
     '''
     SSR YTD Sales
     '''
@@ -582,7 +582,7 @@ def query11():
         inner join ssr.Channel chan on chan.ChannelID = subchan.ChannelID
         inner join ebs.SalesRep sr on sr.SALESREP_ID = sd.PRIMARY_SALESREP_ID
     WHERE
-        sd.PERIOD >= '202401'
+        sd.PERIOD >= '{typ1}'
         and cbq2.dbo.fnSaleTypeCode(SD.AR_TRX_TYPE_ID)='N'   
         AND sd.INVOICE_LINE_TYPE = 'SALE'
         and i.PRODUCT_TYPE in('FT','BK')
@@ -612,3 +612,68 @@ def query11():
             else i.PUBLISHING_GROUP
         end
         '''
+        
+
+def query_mtd(tp):
+    '''
+    Gives us daily sales and units shipped for the current month
+    '''
+    return f'''
+    SELECT 
+        sd.TRX_DATE,
+        SUM(sd.QUANTITY_INVOICED) AS [Units],
+        SUM(sd.REVENUE_AMOUNT) AS [Dollars]
+    FROM
+        ebs.Sales sd
+        INNER JOIN ebs.Item t ON t.ITEM_ID = sd.ITEM_ID
+        INNER JOIN ebs.Customer c ON c.SITE_USE_ID = sd.SHIP_TO_SITE_USE_ID
+        INNER JOIN ebs.SalesRep sr ON sr.SALESREP_ID = sd.PRIMARY_SALESREP_ID
+        LEFT OUTER JOIN ebs.Customer BillTo ON BillTo.SITE_USE_ID = c.BILL_TO_SITE_USE_ID
+    WHERE 
+        sd.PERIOD = '{tp}'
+        AND sd.INVOICE_LINE_TYPE = 'SALE'
+        AND cbq2.dbo.fnSaleTypeCode(sd.AR_TRX_TYPE_ID) = 'N'
+        AND t.PUBLISHER_CODE = 'Chronicle'
+        AND t.PRODUCT_TYPE IN ('BK', 'FT')
+    GROUP BY 
+        sd.TRX_DATE
+    ORDER BY 
+        sd.TRX_DATE DESC;
+    '''
+    
+def query_ytd(typ1):
+    '''
+    Gives us daily sales and units shipped for the current month
+    '''
+    return f'''
+    SELECT 
+        sd.period [Period],
+        SUM(sd.QUANTITY_INVOICED) AS [Units],
+        SUM(sd.REVENUE_AMOUNT) AS [Dollars]
+    FROM
+        ebs.Sales sd
+        INNER JOIN ebs.Item t ON t.ITEM_ID = sd.ITEM_ID
+        INNER JOIN ebs.Customer c ON c.SITE_USE_ID = sd.SHIP_TO_SITE_USE_ID
+        INNER JOIN ebs.SalesRep sr ON sr.SALESREP_ID = sd.PRIMARY_SALESREP_ID
+        LEFT OUTER JOIN ebs.Customer BillTo ON BillTo.SITE_USE_ID = c.BILL_TO_SITE_USE_ID
+    WHERE 
+        sd.PERIOD >= '{typ1}'
+        AND sd.INVOICE_LINE_TYPE = 'SALE'
+        AND cbq2.dbo.fnSaleTypeCode(sd.AR_TRX_TYPE_ID) = 'N'
+        AND t.PUBLISHER_CODE = 'Chronicle'
+        AND t.PRODUCT_TYPE IN ('BK', 'FT')
+    GROUP BY 
+        sd.period
+    ORDER BY 
+        sd.period DESC;
+    '''
+    
+def query_check_cbq_metrics(rows):
+    '''
+    Looks at the top N last updated tables in CBQ2
+    '''
+    return f'''
+    SELECT top {rows} *
+    FROM metrics.TableLastUpdated			
+    Order by LastUpdated DESC
+    '''
