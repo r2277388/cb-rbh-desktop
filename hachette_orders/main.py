@@ -49,6 +49,7 @@ def main():
     # This saves off the df to a pickle file
     create_pickle_file(df)  
     print()
+    sum_val_next_5_days(df)
     print('Next 5 Day Estimate')
     sum_val_next_5_days_by_ssr_row(df)
 

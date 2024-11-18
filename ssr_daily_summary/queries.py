@@ -677,3 +677,116 @@ def query_check_cbq_metrics(rows):
     FROM metrics.TableLastUpdated			
     Order by LastUpdated DESC
     '''
+
+def query_viz_daily():
+    '''
+    the quiz for the altair viz
+    '''
+    return f'''
+    SELECT
+        i.PUBLISHER_CODE Publisher
+        ,left(sd.period,4) [year]
+        ,right(sd.period,2) [month]
+        ,case
+            when right(sd.period,2) in('01','02','03') then 'Q1'
+            when right(sd.period,2) in('04','05','06') then 'Q2'
+            when right(sd.period,2) in('07','08','09') then 'Q3'
+            when right(sd.period,2) in('10','11','12') then 'Q4'
+        end [quarter]
+        ,case
+            when left(period,4) in('2022','2023') then chan.Description
+            else '-'
+        end channel
+        ,case
+            when ssr_row.SSRRowID = 6 then 'Amaz'
+            else 'ROM'
+        end [Group]
+        ,case                             
+            when i.PUBLISHER_CODE = 'Tourbillon' then 'TW'                      
+            when i.PUBLISHER_CODE = 'Sierra Club' then 'SC'                     
+            when i.PUBLISHER_CODE IN('Glam Media','Benefit','PQ Blackwell','San Francisco Art Institute','AFO LLC','FareArts','Sager') then 'CD'                 
+            when i.PUBLISHER_CODE = 'Creative Company' then 'CC'   
+            when i.PUBLISHER_CODE = 'Do Books' then 'DO'
+            when i.PUBLISHER_CODE = 'Levine Querido' then 'LQ'
+            when i.PUBLISHER_CODE = 'AMMO Books' then 'AM'                                           
+            when i.PUBLISHING_GROUP = 'GAL' then 'GA'                                                      
+            when i.PUBLISHING_GROUP = 'GAL-CL' then 'CL'                        
+            when i.PUBLISHING_GROUP = 'MUD' then 'MP'
+            when i.PUBLISHING_GROUP = 'GAL-BM' then 'BM'             
+            when i.PUBLISHING_GROUP in('LAU-BIS') then 'LKBS'                          
+            when i.PUBLISHER_CODE = 'Laurence King' and i.PRODUCT_TYPE = 'FT' then 'LKGI'                      
+            when i.PUBLISHER_CODE = 'Laurence King' and i.PRODUCT_TYPE <> 'FT' then 'LKBK'         
+            when i.PUBLISHER_CODE = 'PRINCETON' and i.PUBLISHING_GROUP in('PAP-MS','PAP-MP') then 'PAMS'       
+            when i.PUBLISHER_CODE = 'Princeton' and i.PRODUCT_TYPE = 'FT' then 'PAGI'                    
+            when i.PUBLISHER_CODE = 'Princeton' and i.PRODUCT_TYPE <> 'FT' then 'PABK'                      
+            when i.PUBLISHER_CODE = 'Hardie Grant Publishing' then 'HG'  
+            when i.PUBLISHING_GROUP in('BAR-ART','BAR-ENT','BAR-LIF') then 'IMP'
+            when i.PUBLISHING_GROUP in('CPB','CCB') then 'IMP'
+            when i.PUBLISHING_GROUP in('RID','PTC','GAM') then 'RPG'
+            when i.PUBLISHING_GROUP in('FWN','LIF') then 'FLS'                         
+            else i.PUBLISHING_GROUP                 
+        end PubGroup
+        ,sum(sd.REVENUE_AMOUNT) rev
+        ,sum(sd.QUANTITY_INVOICED) qty
+    FROM
+        ebs.Sales sd
+        inner join ssr.SalesSSRRow stie on stie.CUSTOMER_TRX_LINE_ID = sd.CUSTOMER_TRX_LINE_ID                  
+        inner join ebs.Item i on sd.ITEM_ID = i.ITEM_ID                      
+        inner join ssr.SSRRow ssr_row on ssr_row.SSRRowID= stie.SSRRowID
+        inner join ssr.SubChannel sub on sub.SubChannelID = ssr_row.SubChannelID
+        inner join ssr.Channel chan on chan.ChannelID = sub.ChannelID
+
+    WHERE
+        Sd.PERIOD >= '201701'
+        --Sd.PERIOD between '201701' and '202302'
+        AND sd.INVOICE_LINE_TYPE='SALE'
+        AND cbq2.dbo.fnSaleTypeCode(SD.AR_TRX_TYPE_ID)='N'
+        and i.PRODUCT_TYPE in('BK','FT')
+        AND chan.ChannelID <> 4
+        AND i.PUBLISHING_GROUP NOT IN('MKT','ZZZ')
+        AND i.publisher_code not in('Benefit', 'Glam Media'
+            ,'PQ Blackwell', 'Moleskine', 'AFO LLC','Sager','San Francisco Art Institute','FareArts')
+    GROUP BY
+        i.PUBLISHER_CODE
+        ,left(sd.period,4)
+        ,right(sd.period,2)
+        ,case
+            when right(sd.period,2) in('01','02','03') then 'Q1'
+            when right(sd.period,2) in('04','05','06') then 'Q2'
+            when right(sd.period,2) in('07','08','09') then 'Q3'
+            when right(sd.period,2) in('10','11','12') then 'Q4'
+        end
+        ,case
+            when left(period,4) in('2022','2023') then chan.Description
+            else '-'
+        end
+        ,case
+            when ssr_row.SSRRowID = 6 then 'Amaz'
+            else 'ROM'
+        end
+        ,case                             
+            when i.PUBLISHER_CODE = 'Tourbillon' then 'TW'                      
+            when i.PUBLISHER_CODE = 'Sierra Club' then 'SC'                     
+            when i.PUBLISHER_CODE IN('Glam Media','Benefit','PQ Blackwell','San Francisco Art Institute','AFO LLC','FareArts','Sager') then 'CD'                 
+            when i.PUBLISHER_CODE = 'Creative Company' then 'CC'   
+            when i.PUBLISHER_CODE = 'Do Books' then 'DO'
+            when i.PUBLISHER_CODE = 'Levine Querido' then 'LQ'
+            when i.PUBLISHER_CODE = 'AMMO Books' then 'AM'                                           
+            when i.PUBLISHING_GROUP = 'GAL' then 'GA'                                                      
+            when i.PUBLISHING_GROUP = 'GAL-CL' then 'CL'                        
+            when i.PUBLISHING_GROUP = 'MUD' then 'MP'
+            when i.PUBLISHING_GROUP = 'GAL-BM' then 'BM'             
+            when i.PUBLISHING_GROUP in('LAU-BIS') then 'LKBS'                          
+            when i.PUBLISHER_CODE = 'Laurence King' and i.PRODUCT_TYPE = 'FT' then 'LKGI'                      
+            when i.PUBLISHER_CODE = 'Laurence King' and i.PRODUCT_TYPE <> 'FT' then 'LKBK'         
+            when i.PUBLISHER_CODE = 'PRINCETON' and i.PUBLISHING_GROUP in('PAP-MS','PAP-MP') then 'PAMS'       
+            when i.PUBLISHER_CODE = 'Princeton' and i.PRODUCT_TYPE = 'FT' then 'PAGI'                    
+            when i.PUBLISHER_CODE = 'Princeton' and i.PRODUCT_TYPE <> 'FT' then 'PABK'                      
+            when i.PUBLISHER_CODE = 'Hardie Grant Publishing' then 'HG'  
+            when i.PUBLISHING_GROUP in('BAR-ART','BAR-ENT','BAR-LIF') then 'IMP'
+            when i.PUBLISHING_GROUP in('CPB','CCB') then 'IMP'
+            when i.PUBLISHING_GROUP in('RID','PTC','GAM') then 'RPG'
+            when i.PUBLISHING_GROUP in('FWN','LIF') then 'FLS'                         
+            else i.PUBLISHING_GROUP                 
+        end
+    '''

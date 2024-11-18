@@ -36,3 +36,6 @@ reprint_project/cache/saldet_cache.pkl
 reprint_project/cache/hachette_order_status_cache.pkl
 reprint_project/cache/inventory_cache.pkl
 reprint_project/cache/osd_cache.pkl
+
+# Ignore any html files.
+*.html
