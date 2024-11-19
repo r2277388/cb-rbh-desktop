@@ -86,6 +86,7 @@ def create_bar_chart(df, ty, ly):
 def create_heatmaps(df):
     """Create heatmaps for yearly and quarterly data."""
     heat_month = alt.Chart(df).mark_rect(cornerRadius=4).encode(
+        x=alt.X('month:O', title='Month', axis=alt.Axis(labelAngle=0)),
         y=alt.Y('year', title='', sort='descending'),
         color=alt.Color('sum(rev)', legend=None, scale=alt.Scale(scheme='blues')),
         tooltip=[alt.Tooltip('sum(rev):Q', format="$,.0f", title='Total Sales')]
