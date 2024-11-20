@@ -678,7 +678,7 @@ def query_check_cbq_metrics(rows):
     Order by LastUpdated DESC
     '''
 
-def query_viz_daily():
+def query_viz_daily(ty,ly):
     '''
     the quiz for the altair viz
     '''
@@ -694,7 +694,7 @@ def query_viz_daily():
             when right(sd.period,2) in('10','11','12') then 'Q4'
         end [quarter]
         ,case
-            when left(period,4) in('2022','2023') then chan.Description
+            when left(period,4) in('{ty}','{ly}') then chan.Description
             else '-'
         end channel
         ,case
@@ -737,8 +737,7 @@ def query_viz_daily():
         inner join ssr.Channel chan on chan.ChannelID = sub.ChannelID
 
     WHERE
-        Sd.PERIOD >= '201701'
-        --Sd.PERIOD between '201701' and '202302'
+        Sd.PERIOD >= '201901'
         AND sd.INVOICE_LINE_TYPE='SALE'
         AND cbq2.dbo.fnSaleTypeCode(SD.AR_TRX_TYPE_ID)='N'
         and i.PRODUCT_TYPE in('BK','FT')
@@ -757,7 +756,7 @@ def query_viz_daily():
             when right(sd.period,2) in('10','11','12') then 'Q4'
         end
         ,case
-            when left(period,4) in('2022','2023') then chan.Description
+            when left(period,4) in('{ty}','{ly}') then chan.Description
             else '-'
         end
         ,case

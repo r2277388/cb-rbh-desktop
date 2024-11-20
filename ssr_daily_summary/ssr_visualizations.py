@@ -3,34 +3,8 @@
 
 import pandas as pd
 import altair as alt
-import os
-import pickle
-from datetime import datetime
-from functions import get_connection  # Assuming functions.py has this
-from queries import query_viz_daily  # Assuming queries.py has this
+from functions import load_data  # Assuming functions.py has this
 from paths import saved_viz_location
-
-def load_data():
-    """Connects to the database and loads the daily data."""
-    engine = get_connection()
-    # Define the filename with the current date
-    today = datetime.today().strftime('%Y-%m-%d')
-    filename = f"data_{today}.pkl"
-
-    # Check if the file already exists
-    if os.path.exists(filename):
-        # Load the data from the pickle file
-        with open(filename, 'rb') as file:
-            df = pickle.load(file)
-    else:
-        # Load the data from the database
-        query_daily = query_viz_daily()
-        df = pd.read_sql_query(query_daily, engine)
-        # Save the data to a pickle file
-        with open(filename, 'wb') as file:
-            pickle.dump(df, file)
-
-    return df
 
 def prepare_data(df):
     df_daily = df.copy()
@@ -244,6 +218,8 @@ def create_charts(df_daily, ty, ly, months_ty, tm):
         alt.FieldOneOfPredicate(field='month', oneOf=months_ty)
     )
 
+    df_daily['year_month'] = df_daily['year'].astype(str) + df_daily['month'].astype(str).str.zfill(2)
+
     amaz_rom = alt.Chart(df_daily).mark_area(line=True).encode(
     alt.X('year_month:O', axis=alt.Axis(title='Year and Month')),
     alt.Y('sum(rev):Q', title="Percentage of Total Sales", stack='normalize'),
@@ -304,7 +280,8 @@ def create_charts(df_daily, ty, ly, months_ty, tm):
     return cumulative_chart
 
 def main():
-    df_raw = load_data()
+    # If you want to update the ty and ly, you can do it here, otherwise, it'll default to the current year and last year.
+    df_raw = load_data(ty=None, ly=None)
     df_daily, ty, ly, months_ty, tm = prepare_data(df_raw)
     cumulative_chart = create_charts(df_daily, ty, ly, months_ty, tm)
     
