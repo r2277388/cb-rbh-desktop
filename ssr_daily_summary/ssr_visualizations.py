@@ -279,7 +279,7 @@ def create_charts(df_daily, ty, ly, months_ty, tm):
 
     return cumulative_chart
 
-def main():
+def create_viz():
     # If you want to update the ty and ly, you can do it here, otherwise, it'll default to the current year and last year.
     df_raw = load_data(ty=None, ly=None)
     df_daily, ty, ly, months_ty, tm = prepare_data(df_raw)
@@ -295,4 +295,4 @@ def main():
     print(f"Charts saved to {path}\nand\n{current_folder_path}")
     
 if __name__ == "__main__":
-    main()
+    create_viz()
