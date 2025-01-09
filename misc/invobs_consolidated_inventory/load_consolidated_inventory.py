@@ -26,7 +26,7 @@ def apply_filters(df, pgrp_filter, bkft_filter):
 
 # Main function to execute the steps
 def consolidate_inventory():
-    file_consolided_inventory = Path(r"F:\2024\Analysis\invobs\Q3\All_Consolidated_Inventories_sep24.xlsx")
+    file_consolided_inventory = Path(r"F:\2024\Analysis\invobs\Q4\All_Consolidated_Inventories_dec24.xlsx")
     
     # Load data
     df = load_data(file_consolided_inventory)

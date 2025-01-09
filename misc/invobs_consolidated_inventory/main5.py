@@ -91,7 +91,7 @@ df_result_inventory = process_inventory(df_inventory, dict_cdu, dict_uc)
 df_aggregated_inventory = df_result_inventory.groupby('ISBN').sum().reset_index()
 
 # Save both detailed and aggregated results to Excel with two tabs
-output_file_path = r'C:\Users\rbh\Desktop\consolidated_inventory_September.xlsx'
+output_file_path = r'C:\Users\rbh\Desktop\consolidated_inventory_december.xlsx'
 with pd.ExcelWriter(output_file_path, engine='xlsxwriter') as writer:
     # First sheet: detailed results
     df_result_inventory.to_excel(writer, sheet_name='Detailed_Results', index=False)
