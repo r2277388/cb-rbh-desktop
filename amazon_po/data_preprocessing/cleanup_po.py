@@ -30,8 +30,8 @@ def upload_po(file=PO_FILE_PATH) -> pd.DataFrame:
     Returns:
     - DataFrame with selected columns and appropriate data types.
     """
-    columns = ['ASIN', 'External ID', 'Accepted quantity (units)', 'Requested quantity (units)', 
-               'Total accepted cost', 'Cost price','Total requested cost']
+    columns = ['ASIN', 'External ID', 'Accepted quantity', 'Requested quantity', 
+               'Total accepted cost', 'Cost','Total requested cost']
     
     return pd.read_csv(file,
                        usecols=columns,
@@ -52,9 +52,10 @@ def rename_columns(df: pd.DataFrame) -> pd.DataFrame:
     - DataFrame with renamed columns.
     """
     col_dict = {'External ID': 'ISBN',
-                'Accepted quantity (units)':'Accepted Quantity',
+                'Accepted quantity':'Accepted Quantity',
                 'Requested quantity (units)':'Requested quantity',
-                'Total requested cost':'Requested Cost'
+                'Total requested cost':'Requested Cost',
+                'Cost':'Cost price'
                 }
     
     return df.rename(columns=col_dict)
