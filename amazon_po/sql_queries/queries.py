@@ -6,7 +6,11 @@ def item_sql() -> str:
     
     return """
         SELECT
-            i.PUBLISHER_CODE Publisher
+            CASE
+                WHEN i.PUBLISHING_GROUP IN('QDP-HGB','HGP-HGNA') THEN 'Hardie Grant Publishing'
+                WHEN i.PUBLISHING_GROUP IN('QDP-BOOK','QDP-GIFT','QDP-HBUK') THEN 'Quadrille'
+                ELSE i.PUBLISHER_CODE
+	        END Publisher
             ,i.PRODUCT_TYPE pt
             ,i.REPORTING_CATEGORY cat
             ,case
@@ -35,5 +39,5 @@ def item_sql() -> str:
             AND i.PUBLISHING_GROUP <> '???'
             AND i.SHORT_TITLE is not NULL
             AND i.PRICE_AMOUNT is not NULL
-	        AND i.PRODUCT_TYPE IN('BK','FT')
+            AND i.PRODUCT_TYPE IN('BK','FT')
         """

@@ -8,7 +8,11 @@ def item_sql():
     SELECT
         i.ISBN
         ,i.SHORT_TITLE title
-        ,i.PUBLISHER_CODE publisher
+        ,CASE
+                WHEN i.PUBLISHING_GROUP IN('QDP-HGB','HGP-HGNA') THEN 'Hardie Grant Publishing'
+                WHEN i.PUBLISHING_GROUP IN('QDP-BOOK','QDP-GIFT','QDP-HBUK') THEN 'Quadrille'
+                ELSE i.PUBLISHER_CODE
+	    END publisher
         ,case                             
             when i.PUBLISHER_CODE = 'Tourbillon' then 'TW'                      
             when i.PUBLISHER_CODE = 'Sierra Club' then 'SC'                     
@@ -24,7 +28,8 @@ def item_sql():
             when i.PUBLISHING_GROUP in('LAU-BIS') then 'LKBS'                          
             when i.PUBLISHER_CODE = 'Laurence King' and i.PRODUCT_TYPE = 'FT' then 'LKGI'                      
             when i.PUBLISHER_CODE = 'Laurence King' and i.PRODUCT_TYPE <> 'FT' then 'LKBK'         
-            when i.PUBLISHER_CODE = 'Hardie Grant Publishing' then 'HG'  
+            when i.PUBLISHING_GROUP IN('QDP-HGB','HGP-HGNA') then 'HG' 
+            when i.PUBLISHING_GROUP IN('QDP-BOOK','QDP-GIFT','QDP-HBUK') then 'QD'
             when i.PUBLISHING_GROUP in('BAR-ART','BAR-ENT','BAR-LIF') then 'BAR'                  
             else i.PUBLISHING_GROUP                 
         end pgrp
