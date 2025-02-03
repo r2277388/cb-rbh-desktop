@@ -33,6 +33,7 @@ def main():
         ("Galison", None, 5, 'Galison'),
         ("Laurence King", None, 5, 'Laurence_King'),
         ("Hardie Grant Publishing", None, 5, 'Hardie Grant Publishing'),
+        ("Quadrille", None, 5, 'Quadrille'),
         ("Levine Querido", None, 5, 'Levine Querido'),
         ("Tourbillon", None, 5, 'Tourbillon'),
         ("Do Books", None, 5, 'Do Books'),

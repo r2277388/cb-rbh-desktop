@@ -61,7 +61,7 @@ def main():
     """
     df = load_data()
     agg_pub, agg_pgrp = aggregate_data(df)
-    filename = generate_filename(r'G:\SALES\Amazon\PURCHASE ORDERS\2024')
+    filename = generate_filename(r'G:\SALES\Amazon\PURCHASE ORDERS\2025')
     save_to_excel(df, agg_pub, agg_pgrp, filename)
 
 if __name__ == '__main__':
