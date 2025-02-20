@@ -17,12 +17,12 @@ def read_catalog_file(file_path: Path, columns: list, date_column: str) -> pd.Da
         skiprows=1,
         na_values='—',
         usecols=columns,
-        dtype={'ASIN': str, 'EAN': str, 'ISBN-13': str, 'Model Number': str, 'Release Date': str}
+        dtype={'ASIN': str, 'EAN': str, 'ISBN': str, 'Model Number': str, 'Release Date': str}
     )
     
     # Convert the date column to datetime and remove the time component
     df[date_column] = pd.to_datetime(df[date_column], errors='coerce').dt.normalize()
-    
+    df.rename(columns={'ISBN': 'ISBN-13'}, inplace=True)
     return df
 
 def process_latest_catalog(folder_path: str, pattern: str, columns: list, date_column: str) -> pd.DataFrame:
@@ -35,7 +35,7 @@ def process_latest_catalog(folder_path: str, pattern: str, columns: list, date_c
 def data_catalog():
     folder_path = r'G:\SALES\Amazon\RBH\DOWNLOADED_FILES'
     pattern = '*Catalog*csv'
-    columns = ['ASIN', 'EAN', 'ISBN-13', 'Model Number', 'Release Date']
+    columns = ['ASIN', 'EAN', 'ISBN', 'Model Number', 'Release Date']
     date_column = 'Release Date'
     
     df_catalog = process_latest_catalog(folder_path, pattern, columns, date_column)

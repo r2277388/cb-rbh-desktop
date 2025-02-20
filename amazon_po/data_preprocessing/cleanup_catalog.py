@@ -21,19 +21,18 @@ CAT_FILE_PATH = base_dir / file_name
 def upload_catalog(file = CAT_FILE_PATH):
     return pd.read_csv(file
                         ,skiprows=1
-                        ,usecols=['EAN','ASIN','ISBN-13','Product Group']
+                        ,usecols=['EAN','ASIN','ISBN','Product Group']
                         ,na_values=['UNKNOWN','—']
-                        ,dtype={'EAN': 'object','ISBN-13':'object'}
+                        ,dtype={'EAN': 'object','ISBN':'object'}
                         )
-
 
 def cat_clean(df)-> pd.DataFrame:
     df = df.copy()
-    filt1 = (df['EAN'].isnull()) & (df['ISBN-13'].isnull())
+    filt1 = (df['EAN'].isnull()) & (df['ISBN'].isnull())
     df = df.loc[~filt1]
-    df.rename(columns={"EAN": "ISBN"}, errors="raise", inplace=True)
-    df['ISBN'] = np.where(df['ISBN'].isna(), df['ISBN-13'], df['ISBN'])
-    df.drop(['ISBN-13'], axis=1, inplace=True)
+    #df.rename(columns={"EAN": "ISBN"}, errors="raise", inplace=True)
+    df['ISBN'] = np.where(df['EAN'].isna(), df['ISBN'], df['EAN'])
+    #df.drop(['ISBN-13'], axis=1, inplace=True)
     df['ISBN'] = df['ISBN'].str.zfill(13)
     df['ASIN'] = df['ASIN'].str.zfill(10)
     return df
