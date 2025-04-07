@@ -13,3 +13,8 @@ def load_midas_data():
     df_midas = df_midas.drop(columns=['Product'])
     df_midas.set_index('ISBN', inplace=True)
     return df_midas
+
+if __name__ == "__main__":
+    df_midas = load_midas_data()
+    print(df_midas.head())  
+    print("Midas data loaded successfully.")
