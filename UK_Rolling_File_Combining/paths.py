@@ -1,6 +1,6 @@
 # Set up paths and load data
 # 
-folder_path = fr"C:\Users\dag\Desktop\Python Scripts\A&CB Data - Python\text_file_deposit"
+folder_path = fr"C:\Users\dag\OneDrive - chroniclebooks.com\Desktop\Python Scripts\A&CB Data - Python\text_file_deposit"
 
 output_path = fr'G:\SALES\2025 Sales Reports\Sell-Through Reporting\Abrams & Chronicle\Title Sales Week ##.xlsx'
 
