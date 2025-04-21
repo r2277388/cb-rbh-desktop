@@ -8,7 +8,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 from loader_osd import upload_osd
 
 # Path components
-base_dir = Path(fr'\\sierra\groups\READTHIS\FINANCE\SALES\23sales')
+base_dir = Path(fr'J:\Metadata Reports')
 file_name = 'Oracle YPTICOD.xlsx'
     
 # File paths and connection strings
