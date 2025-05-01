@@ -2,43 +2,44 @@ import sys
 import pandas as pd
 import numpy as np
 from pathlib import Path
+from tkinter import Tk
+from tkinter.filedialog import askopenfilename
 
 # Add the parent directory to the sys.path so Python can find functions.py
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-# File paths and connection strings
-# Note that the downloaded file must be saved to this location
-
-# Path components
-base_dir = Path(rf'G:\SALES\Amazon\PURCHASE ORDERS\atelier\po_analysis')
-file_name = 'PurchaseOrderItems.csv'
-
-po_list = list(base_dir.glob("PurchaseOrderItems*.csv"))
-if not po_list:
-    raise FileNotFoundError(f"No 'csv' file starting with 'PurchaseOrderItems' found in the following folder {base_dir}.")
-file_name = po_list[0]  # Get the first match
-
-PO_FILE_PATH = base_dir / file_name
-
-def upload_po(file=PO_FILE_PATH) -> pd.DataFrame:
+def upload_po() -> pd.DataFrame:
     """
     Upload the Purchase Order file from Vendor Central and select relevant columns.
-    
-    Parameters:
-    - file: Path to the Purchase Order file.
+    Allows the user to manually select the file using a pop-up window.
     
     Returns:
     - DataFrame with selected columns and appropriate data types.
     """
+    # Open a file dialog to select the Purchase Order file
+    Tk().withdraw()  # Hide the root Tkinter window
+    file = askopenfilename(
+        title="Select the Purchase Order File (CSV format)",
+        filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")]
+    )
+    
+    if not file:
+        raise FileNotFoundError("No file selected. Please select a valid CSV file.")
+    
+    if not file.endswith('.csv'):
+        raise ValueError("The selected file is not a CSV file. Please select a valid CSV file.")
+    
+    print(f"Selected file: {file}")
+    
     columns = ['ASIN', 'External ID', 'Accepted quantity', 'Requested quantity', 
-               'Total accepted cost', 'Cost','Total requested cost']
+               'Total accepted cost', 'Cost', 'Total requested cost']
     
     return pd.read_csv(file,
                        usecols=columns,
                        dtype={'External ID': 'object',
-                              'ASIN':'object',
+                              'ASIN': 'object',
                               'Total accepted cost': 'float',
-                              'Total requested cost':'float'})
+                              'Total requested cost': 'float'})
 
 def rename_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -98,10 +99,13 @@ def main():
     """
     Main function to execute the Purchase Order data preparation.
     """
-    df = get_cleaned_po()
-    print(df.info())
-    print(df.sum())
-    print(df.head())
+    try:
+        df = get_cleaned_po()
+        print(df.info())
+        print(df.sum())
+        print(df.head())
+    except (FileNotFoundError, ValueError) as e:
+        print(f"Error: {e}")
 
 if __name__ == "__main__":
     main()

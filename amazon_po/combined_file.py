@@ -10,7 +10,7 @@ from functools import cache
 from data_preprocessing.cleanup_catalog import get_cleaned_catalog
 from data_preprocessing.cleanup_ebs_item import get_cleaned_item
 from data_preprocessing.cleanup_inventorydetail import get_cleaned_inv
-from data_preprocessing.cleanup_po_v2 import get_cleaned_po
+from amazon_po.data_preprocessing.cleanup_po import get_cleaned_po
 
 def merge_clean_tables(df_po, df_item, df_avail)-> pd.DataFrame:
     df_po['ISBN'] = df_po['ISBN'].str.zfill(13)
