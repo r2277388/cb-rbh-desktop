@@ -28,7 +28,7 @@ def get_top_isbns(df_sales, df_osd, n=10):
     df_osd_filtered = df_osd[df_osd['OSD'] < one_year_ago]
 
     # Merge sales data with OSD data
-    df_merged = pd.merge(df_sales, df_osd_filtered, on='ISBN')
+    df_merged = pd.merge(df_sales, df_osd_filtered, on='ISBN',how = 'inner')
 
     # Get top ISBNs based on sales in the last 3 months
     three_months_ago = pd.to_datetime('today') - pd.DateOffset(months=3)
