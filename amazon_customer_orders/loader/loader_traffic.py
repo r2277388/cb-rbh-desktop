@@ -23,7 +23,7 @@ files = glob.glob(str(folder_path / file_glob_traffic))
 file_traffic = max(files, key=os.path.getctime)
 
 # Define the columns you want to load from the traffic file
-cols_traffic = ['ASIN','Glance Views','Glance Views - Prior Period (%)','Glance Views - Same Period Last Year (%)']  # Replace with actual column names
+cols_traffic = ['ASIN','Featured Offer Page Views','Featured Offer Page Views - Prior Period (%)','Featured Offer Page Views - Same Period Last Year (%)']  # Replace with actual column names
 
 def upload_traffic():
     df = pd.read_csv(file_traffic,
