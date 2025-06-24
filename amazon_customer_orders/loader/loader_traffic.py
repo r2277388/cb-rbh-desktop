@@ -11,9 +11,9 @@ file_glob_traffic = r'*Traffic*csv'
 
 column_mapping = {
     'ASIN': 'ASIN',
-    'Glance Views': 'Glance Views',
-    'Glance Views - Prior Period (%)': 'Glance Views - Prior Period',
-    'Glance Views - Same Period Last Year (%)': 'Glance Views - Same Period Last Year'
+    'Featured Offer Page Views': 'Glance Views',
+    'Featured Offer Page Views - Prior Period (%)': 'Glance Views - Prior Period',
+    'Featured Offer Page Views - Same Period Last Year (%)': 'Glance Views - Same Period Last Year'
     }
 
 # Find all files matching the pattern
