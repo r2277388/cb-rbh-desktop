@@ -8,11 +8,12 @@ from sklearn.metrics import (
 from xgboost import XGBRegressor
 import pandas as pd
 import numpy as np
+import pickle
 
 # Step 1: Load and clean data
-df = pd.read_csv("cb_5y_titles.csv")
+df = pd.read_pickle("sales_data.pkl")
 df.columns = df.columns.str.strip().str.lower()
-df.rename(columns={'period': 'Period', 'isbn': 'ISBN', 'pt': 'PT', 'qty': 'Quantity'}, inplace=True)
+df.rename(columns={'period': 'Period', 'isbn': 'ISBN', 'pgrp': 'PGRP', 'qty': 'Quantity'}, inplace=True)
 
 # Convert period to datetime and extract month/year
 df['Period'] = pd.to_datetime(df['Period'].astype(str), format='%Y%m')
@@ -33,11 +34,11 @@ df = df[df['ISBN'].isin(valid_isbns)].dropna()
 
 # Step 3: Encode categorical variables using older-compatible 'sparse' argument
 encoder = OneHotEncoder(drop='first', sparse_output=False)
-pt_encoded = encoder.fit_transform(df[['PT']])
-pt_encoded_df = pd.DataFrame(pt_encoded, columns=encoder.get_feature_names_out(['PT']))
+PGRP_encoded = encoder.fit_transform(df[['PGRP']])
+PGRP_encoded_df = pd.DataFrame(PGRP_encoded, columns=encoder.get_feature_names_out(['PGRP']))
 
 # Merge encoded columns
-df = pd.concat([df.reset_index(drop=True), pt_encoded_df], axis=1)
+df = pd.concat([df.reset_index(drop=True), PGRP_encoded_df], axis=1)
 
 # Step 4: Standardize quantity (target) and prepare features
 scaler = StandardScaler()
@@ -48,7 +49,7 @@ test_df = df.groupby('ISBN').tail(1)
 train_df = df.drop(test_df.index)
 
 lag_cols = [f'lag_{l}' for l in lags]
-feature_cols = lag_cols + ['month', 'year'] + list(pt_encoded_df.columns)
+feature_cols = lag_cols + ['month', 'year'] + list(PGRP_encoded_df.columns)
 
 X_train = train_df[feature_cols]
 y_train = train_df['Quantity_scaled']
@@ -82,10 +83,12 @@ results['Predicted'] = y_pred
 # import ace_tools as tools; 
 # tools.display_dataframe_to_user(name="XGBoost Forecast Results", dataframe=results)
 # tools.display_dataframe_to_user(name="Feature Importances", dataframe=feature_importance)
-
-print(f"Mean Absolute Error (MAE): {mae:.2f}")
-print(f"Mean Squared Error (MSE): {mse:.2f}")
-print(f"Root Mean Squared Error (RMSE): {rmse:.2f}")
+print()
+print(df.ISBN.nunique(), "unique ISBNs found")
+print()
+print(f"Mean Absolute Error (MAE): {mae:,.0f}")
+print(f"Mean Squared Error (MSE): {mse:,.0f}")
+print(f"Root Mean Squared Error (RMSE): {rmse:,.0f}")
 print(f"R² Score: {r2:.4f}")
 
 print(results.head())

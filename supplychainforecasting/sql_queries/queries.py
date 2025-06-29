@@ -19,7 +19,7 @@ def sql_5y_sales() -> str:
         and i.PRODUCT_TYPE in ('bk', 'ft') 
         AND sd.INVOICE_LINE_TYPE IN('SALE') 
         and i.PUBLISHER_CODE ='Chronicle'
-        AND i.AMORTIZATION_DATE < '2020-06-01'
+        AND i.AMORTIZATION_DATE < '2023-06-01'
     GROUP BY 
         i.ITEM_TITLE
     HAVING
@@ -29,7 +29,10 @@ def sql_5y_sales() -> str:
     SELECT 
         sd.PERIOD
         ,i.ITEM_TITLE ISBN 
-        ,i.PRODUCT_TYPE PT
+        ,CASE
+            WHEN LEFT(i.PUBLISHING_GROUP,3) = 'BAR' THEN 'BAR'
+            ELSE i.PUBLISHING_GROUP
+        END PGRP
         ,sum(sd.QUANTITY_INVOICED) qty 
     FROM
         ebs.sales as sd 
@@ -44,5 +47,8 @@ def sql_5y_sales() -> str:
     GROUP BY 
         sd.PERIOD
         ,i.ITEM_TITLE 
-        ,i.PRODUCT_TYPE
+        ,CASE
+            WHEN LEFT(i.PUBLISHING_GROUP,3) = 'BAR' THEN 'BAR'
+            ELSE i.PUBLISHING_GROUP
+        END
         """
