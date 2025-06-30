@@ -24,20 +24,24 @@ def sql_5y_sales() -> str:
             AND i.PRODUCT_TYPE IN ('bk', 'ft')
             AND sd.INVOICE_LINE_TYPE = 'SALE'
             AND i.PUBLISHER_CODE = 'Chronicle'
+            AND i.AMORTIZATION_DATE < DATEADD(MONTH, -12, @last_full_month_date)  -- Optional logic tweak
         GROUP BY 
             i.ITEM_TITLE
         HAVING 
             SUM(sd.QUANTITY_INVOICED) > 100
-    )
+        )
 
     SELECT 
-        sd.PERIOD,
-        i.ITEM_TITLE AS ISBN,
-        CASE
+        sd.PERIOD
+        ,i.ITEM_TITLE AS ISBN
+        ,CASE
             WHEN LEFT(i.PUBLISHING_GROUP, 3) = 'BAR' THEN 'BAR'
             ELSE i.PUBLISHING_GROUP
-        END AS PGRP,
-        SUM(sd.QUANTITY_INVOICED) AS qty
+        END AS PGRP
+        ,i.PRODUCT_TYPE PT
+        ,i.AMORTIZATION_DATE PUB_DATE
+        ,i.PRICE_AMOUNT PRICE
+        ,SUM(sd.QUANTITY_INVOICED) AS QTY
     FROM
         ebs.sales AS sd
         INNER JOIN ebs.Item AS i ON sd.ITEM_ID = i.ITEM_ID
@@ -48,12 +52,16 @@ def sql_5y_sales() -> str:
         AND i.PRODUCT_TYPE IN ('bk', 'ft')
         AND sd.INVOICE_LINE_TYPE = 'SALE'
         AND i.PUBLISHER_CODE = 'Chronicle'
+        AND i.PRICE_AMOUNT IS NOT NULL
+        AND i.AMORTIZATION_DATE IS NOT NULL
     GROUP BY 
         sd.PERIOD,
         i.ITEM_TITLE,
         CASE
             WHEN LEFT(i.PUBLISHING_GROUP, 3) = 'BAR' THEN 'BAR'
             ELSE i.PUBLISHING_GROUP
-        END;
-
+        END
+        ,i.PRODUCT_TYPE
+        ,i.AMORTIZATION_DATE
+        ,i.PRICE_AMOUNT;
         """
