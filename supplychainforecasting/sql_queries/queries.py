@@ -24,7 +24,7 @@ def sql_5y_sales() -> str:
             AND i.PRODUCT_TYPE IN ('bk', 'ft')
             AND sd.INVOICE_LINE_TYPE = 'SALE'
             AND i.PUBLISHER_CODE = 'Chronicle'
-            AND i.AMORTIZATION_DATE < DATEADD(MONTH, -12, @last_full_month_date)  -- Optional logic tweak
+            AND i.AMORTIZATION_DATE < DATEADD(MONTH, -24, @last_full_month_date)  -- Optional logic tweak
         GROUP BY 
             i.ITEM_TITLE
         HAVING 

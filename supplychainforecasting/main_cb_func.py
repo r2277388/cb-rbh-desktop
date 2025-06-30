@@ -194,9 +194,11 @@ def main():
     print(f"Mean Squared Error (MSE): {mse:,.0f}")
     print(f"Root Mean Squared Error (RMSE): {rmse:,.0f}")
     print(f"R² Score: {r2:.4f}")
+    print("...........")
     print(results.head())
+    print("...........")
     print(feature_importance)
-
+    print("...........")
     # Forecast 12 months ahead and save
     future_forecast = forecast_future(
         df, model, scaler, pgrp_encoder, pt_encoder, lags, months_ahead=12
