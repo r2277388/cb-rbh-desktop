@@ -7,48 +7,53 @@ def sql_5y_sales() -> str:
     
     return """
         
-    WITH title_list as (
+    DECLARE @last_full_month_date DATE = DATEADD(MONTH, -1, GETDATE())
+    DECLARE @tp CHAR(6) = FORMAT(@last_full_month_date, 'yyyyMM');
+    DECLARE @pp CHAR(6) = FORMAT(DATEADD(MONTH, -1, @last_full_month_date), 'yyyyMM');
+    DECLARE @start_period CHAR(6) = FORMAT(DATEADD(MONTH, -60, @last_full_month_date), 'yyyyMM');
+
+    WITH title_list AS (
         SELECT 
-        i.ITEM_TITLE ISBN
-    FROM
-        ebs.sales as sd 
-        inner join ebs.Item as i on sd.ITEM_ID=i.ITEM_ID 
-    WHERE 
-        sd.PERIOD = '202506' 
-        AND cbq2.dbo.fnSaleTypeCode(SD.AR_TRX_TYPE_ID) = 'N'
-        and i.PRODUCT_TYPE in ('bk', 'ft') 
-        AND sd.INVOICE_LINE_TYPE IN('SALE') 
-        and i.PUBLISHER_CODE ='Chronicle'
-        AND i.AMORTIZATION_DATE < '2023-06-01'
-    GROUP BY 
-        i.ITEM_TITLE
-    HAVING
-        sum(sd.QUANTITY_INVOICED) > 100
-        )
+            i.ITEM_TITLE AS ISBN
+        FROM
+            ebs.sales AS sd
+            INNER JOIN ebs.Item AS i ON sd.ITEM_ID = i.ITEM_ID
+        WHERE 
+            sd.PERIOD IN (@tp, @pp)
+            AND cbq2.dbo.fnSaleTypeCode(sd.AR_TRX_TYPE_ID) = 'N'
+            AND i.PRODUCT_TYPE IN ('bk', 'ft')
+            AND sd.INVOICE_LINE_TYPE = 'SALE'
+            AND i.PUBLISHER_CODE = 'Chronicle'
+        GROUP BY 
+            i.ITEM_TITLE
+        HAVING 
+            SUM(sd.QUANTITY_INVOICED) > 100
+    )
 
     SELECT 
-        sd.PERIOD
-        ,i.ITEM_TITLE ISBN 
-        ,CASE
-            WHEN LEFT(i.PUBLISHING_GROUP,3) = 'BAR' THEN 'BAR'
+        sd.PERIOD,
+        i.ITEM_TITLE AS ISBN,
+        CASE
+            WHEN LEFT(i.PUBLISHING_GROUP, 3) = 'BAR' THEN 'BAR'
             ELSE i.PUBLISHING_GROUP
-        END PGRP
-        ,sum(sd.QUANTITY_INVOICED) qty 
+        END AS PGRP,
+        SUM(sd.QUANTITY_INVOICED) AS qty
     FROM
-        ebs.sales as sd 
-        inner join ebs.Item as i on sd.ITEM_ID=i.ITEM_ID 
-        INNER JOIN title_list as tl on tl.ISBN = i.ITEM_TITLE
+        ebs.sales AS sd
+        INNER JOIN ebs.Item AS i ON sd.ITEM_ID = i.ITEM_ID
+        INNER JOIN title_list AS tl ON tl.ISBN = i.ITEM_TITLE
     WHERE 
-        sd.PERIOD between '202001' and '202506' 
-        AND cbq2.dbo.fnSaleTypeCode(SD.AR_TRX_TYPE_ID) = 'N'
-        and i.PRODUCT_TYPE in ('bk', 'ft') 
-        AND sd.INVOICE_LINE_TYPE IN('SALE') 
-        and i.PUBLISHER_CODE = 'Chronicle'
+        sd.PERIOD BETWEEN @start_period AND @tp
+        AND cbq2.dbo.fnSaleTypeCode(sd.AR_TRX_TYPE_ID) = 'N'
+        AND i.PRODUCT_TYPE IN ('bk', 'ft')
+        AND sd.INVOICE_LINE_TYPE = 'SALE'
+        AND i.PUBLISHER_CODE = 'Chronicle'
     GROUP BY 
-        sd.PERIOD
-        ,i.ITEM_TITLE 
-        ,CASE
-            WHEN LEFT(i.PUBLISHING_GROUP,3) = 'BAR' THEN 'BAR'
+        sd.PERIOD,
+        i.ITEM_TITLE,
+        CASE
+            WHEN LEFT(i.PUBLISHING_GROUP, 3) = 'BAR' THEN 'BAR'
             ELSE i.PUBLISHING_GROUP
-        END
+        END;
+
         """

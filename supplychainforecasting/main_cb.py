@@ -93,4 +93,53 @@ print(f"R² Score: {r2:.4f}")
 
 print(results.head())
 print(feature_importance)
-    
+
+
+import calendar
+
+def forecast_future(df, model, scaler, encoder, lags, months_ahead=12):
+    future_results = []
+    # Get unique ISBNs and their PGRP
+    isbn_groups = df.groupby('ISBN')
+    for isbn, group in isbn_groups:
+        group = group.sort_values('Period')
+        last_row = group.iloc[-1].copy()
+        lags_history = list(group['Quantity'].values[-max(lags):])
+        pgrp = last_row['PGRP']
+        # One-hot encode PGRP for this ISBN
+        pgrp_encoded = encoder.transform([[pgrp]])
+        # Start forecasting from the month after the last available
+        last_period = last_row['Period']
+        for i in range(1, months_ahead + 1):
+            next_period = last_period + pd.DateOffset(months=1)
+            month = next_period.month
+            year = next_period.year
+            # Prepare lag features
+            lag_features = lags_history[-max(lags):][::-1][:max(lags)]
+            lag_features = lag_features[::-1]  # oldest to newest
+            if len(lag_features) < max(lags):
+                lag_features = [0] * (max(lags) - len(lag_features)) + lag_features
+            # Build feature vector
+            features = lag_features + [month, year] + list(pgrp_encoded[0])
+            features = np.array(features).reshape(1, -1)
+            # Predict (scaled), then inverse transform
+            pred_scaled = model.predict(features)
+            pred = scaler.inverse_transform(pred_scaled.reshape(-1, 1)).ravel()[0]
+            # Store result
+            future_results.append({
+                'ISBN': isbn,
+                'Period': next_period,
+                'Predicted': pred
+            })
+            # Update lags_history for next prediction
+            lags_history.append(pred)
+            last_period = next_period
+    return pd.DataFrame(future_results)
+
+# Usage:
+future_forecast = forecast_future(df, model, scaler, encoder, lags, months_ahead=12)
+print(future_forecast.head(20))
+
+# Save to pickle
+future_forecast.to_pickle("future_forecast.pkl")
+print("Forecast saved to future_forecast.pkl")
