@@ -7,8 +7,8 @@ def item_sql() -> str:
     return """
         SELECT
             CASE
-                WHEN i.PUBLISHING_GROUP IN('QDP-HGB','HGP-HGNA') THEN 'Hardie Grant Publishing'
-                WHEN i.PUBLISHING_GROUP IN('QDP-BOOK','QDP-GIFT','QDP-HBUK') THEN 'Quadrille'
+                WHEN left(i.PUBLISHING_GROUP,2) = 'HG' THEN 'Hardie Grant'
+		        WHEN left(i.PUBLISHING_GROUP,3) = 'QDP' THEN 'Quadrille'
                 ELSE i.PUBLISHER_CODE
 	        END Publisher
             ,i.PRODUCT_TYPE pt
@@ -35,7 +35,8 @@ def item_sql() -> str:
                 Where tt.date_desc = 'On Sale Date' AND tt.active_datevalue is not null AND tt.printingnumber = 1
                 ) shdt on shdt.ISBN = i.ISBN
         WHERE
-            i.PUBLISHER_CODE NOT IN('PQ Blackwell','San Francisco Art Institute','Driscolls','In Active')
+            i.PUBLISHER_CODE NOT IN('Benefit', 'AFO LLC', 'Glam Media', 'PQ Blackwell',\
+                'PRINCETON','AMMO Books','San Francisco Art Institute','FareArts','Sager','In Active')
             AND i.PUBLISHING_GROUP <> '???'
             AND i.SHORT_TITLE is not NULL
             AND i.PRICE_AMOUNT is not NULL

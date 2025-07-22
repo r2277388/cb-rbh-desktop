@@ -76,7 +76,7 @@ def save_to_pickle(df, filename):
 
 def main():
     df = upload_item()
-    save_to_pickle(df, "item_data.pkl")
+    # save_to_pickle(df, "item_data.pkl")
     print(df.info())
     print(df.head())
     

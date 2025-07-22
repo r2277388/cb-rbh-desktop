@@ -1,61 +1,67 @@
 import pandas as pd
 import os
 import numpy as np
+import time
+from UPDATE_ams_config import tab_dict, month_list
+from loader_asin_mapping import load_asin_mapping
+from loader_monthly_reports import load_monthly_data
+from loader_item import upload_item
 
-pd.reset_option('display.max_columns')
+pd.set_option('future.no_silent_downcasting', True)
 
+def main():
+    pd.reset_option('display.max_columns')
+    start_time = time.time()
 
-file_asin_mapping = "G:\SALES\Amazon\RBH\DOWNLOADED_FILES\Chronicle-AsinMapping.xlsx"
+    asin_mapping = load_asin_mapping()  # uses the default path
+    item_df = upload_item()  # Load item data, if needed
 
+    combined_df = pd.DataFrame()
+    errors = []
 
-folder_path = fr"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2025"
+    for month in month_list:
+        if month not in tab_dict:
+            warning = f"⚠️ Skipping {month}: not found in tab_dict"
+            print(warning)
+            errors.append(warning)
+            continue
 
-tab_dict = {'2025-01': {'tab':'USE_main','skiprows':1,'file':fr"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2025\2025- 01 - January- Performance by ASIN_ALL.xlsx"},
-            '2025-02': {'tab':'USE_main','skiprows':1,'file':fr"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2025\2025- 02 - February - Performance by ASIN_ALL.xlsx"},
-            '2025-03': {'tab':'USE_main','skiprows':1,'file':fr"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2025\2025- 03 - March - Performance by ASIN_ALL.xlsx"},
-            '2025-04': {'tab':'USE_main','skiprows':1,'file':fr"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2025\2025 - 04 - April - Performance by ASIN_ALL.xlsx"},
-            '2025-05': {'tab':'USE_main','skiprows':1,'file':fr"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2025\2025 - 05 - May - Performance by ASIN_ALL.xlsx"}
-            }
+        try:
+            print(f"🔄 Processing {month}...")
+            df_month = load_monthly_data(tab_dict[month], asin_mapping, month)
+            combined_df = pd.concat([combined_df, df_month], ignore_index=True)
+        except Exception as e:
+            error_msg = f"❌ Failed for {month}: {str(e)}"
+            print(error_msg)
+            errors.append(error_msg)
 
-df_asin_mapping = pd.read_excel(
-    file_asin_mapping,
-    usecols = ['Asin', 'Isbn13'],  # specify the columns to read
-    sheet_name='Sheet1',
-    header=0,    # use the next row as header
-    engine='openpyxl'
-)
+    # Merge with item_df on ISBN (after all months are processed)
+    if not combined_df.empty and not item_df.empty:
+        combined_df = pd.merge(combined_df, item_df, on='ISBN', how='left')
 
-# Lowercase all column names
-df_asin_mapping.columns = df_asin_mapping.columns.str.lower()
-# Rename to standard names
-df_asin_mapping.rename(columns={'asin': 'ASIN', 'isbn13': 'ISBN'}, inplace=True)
+    # Save results
+    if not combined_df.empty:
+        # Excel output
+        output_file_excel = "combined_amazon_ads_by_asin.xlsx"
+        combined_df.to_excel(output_file_excel, index=False)
+        print(f"✅ Combined data saved to Excel: {output_file_excel}")
 
-month = '2025-05'
-month_list = list('2025-01, 2025-02, 2025-03, 2025-04, 2025-05')
+        # Pickle output
+        output_file = "combined_amazon_ads_by_asin.pkl"
+        combined_df.to_pickle(output_file)
+        print(f"✅ Combined data saved to pickle: {output_file}")
+    else:
+        print("❗No data was successfully combined.")
 
+    # Save error log
+    if errors:
+        with open("processing_errors.log", "w") as f:
+            for line in errors:
+                f.write(line + "\n")
+        print(f"⚠️ Some issues occurred. See processing_errors.log.")
 
-df = pd.read_excel(
-    tab_dict[month]['file'],
-    sheet_name=tab_dict[month]['tab'],
-    skiprows=tab_dict[month]['skiprows'],      # skip the first row
-    header=0,        # use the next row as header
-    engine='openpyxl'
-)
+    end_time = time.time()
+    print(f"⏱️ Finished in {end_time - start_time:.2f} seconds.")
 
-df.columns = df.columns.str.strip().str.lower()
-# Remove unwanted columns
-df = df.drop(columns=['isbn', 'title', 'pub', 'pub group',\
-    'osd','ctr','cvr','acos','roas', 'product type description'], errors='ignore')
-df.rename(columns={'asin': 'ASIN'}, inplace=True)
-df = df.merge(df_asin_mapping, on='ASIN', how='left')
-
-df['ISBN'] = df['ISBN'].fillna(df['ISBN'].str.replace('-', '', regex=False))
-
-df['CTR'] = df['clicks'].div(df['impressions']).replace([np.inf, -np.inf], np.nan)
-df['CRV'] = df['units sold'].div(df['clicks']).replace([np.inf, -np.inf], np.nan)
-df['ACOS'] = df['spend'].div(df['14 day total sales']).replace([np.inf, -np.inf], np.nan)
-df['ROAS'] = df['14 day total sales'].div(df['spend']).replace([np.inf, -np.inf], np.nan)
-df['period'] = month
-
-print(df.head(20))
-print(df.columns)
+if __name__ == "__main__":
+    main()

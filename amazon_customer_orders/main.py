@@ -32,7 +32,7 @@ def main():
         ("Sierra Club", None, 5, 'Sierra Club'),
         ("Galison", None, 5, 'Galison'),
         ("Laurence King", None, 5, 'Laurence_King'),
-        ("Hardie Grant Publishing", None, 5, 'Hardie Grant Publishing'),
+        ("Hardie Grant", None, 5, 'Hardie Grant'),
         ("Quadrille", None, 5, 'Quadrille'),
         ("Levine Querido", None, 5, 'Levine Querido'),
         ("Tourbillon", None, 5, 'Tourbillon'),
