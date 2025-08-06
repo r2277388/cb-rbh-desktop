@@ -11,18 +11,13 @@ file_asin_mapping = "G:\SALES\Amazon\RBH\DOWNLOADED_FILES\Chronicle-AsinMapping.
 folder_path = fr"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2025"
 
 tab_dict = {
-    '2024-01': {'tab':'USE_main','skiprows':1,'file':fr"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2024\2024- 01 - January - Performance by ASIN_ALL.xlsx"},
-    '2024-02': {'tab':'USE_main','skiprows':1,'file':fr"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2024\2024- 02 - February - Performance by ASIN_ALL.xlsx"},
-    '2024-03': {'tab':'USE_main','skiprows':1,'file':fr"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2024\2024- 03 - March - Performance by ASIN_ALL.xlsx"},
-    '2024-04': {'tab':'USE_main','skiprows':1,'file':fr"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2024\2024- 04 - April - Performance by ASIN_ALL.xlsx"},
-    '2024-05': {'tab':'USE_main','skiprows':1,'file':fr"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2024\2024- 05 - May - Performance by ASIN_ALL.xlsx"},
-    '2024-06': {'tab':'USE_main','skiprows':1,'file':fr"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2024\2024- 06 - June - Performance by ASIN_ALL.xlsx"},
-    '2024-07': {'tab':'USE_main','skiprows':1,'file':fr"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2024\2024- 07 - July - Performance by ASIN_ALL.xlsx"},
-    '2024-08': {'tab':'USE_main','skiprows':1,'file':fr"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2024\2024- 08 - August - Performance by ASIN_ALL.xlsx"},
-    '2024-09': {'tab':'USE_main','skiprows':1,'file':fr"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2024\2024- 09 - September - Performance by ASIN_ALL.xlsx"},
-    '2024-10': {'tab':'USE_main','skiprows':1,'file':fr"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2024\2024- 10 - October - Performance by ASIN_ALL.xlsx"},
-    '2024-11': {'tab':'USE_main','skiprows':1,'file':fr"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2024\2024- 11 - November - Performance by ASIN_ALL.xlsx"},
-    '2024-12': {'tab':'USE_main','skiprows':1,'file':fr"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2024\2024- 12 - December - Performance by ASIN_ALL.xlsx"}
+    '2025-01': {'tab':'USE_main','skiprows':1,'file':fr"G:\SALES\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2025\2025 - 01 - January- Performance by ASIN_ALL.xlsx"},
+    '2025-02': {'tab':'USE_main','skiprows':1,'file':fr"G:\SALES\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2025\2025 - 02 - February - Performance by ASIN_ALL.xlsx"},
+    '2025-03': {'tab':'USE_main','skiprows':1,'file':fr"G:\SALES\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2025\2025 - 03 - March - Performance by ASIN_ALL.xlsx"},
+    '2025-04': {'tab':'USE_main','skiprows':1,'file':fr"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2025\2025 - 04 - April - Performance by ASIN_ALL.xlsx"},
+    '2025-05': {'tab':'USE_main','skiprows':1,'file':fr"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2025\2025 - 05 - May - Performance by ASIN_ALL.xlsx"},
+    '2025-06': {'tab':'USE_main','skiprows':1,'file':fr"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2025\2025 - 06 - June - Performance by ASIN_ALL.xlsx"},
+    '2025-07': {'tab':'USE_main','skiprows':1,'file':fr"G:\SALES\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2025\2025 - 07 - July - Performance by ASIN_ALL.xlsx"}
             }
 
 df_asin_mapping = pd.read_excel(
@@ -38,9 +33,9 @@ df_asin_mapping.columns = df_asin_mapping.columns.str.lower()
 # Rename to standard names
 df_asin_mapping.rename(columns={'asin': 'ASIN', 'isbn13': 'ISBN'}, inplace=True)
 
-month = '2024-06'
-month_list = ['2024-01', '2024-02', '2024-03', '2024-04', '2024-05', '2024-06',\
-    '2024-07', '2024-08', '2024-09', '2024-10', '2024-11', '2024-12']
+month = '2025-07'
+month_list = ['2025-01', '2025-02', '2025-03', '2025-04', '2025-05', '2025-06',\
+    '2025-07']
 
 df = pd.read_excel(
     tab_dict[month]['file'],
