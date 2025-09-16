@@ -58,4 +58,3 @@ if all_dataframes:
     final_df = pd.concat(all_dataframes, ignore_index=True)
 else:
     final_df = pd.DataFrame()
-

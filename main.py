@@ -6,7 +6,7 @@ def get_full_name():
     # Dictionary to map usernames to real names
     USER_NAMES = {
     "kbs": "Kate Breiting Schmitz",
-    "dag": "Desirae Grier",
+    "mjk": "Marlena Kwasnik",
     "sdm": "Sam Mariucci",
     "RBH": "Barrett Hooper",  # Add more as needed
     }
@@ -119,9 +119,9 @@ def main():
             print(display_info(choice_info))
             continue  # Return to the options list after displaying info
 
-        if choice == '8':  # Option '8' to exit
-            run_program(choice)
-            break  # Exit the while loop to end the program
+        if choice.lower() in ['8', 'exit', 'quit']:
+            run_program('8')
+            break
 
         run_program(choice)
 
