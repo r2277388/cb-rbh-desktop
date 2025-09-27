@@ -1,121 +1,162 @@
 def sql_co():
-    'customer orders with weekly pivot and fixed-window aggregates'
     return """
-     /* ===== A) Date anchors (SSMS/2016 friendly) ===== */
-    DECLARE @last_date         date;
-    SELECT  @last_date = MAX([Week]) FROM [CBQ2].[cb].[Sellthrough_Amazon];
+    -- Params
+    DECLARE @start_date date = '2019-01-01';
 
-    DECLARE @start_pivot       date = DATEFROMPARTS(YEAR(@last_date)-2,1,1);  -- ~3-year pivot start
-    DECLARE @d_6w_start        date = DATEADD(week,-6, @last_date);
-    DECLARE @d_52w_start       date = DATEADD(year,-1, @last_date);
-    DECLARE @d_ty_start        date = DATEFROMPARTS(YEAR(@last_date),1,1);
-    DECLARE @d_ly_start        date = DATEFROMPARTS(YEAR(@last_date)-1,1,1);
-    DECLARE @d_lytd_end_next   date = DATEADD(day,1, DATEFROMPARTS(YEAR(@last_date)-1,MONTH(@last_date),DAY(@last_date)));
-    DECLARE @d_ty_start_next   date = DATEFROMPARTS(YEAR(@last_date),1,1);
+    -- Vars
+    DECLARE @last_date date;
+    DECLARE @ty_year   int;
+    DECLARE @ly_year   int;
+    DECLARE @iso_wk    int;
 
-    /* ===== B) Optional: publishers to exclude ===== */
-    IF OBJECT_ID('tempdb..#excl') IS NOT NULL DROP TABLE #excl;
-    CREATE TABLE #excl (publisher_code varchar(100) PRIMARY KEY);
-    INSERT INTO #excl(publisher_code)
-    VALUES
-    ('Benefit'),('AFO LLC'),('Glam Media'),('PQ Blackwell'),('PRINCETON'),
-    ('AMMO Books'),('San Francisco Art Institute'),('FareArts'),('Sager'),
-    ('In Active'),('Driscolls'),('Impossible Foods'),('Moleskine');
-    -- If you don't need exclusions, comment out the INSERT above (leave empty table).
+    DECLARE @wk        date;
+    DECLARE @cols      nvarchar(max);
+    DECLARE @cols_proj nvarchar(max);  -- ISNULL([col],0) AS [col]
+    DECLARE @sum       nvarchar(max);
+    DECLARE @sql       nvarchar(max);
 
-    /* ===== C) One-pass conditional aggregation for fixed-window metrics ===== */
-    /* Use ISNULL() to avoid the NULL-eliminated warning */
+    ------------------------------------------------------------
+    -- 1) Last date & ISO-week context
+    ------------------------------------------------------------
+    SELECT @last_date = MAX([Week])
+    FROM [CBQ2].[cb].[Sellthrough_Amazon];
+
+    SET @ty_year = YEAR(@last_date);
+    SET @ly_year = @ty_year - 1;
+    SET @iso_wk  = DATEPART(ISO_WEEK, @last_date);
+
+    ------------------------------------------------------------
+    -- 2) Items snapshot with padded join key
+    ------------------------------------------------------------
+    IF OBJECT_ID('tempdb..#items') IS NOT NULL DROP TABLE #items;
+
+    SELECT
+    i.*,
+    RIGHT(REPLICATE('0',13) + i.ITEM_TITLE, 13) AS ISBN13
+    INTO #items
+    FROM ebs.item i
+    WHERE i.PRODUCT_TYPE IN ('BK','FT','CP','RP','DI','')
+    AND i.PUBLISHER_CODE NOT IN (
+        'Benefit','AFO LLC','Glam Media','PQ Blackwell','PRINCETON','AMMO Books',
+        'San Francisco Art Institute','FareArts','Sager','In Active','Driscolls',
+        'Impossible Foods','Moleskine'
+    );
+
+    ------------------------------------------------------------
+    -- 3) Aggregations (restored)
+    ------------------------------------------------------------
     IF OBJECT_ID('tempdb..#agg') IS NOT NULL DROP TABLE #agg;
+
+    WITH src AS (
     SELECT
-        sta.ISBN,
-        OH      = SUM(CASE WHEN sta.[Week] = @last_date THEN ISNULL(sta.UnitShipped,0) ELSE 0 END),
-        W52     = SUM(CASE WHEN sta.[Week] >= @d_52w_start AND sta.[Week] <= @last_date THEN ISNULL(sta.UnitShipped,0) ELSE 0 END),
-        SumLast6W = SUM(CASE WHEN sta.[Week] >= @d_6w_start  AND sta.[Week] <= @last_date THEN ISNULL(sta.UnitShipped,0) ELSE 0 END),
-        TYTD    = SUM(CASE WHEN sta.[Week] >= @d_ty_start  AND sta.[Week] <= @last_date THEN ISNULL(sta.UnitShipped,0) ELSE 0 END),
-        LYTD    = SUM(CASE WHEN sta.[Week] >= @d_ly_start  AND sta.[Week] <  @d_lytd_end_next THEN ISNULL(sta.UnitShipped,0) ELSE 0 END),
-        LY_FY   = SUM(CASE WHEN sta.[Week] >= @d_ly_start  AND sta.[Week] <  @d_ty_start_next THEN ISNULL(sta.UnitShipped,0) ELSE 0 END)
+        UPPER(RIGHT(REPLICATE('0',13) + CONVERT(varchar(32), sta.ISBN), 13)) AS ISBN13,
+        sta.[Week],
+        ISNULL(sta.CustomerOrders, 0) AS CustomerOrders   -- <— add ISNULL here
+    FROM [CBQ2].[cb].[Sellthrough_Amazon] sta
+    WHERE YEAR(sta.[Week]) >= 2019
+    )
+
+    SELECT
+    s.ISBN13,
+    SUM(CASE WHEN s.[Week] = @last_date THEN s.CustomerOrders ELSE 0 END) AS OH,
+    SUM(CASE WHEN s.[Week] BETWEEN DATEADD(year,-1,@last_date) AND @last_date THEN s.CustomerOrders ELSE 0 END) AS W52,
+    SUM(CASE WHEN s.[Week] BETWEEN DATEADD(week,-6,@last_date) AND @last_date THEN s.CustomerOrders ELSE 0 END) AS SumLast6W,
+    SUM(CASE WHEN YEAR(s.[Week]) = @ty_year AND DATEPART(ISO_WEEK, s.[Week]) <= @iso_wk THEN s.CustomerOrders ELSE 0 END) AS TYTD,
+    SUM(CASE WHEN YEAR(s.[Week]) = @ly_year AND DATEPART(ISO_WEEK, s.[Week]) <= @iso_wk THEN s.CustomerOrders ELSE 0 END) AS LYTD,
+    SUM(CASE WHEN s.[Week] >= DATEFROMPARTS(@ly_year,1,1) AND s.[Week] < DATEFROMPARTS(@ty_year,1,1) THEN s.CustomerOrders ELSE 0 END) AS LY_FY
     INTO #agg
+    FROM src s
+    GROUP BY s.ISBN13;
+
+    ------------------------------------------------------------
+    -- 4) Build week list & dynamic parts (no STRING_AGG)
+    ------------------------------------------------------------
+    DECLARE @weeks TABLE (wk date PRIMARY KEY);
+    SET @wk = @last_date;
+    WHILE (@wk >= @start_date)
+    BEGIN
+    INSERT INTO @weeks(wk) VALUES(@wk);
+    SET @wk = DATEADD(week, -1, @wk);
+    END
+
+    -- Column list: [mm-dd-yyyy], [mm-dd-yyyy], ... newest → oldest
+    SELECT @cols =
+    STUFF((
+        SELECT ',' + QUOTENAME(CONVERT(varchar(10), wk, 110))
+        FROM @weeks
+        ORDER BY wk DESC
+        FOR XML PATH(''), TYPE
+    ).value('.', 'NVARCHAR(MAX)'), 1, 1, '');
+
+    -- Projection with ISNULL for each pivoted column
+    SELECT @cols_proj =
+    STUFF((
+        SELECT ',ISNULL(' + QUOTENAME(CONVERT(varchar(10), wk, 110)) + ',0) AS ' + QUOTENAME(CONVERT(varchar(10), wk, 110))
+        FROM @weeks
+        ORDER BY wk DESC
+        FOR XML PATH(''), TYPE
+    ).value('.', 'NVARCHAR(MAX)'), 1, 1, '');
+
+    -- Total expression across weekly cols
+    SELECT @sum =
+    STUFF((
+        SELECT ' + ISNULL(' + QUOTENAME(CONVERT(varchar(10), wk, 110)) + ',0)'
+        FROM @weeks
+        ORDER BY wk DESC
+        FOR XML PATH(''), TYPE
+    ).value('.', 'NVARCHAR(MAX)'), 1, 3, '');  -- trims leading ' + '
+
+    ------------------------------------------------------------
+    -- 5) Dynamic pivot with agg columns FIRST, then weeks, then Total
+    ------------------------------------------------------------
+    SET @sql = N'
+    ;WITH base AS (
+    SELECT
+        UPPER(RIGHT(REPLICATE(''0'',13) + CONVERT(varchar(32), sta.ISBN), 13)) AS ISBN13,
+        CONVERT(varchar(10), sta.[Week], 110) AS wk_label,  -- mm-dd-yyyy
+        ISNULL(sta.CustomerOrders, 0) AS CustomerOrders     -- ← add ISNULL here
     FROM [CBQ2].[cb].[Sellthrough_Amazon] sta
-    GROUP BY sta.ISBN;
-
-    /* ===== D) Materialize the week list once (newest → oldest) ===== */
-    IF OBJECT_ID('tempdb..#wk') IS NOT NULL DROP TABLE #wk;
-    SELECT DISTINCT [Week]
-    INTO #wk
-    FROM [CBQ2].[cb].[Sellthrough_Amazon]
-    WHERE [Week] BETWEEN @start_pivot AND @last_date;
-
-    CREATE UNIQUE CLUSTERED INDEX IX_wk_Week ON #wk([Week]); -- helps ordering
-
-    /* Build weekly column lists (DESC) */
-    DECLARE @colsIn  nvarchar(max);
-    DECLARE @colsSel nvarchar(max);
-
-    SELECT @colsIn = STUFF((
-    SELECT ',' + QUOTENAME(CONVERT(varchar(10), [Week], 23))
-    FROM #wk
-    ORDER BY [Week] DESC
-    FOR XML PATH(''), TYPE
-    ).value('.','nvarchar(max)'),1,1,'');
-
-    SELECT @colsSel = STUFF((
-    SELECT ',ISNULL(' + QUOTENAME(CONVERT(varchar(10), [Week], 23)) + ',0) AS '
-        + QUOTENAME(CONVERT(varchar(10), [Week], 23))
-    FROM #wk
-    ORDER BY [Week] DESC
-    FOR XML PATH(''), TYPE
-    ).value('.','nvarchar(max)'),1,1,'');
-
-    /* ===== E) Dynamic pivot over weekly UnitShipped, then join metrics ===== */
-    DECLARE @sql nvarchar(max) = N'
-    ;WITH src AS (
-    SELECT
-        i.PUBLISHER_CODE AS Pub,
-        i.PRODUCT_TYPE   AS pt,
-        i.FORMAT         AS ft,
-        CASE WHEN LEFT(i.PUBLISHING_GROUP,3) = ''BAR'' THEN ''BAR'' ELSE i.PUBLISHING_GROUP END AS pgrp,
-        sta.ISBN,
-        i.SHORT_TITLE    AS Title,
-        i.PRICE_AMOUNT   AS Price,
-        i.AMORTIZATION_DATE,
-        CAST(sta.[Week] AS date) AS [Week],
-        ISNULL(sta.UnitShipped,0) AS UnitShipped
-    FROM [CBQ2].[cb].[Sellthrough_Amazon] sta
-    JOIN ebs.item i ON sta.ISBN = i.ITEM_TITLE
-    WHERE
-        sta.[Week] >= @start_pivot AND sta.[Week] <= @last_date
-        AND NOT EXISTS (SELECT 1 FROM #excl e WHERE e.publisher_code = i.PUBLISHER_CODE)
+    WHERE sta.[Week] >= @start_date
     ),
-    pvt AS (
-    SELECT
-        Pub, pt, ft, pgrp, ISBN, Title, Price, AMORTIZATION_DATE,
-        CONVERT(varchar(10), [Week], 23) AS wk,
-        UnitShipped
-    FROM src
-    ),
-    pivoted AS (
-    SELECT
-        Pub, pt, ft, pgrp, ISBN, Title, Price, AMORTIZATION_DATE, ' + @colsIn + N'
-    FROM pvt
-    PIVOT (SUM(UnitShipped) FOR wk IN (' + @colsIn + N')) pv
+    p AS (
+    SELECT *
+    FROM base
+    PIVOT (SUM(CustomerOrders) FOR wk_label IN (' + @cols + N')) pv
     )
     SELECT
-        pv.Pub, pv.pt, pv.ft, pv.pgrp, pv.ISBN, pv.Title, pv.Price, pv.AMORTIZATION_DATE,
-        a.OH,
-        a.W52,
-        CAST(1.0 * a.SumLast6W / 6 AS decimal(18,2)) AS AvgLast6W,
-        a.TYTD,
-        a.LYTD,
-        a.LY_FY,
-        ' + @colsSel + N'
-    FROM pivoted pv
-    LEFT JOIN #agg a ON a.ISBN = pv.ISBN
-    ORDER BY pv.Pub, pv.pt, pv.ft, pv.pgrp, pv.ISBN;';
+    -- item metadata
+    CASE WHEN it.PUBLISHER_CODE = ''Quadrille Publishing Limited'' THEN ''Quadrille'' ELSE it.PUBLISHER_CODE END AS Pub,
+    it.PRODUCT_TYPE AS pt,
+    it.FORMAT       AS ft,
+    CASE WHEN LEFT(it.PUBLISHING_GROUP,3) = ''BAR'' THEN ''BAR'' ELSE it.PUBLISHING_GROUP END AS pgrp,
+    it.ITEM_TITLE   AS [ISBN],
+    it.SHORT_TITLE  AS Title,
+    it.PRICE_AMOUNT AS Price,
+    CONVERT(varchar(10), it.AMORTIZATION_DATE, 110) AS PubDate,
 
-    EXEC sys.sp_executesql
-    @sql,
-    N'@start_pivot date, @last_date date',
-    @start_pivot=@start_pivot, @last_date=@last_date;
+    -- AGG COLUMNS FIRST
+    ISNULL(ag.OH,0)                                     AS OH,
+    ISNULL(ag.W52,0)                                    AS W52,
+    CAST(ISNULL(ag.SumLast6W,0) / 6.0 AS decimal(18,2)) AS AvgLast6W,
+    ISNULL(ag.TYTD,0)                                   AS TYTD,
+    ISNULL(ag.LYTD,0)                                   AS LYTD,
+    ISNULL(ag.LY_FY,0)                                  AS LY_FY,
 
+    -- >>> TOTAL BEFORE WEEKLY COLUMNS <<<
+    (' + @sum + N') AS [LTD],
+
+    -- WEEKLY COLUMNS (0 instead of NULL), newest → oldest
+    ' + @cols_proj + N'
+
+    FROM p
+    JOIN #items it
+    ON p.ISBN13 = it.ISBN13
+    LEFT JOIN #agg ag
+    ON p.ISBN13 = ag.ISBN13
+    ORDER BY Pub, pt, ft, Title;
+    ';
+
+    -- run it
+    EXEC sp_executesql @sql, N'@start_date date', @start_date = @start_date;
 
     """
