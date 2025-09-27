@@ -35,9 +35,38 @@ def fetch_data_from_db(engine: create_engine, query: str) -> pd.DataFrame:
 def save_to_pickle(df, filename):
     df.to_pickle(filename)
     print(f"Pickle File saved to {filename}")
-    
-def save_to_excel(df,filename):
-    with pd.ExcelWriter(filename,engine='xlsxwriter') as writer:
-        print('Saving to Excel... this will take a moment...')
-        df.to_excel(writer, index=False)
-    print(f"Excel saved to: {filename}")
+
+def build_column_totals(df, columns):
+    """Return a dict of column totals for the given columns."""
+    return {col: df[col].sum() for col in columns if col in df.columns}
+
+def save_to_excel(df, filename, summary=None, format_cols=None, decimal_cols=None):
+    with pd.ExcelWriter(filename, engine='xlsxwriter') as writer:
+        worksheet_name = 'Sheet1'
+        df.to_excel(writer, sheet_name=worksheet_name, startrow=3, index=False)
+        worksheet = writer.sheets[worksheet_name]
+        workbook = writer.book
+
+        # Write summary/totals in row 2 (Excel row index 1)
+        if summary:
+            for col_idx, col in enumerate(df.columns):
+                if col in summary:
+                    worksheet.write(1, col_idx, summary[col])
+
+        # Format integer columns
+        if format_cols:
+            number_format = workbook.add_format({'num_format': '#,##0'})
+            for col in format_cols:
+                if col in df.columns:
+                    col_idx = df.columns.get_loc(col)
+                    worksheet.set_column(col_idx, col_idx, None, number_format)
+
+        # Format decimal columns
+        if decimal_cols:
+            decimal_format = workbook.add_format({'num_format': '#,##0.00'})
+            for col in decimal_cols:
+                if col in df.columns:
+                    col_idx = df.columns.get_loc(col)
+                    worksheet.set_column(col_idx, col_idx, None, decimal_format)
+
+        print(f"Excel saved to: {filename}")

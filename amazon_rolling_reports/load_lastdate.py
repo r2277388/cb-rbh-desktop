@@ -2,6 +2,7 @@ from functions import get_connection, fetch_data_from_db
 from query_datecheck import check_date
 import pandas as pd
 from datetime import datetime
+import os
 
 def data_datecheck():
     engine = get_connection()
@@ -34,8 +35,25 @@ def lastdate_display():
     else:
         print("No dates found in the [WEEK] field ofthe SQL table: [CBQ2].[cb].[Sellthrough_Amazon]")
         
+def get_pickle_last_modified(filename):
+    if os.path.exists(filename):
+        ts = os.path.getmtime(filename)
+        return datetime.fromtimestamp(ts)
+    else:
+        return None
+    
+def display_pickle_last_modified(filename):
+    last_modified = get_pickle_last_modified(filename)
+    if last_modified:
+        days_old = (datetime.now() - last_modified).days
+        formatted = last_modified.strftime("%A, %Y-%m-%d")
+        print(f"The data was pickled from the SQL table {days_old} days ago on {formatted}.")
+    else:
+        print(f"{filename} does not exist.")
+        
 def main():
     lastdate_display()
+    display_pickle_last_modified('rr_customer_orders.pkl')
 
 if __name__ == "__main__":
     main()
