@@ -7,6 +7,7 @@ from load_lastdate import lastdate_formats, lastdate_display
 from load_amazon_open_po import save_latest_amazon_po_as_pickle
 from paths import amazon_po_folder,dp_folders,amazon_rolling_folder
 from file_creation import create_rolling_report
+from load_rolling_reports import run_query_and_save, sql_co, sql_us
 
 #############
 def save_reports_by_pub(df, report_type, week_number, full_year, date_formatted, dp_folders):
@@ -30,6 +31,16 @@ def save_reports_by_pub(df, report_type, week_number, full_year, date_formatted,
 
 def main():
     start_time = time.time()
+    
+    # Refresh pickle files by running SQL queries
+    print("First will grab fresh data from the SQL database...")
+    print("Refreshing pickle files for the customer orders report ...")
+    
+    run_query_and_save(sql_co, "rr_customer_orders.pkl", "Customer Orders")
+    print("Refreshing pickle files for the units shipped report ...")
+    run_query_and_save(sql_us, "rr_units_shipped.pkl", "Units Shipped")
+    print("Pickle files refreshed.")
+    time.sleep(2)
     
     #Display last PO file date info
     latest_date = get_latest_file_date(amazon_po_folder)

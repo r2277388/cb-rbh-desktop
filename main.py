@@ -55,7 +55,8 @@ def display_options():
         "5. UK Rolling File Combining",
         "6. Hachette Orders - Shipping Estimates",
         "7. Consolidate Inventory for the INVOBS",
-        "8. Exit"
+        "8. Amazon Rolling Reports",
+        "9. Exit"
     ]
     print("\nWhat would you like to run?")
     for option in options:
@@ -78,7 +79,8 @@ def display_info(choice):
         '7': """Consolidate Inventory for the INVOBS: Runs the Consolidated Inventory program for INVOBS.
         This program takes the consolidated inventory data from Oracle, run by Ailing and\
         explodes out the CDU's into their components to gives us a component-only inventory file.""",
-        '8': "Exit: Exits the program."
+        '8': "Amazon Rolling Reports: Runs the full Amazon Rolling Reports workflow.",
+        '9': "Exit: Exits the program."
     }
     return info.get(choice, "Invalid choice. No information available.")
 
@@ -91,7 +93,8 @@ def run_program(choice):
         '4': ("SSR Daily Summary", "ssr_daily_summary/main.py"),
         '5': ("UK Rolling File Combining", "UK_Rolling_File_Combining/main.py"),
         '6': ("Hachette Orders - Shipping Estimates", "hachette_orders/main.py"),
-        '7': ("Consolidate Inventory for the INVOBS", "invobs_consolidated_inventory/main.py")
+        '7': ("Consolidate Inventory for the INVOBS", "invobs_consolidated_inventory/main.py"),
+        '8': ("Amazon Rolling Reports", "amazon_rolling_reports/main.py")
     }
 
     if choice in reports:
@@ -102,7 +105,7 @@ def run_program(choice):
             print(f"The {report_name} is now ready.")
         except subprocess.CalledProcessError as e:
             print(f"An error occurred while running the {script_path}.")
-    elif choice == '8':
+    elif choice == '9':
         print(get_farewell_message())
     else:
         print("Invalid choice. Please select a valid option.")
@@ -119,8 +122,8 @@ def main():
             print(display_info(choice_info))
             continue  # Return to the options list after displaying info
 
-        if choice.lower() in ['8', 'exit', 'quit']:
-            run_program('8')
+        if choice.lower() in ['9', 'exit', 'quit']:
+            run_program('9')
             break
 
         run_program(choice)
