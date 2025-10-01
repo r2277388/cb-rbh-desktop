@@ -12,6 +12,7 @@ def df_traffic():
     # Convert traffic columns to numeric
     traffic_cols = ['Featured Offer Page Views']
     for col in traffic_cols:
+        df[col] = df[col].astype(str).str.replace(',', '', regex=False).str.replace('$', '', regex=False)
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
     rename = {

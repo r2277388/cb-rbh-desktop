@@ -7,14 +7,15 @@ def df_sales():
         sales_file,
         skiprows=1,
          usecols = ['ASIN', 'Product Title', 'Ordered Revenue'
-                                      ,'Ordered Units','Shipped Revenue','Shipped Units'
-                                      ,'Shipped COGS','Customer Returns']
+                   ,'Ordered Units','Shipped Revenue','Shipped Units'
+                    ,'Shipped COGS','Customer Returns']
     )
 
     df['ASIN'] = df['ASIN'].astype(str).str.strip().str.zfill(10)
 
     # Columns to clean
-    money_cols = ['Ordered Revenue', 'Shipped Revenue', 'Shipped COGS']
+    money_cols = ['Ordered Revenue', 'Shipped Revenue', \
+        'Shipped COGS','Ordered Units','Shipped Units','Customer Returns']
     for col in money_cols:
         df[col] = df[col].astype(str).str.replace('$', '', regex=False).str.replace(',', '', regex=False)
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
@@ -26,6 +27,8 @@ def df_sales():
 
     return df
 
+
+
 def main():
     df = df_sales()
 
@@ -36,6 +39,11 @@ def main():
     print(df.info())
     print()
     print(df.head())
+
+    # Show the row where ASIN == '1452111731'
+    asin_row = df[df['ASIN'] == '1452111731']
+    print("\nRow for ASIN 1452111731:")
+    print(asin_row.T)
 
 if __name__ == "__main__":
     main()

@@ -5,8 +5,8 @@ import time
 from load_ypticod import load_ypticod
 from combine_files import combine_weekly_files
 from load_ebs_isbn_key import isbn_key
-from asin_manual_key import asin_isbn_manual_key
 
+from asin_manual_key import asin_isbn_manual_key
 from asin_removal_list import asins_to_delete_list
 
 def asin_isbn_conversion():

@@ -11,8 +11,10 @@ def df_inventory():
     df['ASIN'] = df['ASIN'].astype(str).str.strip().str.zfill(10)
 
     # Convert units columns to numeric
-    unit_cols = ['Open Purchase Order Quantity', 'Unfilled Customer Ordered Units', 'Sellable On Hand Units']
+    unit_cols = ['Open Purchase Order Quantity', 'Unfilled Customer Ordered Units', \
+        'Sellable On Hand Units']
     for col in unit_cols:
+        df[col] = df[col].astype(str).str.replace(',', '', regex=False).str.replace('$', '', regex=False)
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
     
     return df
