@@ -5,6 +5,7 @@ import time
 from load_ypticod import load_ypticod
 from combine_files import combine_weekly_files
 from load_ebs_isbn_key import isbn_key
+from asin_manual_key import asin_isbn_manual_key
 
 from asin_removal_list import asins_to_delete_list
 
@@ -48,6 +49,12 @@ def asin_isbn_conversion():
 
     # Remove rows where Product Title ends with 'anglais'
     df_merged = df_merged[~df_merged['Product Title'].fillna('').str.lower().str.endswith('anglais')]
+
+    # Apply manual ASIN to ISBN overrides
+    df_merged['ISBN'] = df_merged.apply(
+        lambda row: asin_isbn_manual_key.get(row['ASIN'], row['ISBN']),
+        axis=1
+    )
 
     float_cols = df_merged.select_dtypes(include='float64').columns
     df_merged[float_cols] = df_merged[float_cols].fillna(0)
