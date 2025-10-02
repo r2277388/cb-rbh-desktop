@@ -1,41 +1,69 @@
+# =========================
+# Python cache and artifacts
+# =========================
+__pycache__/
+*.pyc
+
+# =========================
+# Virtual environments
+# =========================
+.venv/
+venv/
+env/
 amazon_po/.venv
 amazon_preorders/.venv
 pickle_raw_data/.venv
 ssr_daily_summary/.venv
-
-# Ignore the virtual environment in the misc/amazon_roi directory
 misc/amazon_roi/.venv
+xgboost_model/.venv
 
-# Ignore all CSV files in the xgboost directory
-xgboost/*.csv
-
-# Ignore the virtual environment in the xgboost directory
-xgboost/.venv
-# Ignore Python cache and virtual environments
-__pycache__/
-*.pyc
-.venv/
-env/
-venv/
-
-# Ignore logs and temporary files
+# =========================
+# Logs and temporary files
+# =========================
 *.log
 *.tmp
+
+# =========================
+# OS-specific files
+# =========================
 .DS_Store
+Thumbs.db
 
-# Ignore all CSV files in the root directory
+# =========================
+# Data files (large or sensitive)
+# =========================
+data/
+
+# =========================
+# CSV files (all folders)
+# =========================
+*.csv
+xgboost/*.csv
 /*.csv
-
-# Ignore specific CSV files in the root directory
 pgrp_flbl_forecasts.csv
 pgrp_forecasts.csv
 
-# Ignore specific cache files in the reprint_project/cache directory
+# =========================
+# Pickle and parquet files
+# =========================
 *.pkl
+*.parquet
 reprint_project/cache/saldet_cache.pkl
 reprint_project/cache/hachette_order_status_cache.pkl
 reprint_project/cache/inventory_cache.pkl
 reprint_project/cache/osd_cache.pkl
 
-# Ignore any html files.
+# =========================
+# Excel files
+# =========================
+*.xlsx
+
+# =========================
+# HTML files
+# =========================
 *.html
+
+# =========================
+# Other project-specific ignores
+# =========================
+*.dll

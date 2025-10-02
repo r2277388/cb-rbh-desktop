@@ -47,6 +47,7 @@ def main():
     # --- PO file ---
     pickle_po_file = "latest_amazon_po.pkl"
     print("PO file status:")
+    lastdate_display()
     prompt_update(pickle_po_file, save_latest_amazon_po_as_pickle, amazon_po_folder, pickle_po_file)
 
     # --- Customer Orders ---
