@@ -1,0 +1,5 @@
+[tool.ruff]
+line-length = 88
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["E203"]  # plays nice with Black
+
