@@ -1,10 +1,36 @@
+import os
 import pandas as pd
 import subprocess
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
 from asin_isbn_conversion import asin_isbn_conversion
+from paths import amz_weekly_sales,amz_weekly_inventory,amz_weekly_traffic,amz_catalog,ypticod
 
 def main():
+    ##############
+    # --- Show required save locations and ask for confirmation ---
+    root = tk.Tk()
+    root.withdraw()
+    from paths import amz_weekly_sales, amz_weekly_inventory, amz_weekly_traffic, amz_catalog, ypticod
+
+    folder_message = (
+        "For this process to run correctly, files should be saved in the following locations:\n\n"
+        f"Sales: {amz_weekly_sales}\n"
+        f"Inventory: {amz_weekly_inventory}\n"
+        f"Traffic: {amz_weekly_traffic}\n"
+        f"Catalog: {amz_catalog}\n"
+        f"YPTICOD: {ypticod}\n\n"
+        "Do you confirm these locations are correct?"
+    )
+    confirmed = messagebox.askyesno("Confirm File Locations", folder_message)
+    if not confirmed:
+        print("❌ Process cancelled by user.")
+        return
+
+    # Show latest weekly files being analyzed
+    subprocess.run(["python", "load_weekly_files.py"])
+    
+    ##############
     # Run the main data pipeline to get the cleaned DataFrame
     df = asin_isbn_conversion()
 
@@ -46,7 +72,14 @@ def main():
     # Count how many titles have NO_ISBN
     no_isbn_count = (df['External ID'] == "NO_ISBN").sum()
     # Select columns to show for NO_ISBN reporting
-    cols_to_show = ['ASIN', 'External ID'] + float_cols
+    cols_to_show = [
+        'ASIN',
+        'External ID',
+        'Customer Orders',
+        'Units Shipped',
+        'Units at Amazon',
+        'Open PO qty'
+    ]
     df_no_isbn = df[df['External ID'] == "NO_ISBN"][cols_to_show]
 
     # Ask user if they want to view or save NO_ISBN titles
