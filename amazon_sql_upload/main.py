@@ -1,17 +1,23 @@
-import os
-import pandas as pd
 import subprocess
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
+
+import pandas as pd
 from asin_isbn_conversion import asin_isbn_conversion
-from paths import amz_weekly_sales,amz_weekly_inventory,amz_weekly_traffic,amz_catalog,ypticod
+from paths import (
+    amz_catalog,
+    amz_weekly_inventory,
+    amz_weekly_sales,
+    amz_weekly_traffic,
+    ypticod,
+)
+
 
 def main():
     ##############
     # --- Show required save locations and ask for confirmation ---
     root = tk.Tk()
     root.withdraw()
-    from paths import amz_weekly_sales, amz_weekly_inventory, amz_weekly_traffic, amz_catalog, ypticod
 
     folder_message = (
         "For this process to run correctly, files should be saved in the following locations:\n\n"
@@ -29,24 +35,24 @@ def main():
 
     # Show latest weekly files being analyzed
     subprocess.run(["python", "load_weekly_files.py"])
-    
+
     ##############
     # Run the main data pipeline to get the cleaned DataFrame
     df = asin_isbn_conversion()
 
     # Get all float columns for later selection and reporting
-    float_cols = df.select_dtypes(include='float64').columns.tolist()
+    float_cols = df.select_dtypes(include="float64").columns.tolist()
 
     # Reorder columns: ASIN, ISBN, then all float columns
-    df = df[['ASIN', 'ISBN'] + float_cols]
+    df = df[["ASIN", "ISBN"] + float_cols]
 
     # Rename columns for clarity in the final report
     rename = {
-        'ISBN': 'External ID',
-        'Ordered Units': 'Customer Orders',
-        'Shipped Units': 'Units Shipped',
-        'Sellable On Hand Units': 'Units at Amazon',
-        'Open Purchase Order Quantity': 'Open PO qty'
+        "ISBN": "External ID",
+        "Ordered Units": "Customer Orders",
+        "Shipped Units": "Units Shipped",
+        "Sellable On Hand Units": "Units at Amazon",
+        "Open Purchase Order Quantity": "Open PO qty",
     }
     df = df.rename(columns=rename)
 
@@ -58,7 +64,7 @@ def main():
     file_path = filedialog.asksaveasfilename(
         defaultextension=".xlsx",
         filetypes=[("Excel files", "*.xlsx")],
-        title="Save Amazon SQL Upload Excel File"
+        title="Save Amazon SQL Upload Excel File",
     )
     if file_path:
         # Save the DataFrame to the chosen Excel file, starting at row 4
@@ -70,17 +76,17 @@ def main():
 
     # --- NO_ISBN Reporting ---
     # Count how many titles have NO_ISBN
-    no_isbn_count = (df['External ID'] == "NO_ISBN").sum()
+    no_isbn_count = (df["External ID"] == "NO_ISBN").sum()
     # Select columns to show for NO_ISBN reporting
     cols_to_show = [
-        'ASIN',
-        'External ID',
-        'Customer Orders',
-        'Units Shipped',
-        'Units at Amazon',
-        'Open PO qty'
+        "ASIN",
+        "External ID",
+        "Customer Orders",
+        "Units Shipped",
+        "Units at Amazon",
+        "Open PO qty",
     ]
-    df_no_isbn = df[df['External ID'] == "NO_ISBN"][cols_to_show]
+    df_no_isbn = df[df["External ID"] == "NO_ISBN"][cols_to_show]
 
     # Ask user if they want to view or save NO_ISBN titles
     msg = (
@@ -100,7 +106,7 @@ def main():
         no_isbn_file = filedialog.asksaveasfilename(
             defaultextension=".xlsx",
             filetypes=[("Excel files", "*.xlsx")],
-            title="Save NO_ISBN Titles Excel File"
+            title="Save NO_ISBN Titles Excel File",
         )
         if no_isbn_file:
             # Save NO_ISBN titles to Excel
@@ -115,13 +121,14 @@ def main():
     # Ask user if they want to update ASIN removal list or manual key
     update_dicts = simpledialog.askstring(
         "Update Dictionaries",
-        "Would you like to update the ASIN removal list or ASIN-->ISBN manual key?\nType 'y' for yes or 'n' for no:"
+        "Would you like to update the ASIN removal list or ASIN-->ISBN manual key?\nType 'y' for yes or 'n' for no:",
     )
-    if update_dicts and update_dicts.lower() == 'y':
+    if update_dicts and update_dicts.lower() == "y":
         # Run the dictionary update script as a subprocess
         subprocess.run(["python", "asin_add_to_dictionaries.py"])
     else:
         print("Skipping dictionary update.")
+
 
 if __name__ == "__main__":
     main()

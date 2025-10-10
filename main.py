@@ -2,18 +2,20 @@ import getpass
 import subprocess
 from datetime import datetime
 
+
 def get_full_name():
     # Dictionary to map usernames to real names
     USER_NAMES = {
-    "kbs": "Kate Breiting Schmitz",
-    "mjk": "Marlena Kwasnik",
-    "sdm": "Sam Mariucci",
-    "RBH": "Barrett Hooper",  # Add more as needed
-    }
-    
+        "kbs": "Kate Breiting Schmitz",
+        "mjk": "Marlena Kwasnik",
+        "sdm": "Sam Mariucci",
+        "RBH": "Barrett Hooper",  # Add more as needed
+        }
+
     username = getpass.getuser()
     full_name = USER_NAMES.get(username, username)
     return full_name
+
 
 def greet_user():
     """Greet the user based on the time of day and day of the week."""
@@ -27,10 +29,11 @@ def greet_user():
         greeting = "Good afternoon"
     else:
         greeting = "Good evening"
-    
+
     full_name = get_full_name()
     
     return f"\n{greeting}, {full_name}! Happy {current_day}!"
+
 
 def get_farewell_message():
     """Return a farewell message based on the time of day."""
@@ -44,6 +47,7 @@ def get_farewell_message():
         return f"\nGood evening, {full_name}!"
     else:
         return f"\nHave a great day, {full_name}!"
+
 
 def display_options():
     """Display the available program options."""
@@ -61,6 +65,7 @@ def display_options():
     print("\nWhat would you like to run?")
     for option in options:
         print(option)
+
 
 def display_info(choice):
     """Display information about the selected option."""
@@ -83,6 +88,7 @@ def display_info(choice):
         '9': "Exit: Exits the program."
     }
     return info.get(choice, "Invalid choice. No information available.")
+
 
 def run_program(choice):
     """Run the selected program with a loading indicator."""
@@ -109,6 +115,7 @@ def run_program(choice):
         print(get_farewell_message())
     else:
         print("Invalid choice. Please select a valid option.")
+
 
 def main():
     print(greet_user())
