@@ -56,6 +56,17 @@ def main():
     }
     df = df.rename(columns=rename)
 
+    # Remove duplicates at the ASIN/ISBN level
+    # Ideally I'm looking at this duplicates and trying to figure out why they exist
+    df = df.drop_duplicates(subset=["ASIN", "External ID"])
+
+    # this was getting associated with the wrong ISBN somehow. Just dropping it.
+    drop_asin = "1743791895"
+    df = df[df["ASIN"] != drop_asin]
+
+    # Now there are duplicate ISBN's in there, some rows are literally duplicated. Deciding to keep the first by ISBN
+    df = df.drop_duplicates(subset="External ID", keep="first")
+
     # --- Excel Save Dialog ---
     # Create a hidden Tkinter root window for dialogs
     root = tk.Tk()
