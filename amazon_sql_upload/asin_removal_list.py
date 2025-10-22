@@ -37,4 +37,5 @@ asins_to_delete_list = [
     "081181338X",
     "B0DB8JTQQZ",
     "B0BC2X5J8B",
+    "0898123550",
 ]
