@@ -1,16 +1,16 @@
-import pandas as pd
-import os
-import numpy as np
 import time
-from UPDATE_ams_config import tab_dict, month_list
-from loader_asin_mapping import load_asin_mapping
-from loader_monthly_reports import load_monthly_data
-from loader_item import upload_item
 
-pd.set_option('future.no_silent_downcasting', True)
+import pandas as pd
+from loader_asin_mapping import load_asin_mapping
+from loader_item import upload_item
+from loader_monthly_reports import load_monthly_data
+from UPDATE_ams_config import month_list, tab_dict
+
+pd.set_option("future.no_silent_downcasting", True)
+
 
 def main():
-    pd.reset_option('display.max_columns')
+    pd.reset_option("display.max_columns")
     start_time = time.time()
 
     asin_mapping = load_asin_mapping()  # uses the default path
@@ -37,7 +37,7 @@ def main():
 
     # Merge with item_df on ISBN (after all months are processed)
     if not combined_df.empty and not item_df.empty:
-        combined_df = pd.merge(combined_df, item_df, on='ISBN', how='left')
+        combined_df = pd.merge(combined_df, item_df, on="ISBN", how="left")
 
     # Save results
     if not combined_df.empty:
@@ -58,10 +58,11 @@ def main():
         with open("processing_errors.log", "w") as f:
             for line in errors:
                 f.write(line + "\n")
-        print(f"⚠️ Some issues occurred. See processing_errors.log.")
+        print("⚠️ Some issues occurred. See processing_errors.log.")
 
     end_time = time.time()
     print(f"⏱️ Finished in {end_time - start_time:.2f} seconds.")
+
 
 if __name__ == "__main__":
     main()
