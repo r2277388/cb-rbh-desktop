@@ -2,7 +2,11 @@
 # Python cache and artifacts
 # =========================
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+pip-wheel-metadata/
 
 # =========================
 # Virtual environments
@@ -67,3 +71,19 @@ reprint_project/cache/osd_cache.pkl
 # Other project-specific ignores
 # =========================
 *.dll
+
+
+# =========================
+# DE and system files
+# =========================
+.vscode/
+.DS_Store
+Thumbs.db
+
+# =========================
+# Data / temp files
+# =========================
+*.pkl
+*.csv
+*.xlsx
+*.log
