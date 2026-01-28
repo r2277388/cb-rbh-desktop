@@ -59,6 +59,16 @@ tab_dict = {
         "skiprows": 1,
         "file": r"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2025\2025 - 10 - October - Performance by ASIN_ALL.xlsx",
     },
+    "2025-11": {
+        "tab": "USE_main",
+        "skiprows": 1,
+        "file": r"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2025\2025 - 11 - November - Performance by ASIN_ALL.xlsx",
+    },
+    "2025-12": {
+        "tab": "USE_main",
+        "skiprows": 1,
+        "file": r"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2025\2025 - 12 - December - Performance by ASIN_ALL.xlsx",
+    },
 }
 
 df_asin_mapping = pd.read_excel(
@@ -74,7 +84,7 @@ df_asin_mapping.columns = df_asin_mapping.columns.str.lower()
 # Rename to standard names
 df_asin_mapping.rename(columns={"asin": "ASIN", "isbn13": "ISBN"}, inplace=True)
 
-month = "2025-08"
+month = "2025-12"
 month_list = [
     "2025-01",
     "2025-02",
@@ -86,6 +96,8 @@ month_list = [
     "2025-08",
     "2025-09",
     "2025-10",
+    "2025-11",
+    "2025-12",
 ]
 
 df = pd.read_excel(

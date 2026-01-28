@@ -1,6 +1,10 @@
-amz_weekly_sales = fr'F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2025\Amazon\Sales'
-amz_weekly_inventory = fr'F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2025\Amazon\Inventory'
-amz_weekly_traffic = fr'F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2025\Amazon\Traffic'
-amz_catalog = fr'F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2025\Amazon\Catalog'
+amz_weekly_sales = r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Amazon\Sales"
+amz_weekly_inventory = (
+    r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Amazon\Inventory"
+)
+amz_weekly_traffic = (
+    r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Amazon\Traffic"
+)
+amz_catalog = r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Amazon\Catalog"
 
-ypticod = fr"J:\Metadata Reports\Oracle YPTICOD.xlsx"
+ypticod = r"J:\Metadata Reports\Oracle YPTICOD.xlsx"
