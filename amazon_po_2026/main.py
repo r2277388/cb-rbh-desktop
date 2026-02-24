@@ -1,5 +1,6 @@
 import pandas as pd
 from pathlib import Path
+from datetime import datetime
 from tkinter import Tk, filedialog
 
 from combined_file import get_merged_files
@@ -52,10 +53,14 @@ def lost_sales_summary(df):
     return df_summary.head(20)
 
 def main():
-    
-    excel_report.main()
-    
+    # Load/clean/merge once so the PO file picker only appears a single time.
     df = get_merged_files()
+
+    # Reuse the same merged data for the dated Excel report.
+    agg_pub, agg_pgrp = excel_report.aggregate_data(df)
+    po_year_folder = Path(r'G:\SALES\Amazon\PURCHASE ORDERS') / str(datetime.now().year)
+    dated_filename = excel_report.generate_filename(po_year_folder)
+    excel_report.save_to_excel(df, agg_pub, agg_pgrp, dated_filename)
     
     filename = Path(rf'G:\SALES\Amazon\PURCHASE ORDERS\atelier\po_analysis\amazon_order_py_dump.xlsx')
     with pd.ExcelWriter(filename) as writer:

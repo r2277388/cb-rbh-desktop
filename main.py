@@ -2,23 +2,22 @@ import getpass
 import subprocess
 from datetime import datetime
 
+# call the PO archive manager directly
+import tools.po_archive_manager as po_archive_manager
+
 
 def get_full_name():
-    # Dictionary to map usernames to real names
     USER_NAMES = {
         "kbs": "Kate Breiting Schmitz",
         "mjk": "Marlena Kwasnik",
         "sdm": "Sam Mariucci",
-        "RBH": "Barrett Hooper",  # Add more as needed
+        "RBH": "Barrett Hooper",
     }
-
     username = getpass.getuser()
-    full_name = USER_NAMES.get(username, username)
-    return full_name
+    return USER_NAMES.get(username, username)
 
 
 def greet_user():
-    """Greet the user based on the time of day and day of the week."""
     current_datetime = datetime.now()
     current_hour = current_datetime.hour
     current_day = current_datetime.strftime("%A")
@@ -31,14 +30,11 @@ def greet_user():
         greeting = "Good evening"
 
     full_name = get_full_name()
-
     return f"\n{greeting}, {full_name}! Happy {current_day}!"
 
 
 def get_farewell_message():
-    """Return a farewell message based on the time of day."""
     current_hour = datetime.now().hour
-
     full_name = get_full_name()
 
     if 12 <= current_hour < 17:
@@ -50,17 +46,18 @@ def get_farewell_message():
 
 
 def display_options():
-    """Display the available program options."""
     options = [
-        "1. Amazon PO Report",
-        "2. Amazon PreOrders",
-        "3. Amazon Customer Orders",
-        "4. SSR Daily Summary",
-        "5. UK Rolling File Combining",
-        "6. Hachette Orders - Shipping Estimates",
-        "7. Consolidate Inventory for the INVOBS",
-        "8. Amazon Rolling Reports",
-        "9. Exit",
+        "1. PO Archive Manager",
+        "2. Amazon PO Report",
+        "3. Amazon PreOrders",
+        "4. Amazon Customer Orders",
+        "5. amazon_sql_upload",
+        "6. Amazon Rolling Reports",
+        "7. SSR Daily Summary",
+        "8. UK Rolling File Combining",
+        "9. Hachette Orders - Shipping Estimates",
+        "10. Consolidate Inventory for the INVOBS",
+        "11. Exit",
     ]
     print("\nWhat would you like to run?")
     for option in options:
@@ -68,43 +65,50 @@ def display_options():
 
 
 def display_info(choice):
-    """Display information about the selected option."""
     info = {
-        "1": """Amazon PO Report: Generates a detailed report based on Amazon Purchase Orders.
-        Before running, save the Vendor Central PO File to the following location:
+        "1": "PO Archive Manager: Launches the PO archive helper to archive prior current_amaz_preorders and copy the new file into po_analysis.",
+        "2": """Amazon PO Report: Generates a detailed report based on Amazon Purchase Orders.
+        Before running, save the Vendor Central PO File to:
         G:\\SALES\\Amazon\\PURCHASE ORDERS\\atelier\\po_analysis\\PurchaseOrderItems.csv
         A PO Report is saved off to: G:\\SALES\\Amazon\\PURCHASE ORDERS folder""",
-        "2": """Amazon NYP PreOrders: Generates a report for Amazon NYP PreOrders.
-        Save the relevant data file to the appropriate location before running.""",
-        "3": """Amazon Customer Orders: Generates a report for Amazon Customer Orders.
-        Save the relevant data file to the appropriate location before running.""",
-        "4": "SSR Daily Summary: Prepares the data for the SSR Daily Summary email.",
-        "5": "UK Rolling File Combining: This combines the sales, reserve and midas files together.",
-        "6": "Hachette Orders - Shipping Estimates: Generates a report for Hachette Orders.",
-        "7": """Consolidate Inventory for the INVOBS: Runs the Consolidated Inventory program for INVOBS.
-        This program takes the consolidated inventory data from Oracle, run by Ailing and\
-        explodes out the CDU's into their components to gives us a component-only inventory file.""",
-        "8": "Amazon Rolling Reports: Runs the full Amazon Rolling Reports workflow.",
-        "9": "Exit: Exits the program.",
+        "3": "Amazon NYP PreOrders: Generates a report for Amazon NYP PreOrders. Save the relevant data file to the appropriate location before running.",
+        "4": "Amazon Customer Orders: Generates a report for Amazon Customer Orders. Save the relevant data file to the appropriate location before running.",
+        "5": "amazon_sql_upload: Runs the amazon_sql_upload workflow (ASIN/ISBN conversion, uploads, etc.).",
+        "6": "Amazon Rolling Reports: Runs the full Amazon Rolling Reports workflow.",
+        "7": "SSR Daily Summary: Prepares the data for the SSR Daily Summary email.",
+        "8": "UK Rolling File Combining: This combines the sales, reserve and midas files together.",
+        "9": "Hachette Orders - Shipping Estimates: Generates a report for Hachette Orders.",
+        "10": """Consolidate Inventory for the INVOBS: Runs the Consolidated Inventory program for INVOBS.
+        This program takes the consolidated inventory data from Oracle, run by Ailing, and
+        explodes out the CDU's into their components to give a component-only inventory file.""",
+        "11": "Exit: Exits the program.",
     }
     return info.get(choice, "Invalid choice. No information available.")
 
 
 def run_program(choice):
-    """Run the selected program with a loading indicator."""
     reports = {
-        "1": ("Amazon PO Report", "amazon_po/main.py"),
-        "2": ("Amazon NYP PreOrders", "amazon_preorders/main.py"),
-        "3": ("Amazon Customer Orders", "amazon_customer_orders/main.py"),
-        "4": ("SSR Daily Summary", "ssr_daily_summary/main.py"),
-        "5": ("UK Rolling File Combining", "UK_Rolling_File_Combining/main.py"),
-        "6": ("Hachette Orders - Shipping Estimates", "hachette_orders/main.py"),
-        "7": (
+        "2": ("Amazon PO Report", "amazon_po_2026/main.py"),
+        "3": ("Amazon NYP PreOrders", "amazon_preorders/main.py"),
+        "4": ("Amazon Customer Orders", "amazon_customer_orders_2026/main.py"),
+        "5": ("amazon_sql_upload", "amazon_sql_upload/main.py"),
+        "6": ("Amazon Rolling Reports", "amazon_rolling_reports/main.py"),
+        "7": ("SSR Daily Summary", "ssr_daily_summary/main.py"),
+        "8": ("UK Rolling File Combining", "UK_Rolling_File_Combining/main.py"),
+        "9": ("Hachette Orders - Shipping Estimates", "hachette_orders/main.py"),
+        "10": (
             "Consolidate Inventory for the INVOBS",
             "invobs_consolidated_inventory/main.py",
         ),
-        "8": ("Amazon Rolling Reports", "amazon_rolling_reports/main.py"),
     }
+
+    if choice == "1":
+        # run PO archive manager in-process (Tk GUI)
+        try:
+            po_archive_manager.main()
+        except Exception as e:
+            print(f"An error occurred while running PO Archive Manager: {e}")
+        return
 
     if choice in reports:
         report_name, script_path = reports[choice]
@@ -113,11 +117,14 @@ def run_program(choice):
             subprocess.run(["venv/Scripts/python", script_path], check=True)
             print(f"The {report_name} is now ready.")
         except subprocess.CalledProcessError:
-            print(f"An error occurred while running the {script_path}.")
-    elif choice == "9":
+            print(f"An error occurred while running {script_path}.")
+        return
+
+    if choice == "11":
         print(get_farewell_message())
-    else:
-        print("Invalid choice. Please select a valid option.")
+        return
+
+    print("Invalid choice. Please select a valid option.")
 
 
 def main():
@@ -134,10 +141,10 @@ def main():
                 "\nEnter the number of the option you want to learn more about: "
             ).strip()
             print(display_info(choice_info))
-            continue  # Return to the options list after displaying info
+            continue
 
-        if choice.lower() in ["9", "exit", "quit"]:
-            run_program("9")
+        if choice.lower() in ["11", "exit", "quit"]:
+            run_program("11")
             break
 
         run_program(choice)

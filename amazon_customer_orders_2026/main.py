@@ -53,6 +53,7 @@ def main():
             print(f"Error processing {sheet_name}: {e}")
 
     path = Path(fr'G:\SALES\Amazon\RBH\weekly_customer_order\atelier\amazon_weekly_customer_order_py.xlsx')
+    print(f"Amazon Customer Orders output path: {path}")
 
     try:
         with pd.ExcelWriter(path, engine='xlsxwriter') as writer:
@@ -61,6 +62,7 @@ def main():
             df_glance_cb.to_excel(writer, sheet_name='glance_cb', index=False)
             for sheet_name, df in dfs.items():
                 df.to_excel(writer, sheet_name=sheet_name, index=False)
+        print(f"Amazon Customer Orders saved successfully to: {path}")
     except Exception as e:
         print(f"Error writing to Excel: {e}")
         
