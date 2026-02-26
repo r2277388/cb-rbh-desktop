@@ -57,7 +57,8 @@ def display_options():
         "8. UK Rolling File Combining",
         "9. Hachette Orders - Shipping Estimates",
         "10. Consolidate Inventory for the INVOBS",
-        "11. Exit",
+        "11. XGBoost Model",
+        "12. Exit",
     ]
     print("\nWhat would you like to run?")
     for option in options:
@@ -81,7 +82,8 @@ def display_info(choice):
         "10": """Consolidate Inventory for the INVOBS: Runs the Consolidated Inventory program for INVOBS.
         This program takes the consolidated inventory data from Oracle, run by Ailing, and
         explodes out the CDU's into their components to give a component-only inventory file.""",
-        "11": "Exit: Exits the program.",
+        "11": "XGBoost Model: Launches the xgboost_model workflow menu.",
+        "12": "Exit: Exits the program.",
     }
     return info.get(choice, "Invalid choice. No information available.")
 
@@ -100,6 +102,7 @@ def run_program(choice):
             "Consolidate Inventory for the INVOBS",
             "invobs_consolidated_inventory/main.py",
         ),
+        "11": ("XGBoost Model", "xgboost_model/main.py"),
     }
 
     if choice == "1":
@@ -120,7 +123,7 @@ def run_program(choice):
             print(f"An error occurred while running {script_path}.")
         return
 
-    if choice == "11":
+    if choice == "12":
         print(get_farewell_message())
         return
 
@@ -143,8 +146,8 @@ def main():
             print(display_info(choice_info))
             continue
 
-        if choice.lower() in ["11", "exit", "quit"]:
-            run_program("11")
+        if choice.lower() in ["12", "exit", "quit"]:
+            run_program("12")
             break
 
         run_program(choice)
