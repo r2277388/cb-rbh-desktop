@@ -1,5 +1,7 @@
 import subprocess
 import tkinter as tk
+import sys
+from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog
 
 import pandas as pd
@@ -14,6 +16,8 @@ from paths import (
 
 
 def main():
+    script_dir = Path(__file__).resolve().parent
+
     ##############
     # --- Show required save locations and ask for confirmation ---
     root = tk.Tk()
@@ -34,7 +38,7 @@ def main():
         return
 
     # Show latest weekly files being analyzed
-    subprocess.run(["python", "load_weekly_files.py"])
+    subprocess.run([sys.executable, str(script_dir / "load_weekly_files.py")])
 
     ##############
     # Run the main data pipeline to get the cleaned DataFrame
@@ -136,7 +140,7 @@ def main():
     )
     if update_dicts and update_dicts.lower() == "y":
         # Run the dictionary update script as a subprocess
-        subprocess.run(["python", "asin_add_to_dictionaries.py"])
+        subprocess.run([sys.executable, str(script_dir / "asin_add_to_dictionaries.py")])
     else:
         print("Skipping dictionary update.")
 
