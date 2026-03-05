@@ -75,7 +75,7 @@ def display_info(choice):
         "3": "Amazon NYP PreOrders: Generates a report for Amazon NYP PreOrders. Save the relevant data file to the appropriate location before running.",
         "4": "Amazon Customer Orders: Generates a report for Amazon Customer Orders. Save the relevant data file to the appropriate location before running.",
         "5": "amazon_sql_upload: Runs the amazon_sql_upload workflow (ASIN/ISBN conversion, uploads, etc.).",
-        "6": "Amazon Rolling Reports: Runs the full Amazon Rolling Reports workflow.",
+        "6": "Amazon Rolling Reports: Runs a 10-week SQL freshness check first, then asks whether to continue with the full process.",
         "7": "SSR Daily Summary: Prepares the data for the SSR Daily Summary email.",
         "8": "UK Rolling File Combining: This combines the sales, reserve and midas files together.",
         "9": "Hachette Orders - Shipping Estimates: Generates a report for Hachette Orders.",
@@ -94,7 +94,6 @@ def run_program(choice):
         "3": ("Amazon NYP PreOrders", "amazon_preorders/main.py"),
         "4": ("Amazon Customer Orders", "amazon_customer_orders_2026/main.py"),
         "5": ("amazon_sql_upload", "amazon_sql_upload/main.py"),
-        "6": ("Amazon Rolling Reports", "amazon_rolling_reports/main.py"),
         "7": ("SSR Daily Summary", "ssr_daily_summary/main.py"),
         "8": ("UK Rolling File Combining", "UK_Rolling_File_Combining/main.py"),
         "9": ("Hachette Orders - Shipping Estimates", "hachette_orders/main.py"),
@@ -113,6 +112,10 @@ def run_program(choice):
             print(f"An error occurred while running PO Archive Manager: {e}")
         return
 
+    if choice == "6":
+        run_amazon_rolling_reports_menu()
+        return
+
     if choice in reports:
         report_name, script_path = reports[choice]
         print(f"Running the {report_name}... Please wait.")
@@ -128,6 +131,52 @@ def run_program(choice):
         return
 
     print("Invalid choice. Please select a valid option.")
+
+
+def run_amazon_rolling_reports_menu():
+    while True:
+        print("\nAmazon Rolling Reports")
+        print("1. Check Amazon upload table (last 10 weeks)")
+        print("2. Run normal Amazon Rolling Reports process")
+        print("3. Back to main menu")
+        print("4. Exit launcher")
+
+        subchoice = input("\nChoose an option: ").strip().lower()
+
+        if subchoice == "1":
+            print("Running SQL check for the latest 10 weeks... Please wait.")
+            try:
+                subprocess.run(
+                    [
+                        "venv/Scripts/python",
+                        "amazon_rolling_reports/check_last_10_weeks.py",
+                    ],
+                    check=True,
+                )
+            except subprocess.CalledProcessError:
+                print("The SQL check failed.")
+            continue
+
+        if subchoice == "2":
+            print("Running the Amazon Rolling Reports... Please wait.")
+            try:
+                subprocess.run(
+                    ["venv/Scripts/python", "amazon_rolling_reports/main.py"],
+                    check=True,
+                )
+                print("The Amazon Rolling Reports is now ready.")
+            except subprocess.CalledProcessError:
+                print("An error occurred while running amazon_rolling_reports/main.py.")
+            return
+
+        if subchoice in ["3", "back", "b"]:
+            return
+
+        if subchoice in ["4", "exit", "quit", "q"]:
+            print(get_farewell_message())
+            raise SystemExit(0)
+
+        print("Invalid choice. Please select a valid option.")
 
 
 def main():
