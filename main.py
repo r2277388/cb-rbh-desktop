@@ -58,7 +58,8 @@ def display_options():
         "9. Hachette Orders - Shipping Estimates",
         "10. Consolidate Inventory for the INVOBS",
         "11. XGBoost Model",
-        "12. Exit",
+        "12. Check Table Updates",
+        "13. Exit",
     ]
     print("\nWhat would you like to run?")
     for option in options:
@@ -83,7 +84,8 @@ def display_info(choice):
         This program takes the consolidated inventory data from Oracle, run by Ailing, and
         explodes out the CDU's into their components to give a component-only inventory file.""",
         "11": "XGBoost Model: Launches the xgboost_model workflow menu.",
-        "12": "Exit: Exits the program.",
+        "12": "Check Table Updates: Runs SQL checks for table freshness and recent weeks for SSR/Amazon/Bookscan tables.",
+        "13": "Exit: Exits the program.",
     }
     return info.get(choice, "Invalid choice. No information available.")
 
@@ -127,6 +129,10 @@ def run_program(choice):
         return
 
     if choice == "12":
+        run_check_table_updates_menu()
+        return
+
+    if choice == "13":
         print(get_farewell_message())
         return
 
@@ -179,6 +185,39 @@ def run_amazon_rolling_reports_menu():
         print("Invalid choice. Please select a valid option.")
 
 
+def run_check_table_updates_menu():
+    while True:
+        print("\nCheck Table Updates")
+        print("1. All Updates")
+        print("2. Tables for SSR Summary")
+        print("3. Amazon")
+        print("4. Bookscan")
+        print("5. Barnes & Noble")
+        print("6. Back to main menu")
+
+        subchoice = input("\nChoose an option: ").strip().lower()
+
+        if subchoice in ["1", "2", "3", "4", "5"]:
+            print("Running table-update SQL check... Please wait.")
+            try:
+                subprocess.run(
+                    [
+                        "venv/Scripts/python",
+                        "table_check/check_table_updates.py",
+                        subchoice,
+                    ],
+                    check=True,
+                )
+            except subprocess.CalledProcessError:
+                print("The table-update SQL check failed.")
+            continue
+
+        if subchoice in ["6", "back", "b", "exit", "quit", "q"]:
+            return
+
+        print("Invalid choice. Please select a valid option.")
+
+
 def main():
     print(greet_user())
 
@@ -195,8 +234,8 @@ def main():
             print(display_info(choice_info))
             continue
 
-        if choice.lower() in ["12", "exit", "quit"]:
-            run_program("12")
+        if choice.lower() in ["13", "exit", "quit"]:
+            run_program("13")
             break
 
         run_program(choice)
