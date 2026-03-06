@@ -1,87 +1,37 @@
 import sys
+from pathlib import Path
 
-from sqlalchemy import create_engine
 import pandas as pd
 
+# Ensure repo root is importable when this script is executed by file path.
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
-def get_connection() -> create_engine:
-    engine = create_engine("mssql+pyodbc://sql-2-db/CBQ2?driver=SQL+Server")
-    return engine
-
-
-def fetch_data_from_db(engine: create_engine, query: str) -> pd.DataFrame:
-    raw_connection = engine.raw_connection()
-    try:
-        cursor = raw_connection.cursor()
-        try:
-            cursor.execute(query)
-            columns = None
-            rows = None
-            while True:
-                if cursor.description:
-                    columns = [col[0] for col in cursor.description]
-                    rows = cursor.fetchall()
-                    break
-                if not cursor.nextset():
-                    raise RuntimeError("Query did not return a result set.")
-        finally:
-            cursor.close()
-    finally:
-        raw_connection.close()
-
-    if columns is None or rows is None:
-        return pd.DataFrame()
-
-    return pd.DataFrame.from_records(rows, columns=columns)
+from shared.db import fetch_data_from_db, get_connection
+from shared.sql import load_sql
 
 
 SQL_QUERIES = {
     "1": (
         "All Updates",
-        """
-SELECT TOP 100
-    tlu.TableName,
-    tlu.LastUpdated
-FROM metrics.TableLastUpdated tlu;
-""",
+        load_sql("table_check", "all_updates.sql"),
     ),
     "2": (
         "Tables for SSR Summary",
-        """
-SELECT
-    tlu.TableName,
-    tlu.LastUpdated
-FROM metrics.TableLastUpdated tlu
-WHERE tlu.TableName IN ('ssr.SalesSSRRow', 'ebs.Sales', 'ebs.Item')
-ORDER BY tlu.LastUpdated DESC;
-""",
+        load_sql("table_check", "ssr_summary_tables.sql"),
     ),
     "3": (
         "Amazon",
-        """
-SELECT DISTINCT TOP 10
-    [WEEK]
-FROM [CBQ2].[cb].[Sellthrough_Amazon] sta
-ORDER BY [WEEK] DESC;
-""",
+        load_sql("table_check", "amazon_weeks.sql"),
     ),
     "4": (
         "Bookscan",
-        """
-SELECT DISTINCT TOP 10
-    [WEEK]
-FROM [CBQ2].[cb].[Sellthrough_RollBookscan]
-ORDER BY [WEEK] DESC;
-""",
+        load_sql("table_check", "bookscan_weeks.sql"),
     ),
     "5": (
         "Barnes & Noble",
-        """
-SELECT DISTINCT TOP 10
-    [WEEK]
-FROM [CBQ2].[cb].[Sellthrough_Barnes_and_Noble]
-ORDER BY [WEEK] DESC;
-""",
+        load_sql("table_check", "bn_weeks.sql"),
     ),
 }
 

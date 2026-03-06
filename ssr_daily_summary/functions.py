@@ -1,15 +1,24 @@
 # functions.py
 # This file contains the functions that will be used in the main script
-from sqlalchemy import create_engine, text
+import sys
+from pathlib import Path
+from sqlalchemy import text
 from datetime import datetime
 import os
 import pickle
 from queries import query_viz_daily
 import pandas as pd
 
+# Ensure repo root is importable when this script is executed by file path.
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from shared.db import get_connection as shared_get_connection
+
+
 def get_connection():
-    engine = create_engine('mssql+pyodbc://sql-2-db/CBQ2?driver=SQL+Server')
-    return engine
+    return shared_get_connection()
 
 def get_greeting():
     now = datetime.now()

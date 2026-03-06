@@ -184,6 +184,17 @@ tab_dict = {
         "skiprows": 1,
         "file": r"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2025\2025 - 12 - December - Performance by ASIN_ALL.xlsx",
     },
+    ## 2026 AMS Data
+    "2026-01": {
+        "tab": "USE_main",
+        "skiprows": 1,
+        "file": r"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2026\2026 - 01 - January- Performance by ASIN_ALL.xlsx",
+    },
+    "2026-02": {
+        "tab": "USE_main",
+        "skiprows": 1,
+        "file": r"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2026\2026 - 02 - February - Performance by ASIN_ALL.xlsx",
+    },
 }
 
 # Build month_list from the keys defined in tab_dict so they stay in sync

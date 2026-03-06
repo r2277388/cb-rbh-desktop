@@ -26,7 +26,11 @@ def div():
     df_item = df_item[['ISBN','publisher']]
     df = df.merge(df_item,on='ISBN',how='inner')
     
-    df['div'] = np.where(df['publisher']=='Chronicle', "CB", "DP")
+    df['div'] = np.select(
+        [df['publisher'] == 'Chronicle', df['publisher'] == 'Galison'],
+        ['CB', 'GA'],
+        default='DP'
+    )
     
     df.drop_duplicates(subset=['ASIN'],inplace=True)
     
@@ -101,6 +105,11 @@ def summarize_by_div(df):
 
     # Dropping intermediate columns no longer needed
     summary.drop(columns=['ou_pp', 'ou_ly', 'or_pp', 'or_ly'], inplace=True)
+
+    # Keep order CB, GA, DP, Total
+    cat_order = ['CB', 'GA', 'DP', 'Total']
+    summary['div'] = pd.Categorical(summary['div'], categories=cat_order, ordered=True)
+    summary = summary.sort_values('div').reset_index(drop=True)
 
     return summary
 

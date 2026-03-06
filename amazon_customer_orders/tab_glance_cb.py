@@ -38,7 +38,11 @@ def calculate_rev_units():
     df_item = df_item[['ISBN','publisher']]
     df = df.merge(df_item,on='ISBN',how='inner')
     
-    df['div'] = np.where(df['publisher']=='Chronicle','CB','DP')
+    df['div'] = np.select(
+        [df['publisher'] == 'Chronicle', df['publisher'] == 'Galison'],
+        ['CB', 'GA'],
+        default='DP'
+    )
     
     df.drop_duplicates(subset=['ASIN','ISBN'],inplace=True)
     
@@ -50,7 +54,9 @@ def calculate_rev_units():
     return df
 
 def format_percentage(numerator, denominator):
-    return str(round((numerator-denominator) / denominator * 100, 2)) + '%'
+    if denominator == 0:
+        return '0%'
+    return str(round((numerator - denominator) / denominator * 100, 2)) + '%'
  
 def summarize_data(df):
     summary = df.groupby('div').agg({
@@ -73,6 +79,11 @@ def summarize_data(df):
 
     # Reorder columns if necessary
     summary = summary[['div', 'Glance Views', 'gv_pp_pct', 'gv_lp_pct']]
+
+    # Keep order CB, GA, DP, Total
+    cat_order = ['CB', 'GA', 'DP', 'Total']
+    summary['div'] = pd.Categorical(summary['div'], categories=cat_order, ordered=True)
+    summary = summary.sort_values('div').reset_index(drop=True)
 
     return summary
 

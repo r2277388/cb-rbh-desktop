@@ -18,8 +18,11 @@ def top_titles(df_weeklysales, df_converter, df_item, df_glance, publisher=None,
 	
 	# Filter by publisher if specified
 	if publisher:
-		if publisher.startswith('!'):
-			df = df[df['publisher'] != publisher[1:]]
+		if isinstance(publisher, str) and publisher.startswith('!'):
+			excluded_publishers = [pub.strip() for pub in publisher[1:].split('|') if pub.strip()]
+			df = df[~df['publisher'].isin(excluded_publishers)]
+		elif isinstance(publisher, (list, tuple, set)):
+			df = df[df['publisher'].isin(publisher)]
 		else:
 			df = df[df['publisher'] == publisher]
 	

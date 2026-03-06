@@ -1,16 +1,15 @@
-from functions import fetch_data_from_db, get_connection
+import sys
+from pathlib import Path
 
-SQL_LAST_10_WEEKS = """
-SELECT TOP 10
-    sta.[WEEK],
-    COUNT(*) AS [RowCount],
-    SUM(sta.[CustomerOrders]) AS [CustomerOrders],
-    SUM(sta.[UnitShipped]) AS [UnitShipped],
-    SUM(sta.[OnHand]) AS [OnHand]
-FROM [CBQ2].[cb].[Sellthrough_Amazon] sta
-GROUP BY sta.[WEEK]
-ORDER BY sta.[WEEK] DESC;
-"""
+# Ensure repo root is importable when this script is executed by file path.
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from shared.db import fetch_data_from_db, get_connection
+from shared.sql import load_sql
+
+SQL_LAST_10_WEEKS = load_sql("amazon_rolling_reports", "last_10_weeks.sql")
 
 
 def main():

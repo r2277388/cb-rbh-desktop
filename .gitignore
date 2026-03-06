@@ -37,6 +37,7 @@ Thumbs.db
 # Data files (large or sensitive)
 # =========================
 data/
+archive/
 
 # =========================
 # CSV files (all folders)
@@ -80,10 +81,3 @@ reprint_project/cache/osd_cache.pkl
 .DS_Store
 Thumbs.db
 
-# =========================
-# Data / temp files
-# =========================
-*.pkl
-*.csv
-*.xlsx
-*.log

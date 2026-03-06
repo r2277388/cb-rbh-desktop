@@ -47,19 +47,20 @@ def get_farewell_message():
 
 def display_options():
     options = [
-        "1. PO Archive Manager",
-        "2. Amazon PO Report",
-        "3. Amazon PreOrders",
-        "4. Amazon Customer Orders",
-        "5. amazon_sql_upload",
-        "6. Amazon Rolling Reports",
-        "7. SSR Daily Summary",
-        "8. UK Rolling File Combining",
-        "9. Hachette Orders - Shipping Estimates",
-        "10. Consolidate Inventory for the INVOBS",
-        "11. XGBoost Model",
-        "12. Check Table Updates",
-        "13. Exit",
+        "01. Amazon PO Archive Manager",
+        "02. Amazon PO Report",
+        "03. Amazon PreOrders",
+        "04. Amazon Customer Orders",
+        "05. Amazon Sellthru SQL Upload",
+        "06. Amazon Rolling Reports",
+        "07. Amazon AMS Manager",
+        "08. SSR Daily Summary",
+        "09. UK Rolling File Combining",
+        "10. Hachette Orders - Shipping Estimates",
+        "11. Consolidate Inventory for the INVOBS",
+        "12. XGBoost Model",
+        "13. Check Table Updates",
+        "14. Exit",
     ]
     print("\nWhat would you like to run?")
     for option in options:
@@ -77,15 +78,16 @@ def display_info(choice):
         "4": "Amazon Customer Orders: Generates a report for Amazon Customer Orders. Save the relevant data file to the appropriate location before running.",
         "5": "amazon_sql_upload: Runs the amazon_sql_upload workflow (ASIN/ISBN conversion, uploads, etc.).",
         "6": "Amazon Rolling Reports: Runs a 10-week SQL freshness check first, then asks whether to continue with the full process.",
-        "7": "SSR Daily Summary: Prepares the data for the SSR Daily Summary email.",
-        "8": "UK Rolling File Combining: This combines the sales, reserve and midas files together.",
-        "9": "Hachette Orders - Shipping Estimates: Generates a report for Hachette Orders.",
-        "10": """Consolidate Inventory for the INVOBS: Runs the Consolidated Inventory program for INVOBS.
+        "7": "Amazon AMS Manager: Manage/update AMS month configuration and run incremental or full AMS processing.",
+        "8": "SSR Daily Summary: Prepares the data for the SSR Daily Summary email.",
+        "9": "UK Rolling File Combining: This combines the sales, reserve and midas files together.",
+        "10": "Hachette Orders - Shipping Estimates: Generates a report for Hachette Orders.",
+        "11": """Consolidate Inventory for the INVOBS: Runs the Consolidated Inventory program for INVOBS.
         This program takes the consolidated inventory data from Oracle, run by Ailing, and
         explodes out the CDU's into their components to give a component-only inventory file.""",
-        "11": "XGBoost Model: Launches the xgboost_model workflow menu.",
-        "12": "Check Table Updates: Runs SQL checks for table freshness and recent weeks for SSR/Amazon/Bookscan tables.",
-        "13": "Exit: Exits the program.",
+        "12": "XGBoost Model: Launches the xgboost_model workflow menu.",
+        "13": "Check Table Updates: Runs SQL checks for table freshness and recent weeks for SSR/Amazon/Bookscan tables.",
+        "14": "Exit: Exits the program.",
     }
     return info.get(choice, "Invalid choice. No information available.")
 
@@ -94,16 +96,17 @@ def run_program(choice):
     reports = {
         "2": ("Amazon PO Report", "amazon_po_2026/main.py"),
         "3": ("Amazon NYP PreOrders", "amazon_preorders/main.py"),
-        "4": ("Amazon Customer Orders", "amazon_customer_orders_2026/main.py"),
+        "4": ("Amazon Customer Orders", "amazon_customer_orders/main.py"),
         "5": ("amazon_sql_upload", "amazon_sql_upload/main.py"),
-        "7": ("SSR Daily Summary", "ssr_daily_summary/main.py"),
-        "8": ("UK Rolling File Combining", "UK_Rolling_File_Combining/main.py"),
-        "9": ("Hachette Orders - Shipping Estimates", "hachette_orders/main.py"),
-        "10": (
+        "7": ("Amazon AMS Manager", "amazon_ams/manage_ams.py"),
+        "8": ("SSR Daily Summary", "ssr_daily_summary/main.py"),
+        "9": ("UK Rolling File Combining", "UK_Rolling_File_Combining/main.py"),
+        "10": ("Hachette Orders - Shipping Estimates", "hachette_orders/main.py"),
+        "11": (
             "Consolidate Inventory for the INVOBS",
             "invobs_consolidated_inventory/main.py",
         ),
-        "11": ("XGBoost Model", "xgboost_model/main.py"),
+        "12": ("XGBoost Model", "xgboost_model/main.py"),
     }
 
     if choice == "1":
@@ -128,11 +131,11 @@ def run_program(choice):
             print(f"An error occurred while running {script_path}.")
         return
 
-    if choice == "12":
+    if choice == "13":
         run_check_table_updates_menu()
         return
 
-    if choice == "13":
+    if choice == "14":
         print(get_farewell_message())
         return
 
@@ -226,16 +229,20 @@ def main():
         choice = input(
             "\nPlease enter the number of your choice (or type 'info' to learn more): "
         ).strip()
+        if choice.isdigit():
+            choice = str(int(choice))
 
         if choice.lower() == "info":
             choice_info = input(
                 "\nEnter the number of the option you want to learn more about: "
             ).strip()
+            if choice_info.isdigit():
+                choice_info = str(int(choice_info))
             print(display_info(choice_info))
             continue
 
-        if choice.lower() in ["13", "exit", "quit"]:
-            run_program("13")
+        if choice.lower() in ["14", "exit", "quit"]:
+            run_program("14")
             break
 
         run_program(choice)
