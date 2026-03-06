@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from UPDATE_ams_config import tab_dict, month_list
+from UPDATE_ams_config import month_list, tab_dict
 
 pd.reset_option("display.max_columns")
 
@@ -27,8 +27,7 @@ BASELINE_YEAR = "2025"
 month = month_list[-1]
 if month not in tab_dict:
     raise KeyError(
-        f"Selected month '{month}' is not in tab_dict. "
-        f"Available months: {month_list}"
+        f"Selected month '{month}' is not in tab_dict. Available months: {month_list}"
     )
 
 df = pd.read_excel(
@@ -120,7 +119,9 @@ else:
     else:
         first_baseline_month = sorted(baseline_sets.keys())[0]
         baseline_columns = baseline_sets[first_baseline_month]
-        baseline_consistent = all(cols == baseline_columns for cols in baseline_sets.values())
+        baseline_consistent = all(
+            cols == baseline_columns for cols in baseline_sets.values()
+        )
 
         print(f"Baseline months loaded: {len(baseline_sets)}")
         if baseline_consistent:
