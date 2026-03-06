@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from UPDATE_ams_config import tab_dict, month_list
+
 
 def load_monthly_data(tab_info, asin_mapping, period):
     df = pd.read_excel(
@@ -25,7 +25,7 @@ def load_monthly_data(tab_info, asin_mapping, period):
     if missing:
         raise ValueError(f"Missing critical columns in {period}: {missing}")
     if extra:
-        print(f"ℹ️ Note: Extra columns found in {period}: {extra}")
+        print(f"INFO: Extra columns found in {period}: {extra}")
 
     df.rename(columns={'asin': 'ASIN'}, inplace=True)
     df['ASIN'] = df['ASIN'].astype(str).str.strip().str.zfill(10)
