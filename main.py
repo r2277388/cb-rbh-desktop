@@ -95,7 +95,7 @@ def display_info(choice):
 
 def run_program(choice):
     reports = {
-        "2": ("Amazon PO Report", "amazon_po_2026/main.py"),
+        "2": ("Amazon PO Report", "amazon_po/main.py"),
         "3": ("Amazon NYP PreOrders", "amazon_preorders/main.py"),
         "4": ("Amazon Customer Orders", "amazon_customer_orders/main.py"),
         "5": ("amazon_sql_upload", "amazon_sql_upload/main.py"),

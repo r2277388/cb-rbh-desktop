@@ -1,5 +1,6 @@
 import pandas as pd
 from pathlib import Path
+from datetime import datetime
 from tkinter import Tk, filedialog
 
 from combined_file import get_merged_files
@@ -21,8 +22,13 @@ def ordered_summary_cb(df):
     df_summary.sort_values(by='Requested quantity', ascending=False, inplace=True)
     return df_summary.head(20)
 
+def ordered_summary_ga(df):
+    df_summary = df[df['Publisher'] == 'Galison'].copy()
+    df_summary.sort_values(by='Requested quantity', ascending=False, inplace=True)
+    return df_summary.head(20)
+
 def ordered_summary_dp(df):
-    df_summary = df[df['Publisher'] != 'Chronicle'].copy()
+    df_summary = df[~df['Publisher'].isin(['Chronicle', 'Galison'])].copy()
     df_summary.sort_values(by='Requested quantity', ascending=False, inplace=True)
     return df_summary.head(20)
 
@@ -31,28 +37,39 @@ def accepted_summary_cb(df):
     df_summary.sort_values(by='Total accepted cost', ascending=False, inplace=True)
     return df_summary.head(20)
 
+def accepted_summary_ga(df):
+    df_summary = df[df['Publisher'] == 'Galison'].copy()
+    df_summary.sort_values(by='Total accepted cost', ascending=False, inplace=True)
+    return df_summary.head(20)
+
 def accepted_summary_dp(df):
-    df_summary = df[df['Publisher'] != 'Chronicle'].copy()
+    df_summary = df[~df['Publisher'].isin(['Chronicle', 'Galison'])].copy()
     df_summary.sort_values(by='Total accepted cost', ascending=False, inplace=True)
     return df_summary.head(20)
 
 def lost_sales_summary(df):
-    df_summary = df[df['Publisher'] != 'Chronicle'].copy()
+    df_summary = df[~df['Publisher'].isin(['Chronicle', 'Galison'])].copy()
     df_summary.sort_values(by='Lost Sales', ascending=False, inplace=True)
     return df_summary.head(20)
 
 def main():
-    
-    excel_report.main()
-    
+    # Load/clean/merge once so the PO file picker only appears a single time.
     df = get_merged_files()
+
+    # Reuse the same merged data for the dated Excel report.
+    agg_pub, agg_pgrp = excel_report.aggregate_data(df)
+    po_year_folder = Path(r'G:\SALES\Amazon\PURCHASE ORDERS') / str(datetime.now().year)
+    dated_filename = excel_report.generate_filename(po_year_folder)
+    excel_report.save_to_excel(df, agg_pub, agg_pgrp, dated_filename)
     
     filename = Path(rf'G:\SALES\Amazon\PURCHASE ORDERS\atelier\po_analysis\amazon_order_py_dump.xlsx')
     with pd.ExcelWriter(filename) as writer:
         publisher_summary(df).to_excel(writer, sheet_name='pub_summary')
         ordered_summary_cb(df).to_excel(writer, sheet_name='ordered_summary_cb',index=False)
+        ordered_summary_ga(df).to_excel(writer, sheet_name='ordered_summary_ga',index=False)
         ordered_summary_dp(df).to_excel(writer, sheet_name='ordered_summary_dp',index=False)
         accepted_summary_cb(df).to_excel(writer, sheet_name='accepted_summary_cb',index=False)
+        accepted_summary_ga(df).to_excel(writer, sheet_name='accepted_summary_ga',index=False)
         accepted_summary_dp(df).to_excel(writer, sheet_name='accepted_summary_dp',index=False)
         lost_sales_summary(df).to_excel(writer, sheet_name='lost_sales_summary',index=False)
 
