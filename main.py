@@ -150,9 +150,12 @@ def run_amazon_rolling_reports_menu():
         print("    1. Check Amazon upload table (last 10 weeks)")
         print("    2. Run normal Amazon Rolling Reports process")
         print("    3. Back to main menu")
-        print("    4. Back to main menu")
         print()
-        subchoice = input("Choose an option: ").strip().lower()
+        try:
+            subchoice = input("Choose an option: ").strip().lower()
+        except KeyboardInterrupt:
+            print("\nReturning to main menu.")
+            return
 
         if subchoice == "1":
             print("Running SQL check for the latest 10 weeks... Please wait.")
@@ -180,7 +183,7 @@ def run_amazon_rolling_reports_menu():
                 print("An error occurred while running amazon_rolling_reports/main.py.")
             return
 
-        if subchoice in ["3", "4", "back", "b", "exit", "quit", "q"]:
+        if subchoice in ["3", "back", "b", "exit", "quit", "q"]:
             return
 
         print("Invalid choice. Please select a valid option.")
@@ -197,7 +200,11 @@ def run_check_table_updates_menu():
         print("    5. Barnes & Noble")
         print("    6. Back to main menu")
         print()
-        subchoice = input("Choose an option: ").strip().lower()
+        try:
+            subchoice = input("Choose an option: ").strip().lower()
+        except KeyboardInterrupt:
+            print("\nReturning to main menu.")
+            return
 
         if subchoice in ["1", "2", "3", "4", "5"]:
             print("Running table-update SQL check... Please wait.")
@@ -225,9 +232,13 @@ def main():
 
     while True:
         display_options()
-        choice = input(
-            "\nPlease enter the number of your choice (or type 'info' to learn more): "
-        ).strip()
+        try:
+            choice = input(
+                "\nPlease enter the number of your choice (or type 'info' to learn more): "
+            ).strip()
+        except KeyboardInterrupt:
+            print(get_farewell_message())
+            break
         if choice.isdigit():
             choice = str(int(choice))
 
