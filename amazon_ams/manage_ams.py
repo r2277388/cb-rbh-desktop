@@ -214,10 +214,12 @@ def run_ams_incremental():
 
 def run_ams():
     print("\nRun AMS")
-    print("1. Incremental (new/additional month only)")
-    print("2. Full rerun (all configured months)")
-    print("3. Back")
-    choice = input("\nChoose an option: ").strip().lower()
+    print()
+    print("    1. Incremental (new/additional month only)")
+    print("    2. Full rerun (all configured months)")
+    print("    3. Back")
+    print()
+    choice = input("Choose an option: ").strip().lower()
     if choice == "1":
         run_ams_incremental()
     elif choice == "2":
@@ -231,13 +233,14 @@ def run_ams():
 def main():
     while True:
         print("\nAmazon AMS Manager")
-        print("1. Show last 10 configured months")
-        print("2. Remove month from tab_dict")
-        print("3. Add/process new month (validate before add)")
-        print("4. Run AMS processing")
-        print("5. Back to launcher")
-
-        choice = input("\nChoose an option: ").strip().lower()
+        print()
+        print("    1. Show last 10 configured months")
+        print("    2. Remove month from tab_dict")
+        print("    3. Add/process new month (validate before add)")
+        print("    4. Run AMS processing")
+        print("    5. Back to launcher")
+        print()
+        choice = input("Choose an option: ").strip().lower()
 
         try:
             if choice == "1":

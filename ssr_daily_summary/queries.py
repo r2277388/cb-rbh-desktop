@@ -747,7 +747,7 @@ def query_viz_daily(ty,ly):
         inner join ssr.Channel chan on chan.ChannelID = sub.ChannelID
 
     WHERE
-        Sd.PERIOD >= '201901'
+        Sd.PERIOD >= '202101'
         AND sd.INVOICE_LINE_TYPE='SALE'
         AND cbq2.dbo.fnSaleTypeCode(SD.AR_TRX_TYPE_ID)='N'
         and i.PRODUCT_TYPE in('BK','FT')

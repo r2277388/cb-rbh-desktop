@@ -63,8 +63,9 @@ def display_options():
         "14. Exit",
     ]
     print("\nWhat would you like to run?")
+    print()
     for option in options:
-        print(option)
+        print(f"    {option}")
 
 
 def display_info(choice):
@@ -145,12 +146,13 @@ def run_program(choice):
 def run_amazon_rolling_reports_menu():
     while True:
         print("\nAmazon Rolling Reports")
-        print("1. Check Amazon upload table (last 10 weeks)")
-        print("2. Run normal Amazon Rolling Reports process")
-        print("3. Back to main menu")
-        print("4. Exit launcher")
-
-        subchoice = input("\nChoose an option: ").strip().lower()
+        print()
+        print("    1. Check Amazon upload table (last 10 weeks)")
+        print("    2. Run normal Amazon Rolling Reports process")
+        print("    3. Back to main menu")
+        print("    4. Back to main menu")
+        print()
+        subchoice = input("Choose an option: ").strip().lower()
 
         if subchoice == "1":
             print("Running SQL check for the latest 10 weeks... Please wait.")
@@ -178,12 +180,8 @@ def run_amazon_rolling_reports_menu():
                 print("An error occurred while running amazon_rolling_reports/main.py.")
             return
 
-        if subchoice in ["3", "back", "b"]:
+        if subchoice in ["3", "4", "back", "b", "exit", "quit", "q"]:
             return
-
-        if subchoice in ["4", "exit", "quit", "q"]:
-            print(get_farewell_message())
-            raise SystemExit(0)
 
         print("Invalid choice. Please select a valid option.")
 
@@ -191,14 +189,15 @@ def run_amazon_rolling_reports_menu():
 def run_check_table_updates_menu():
     while True:
         print("\nCheck Table Updates")
-        print("1. All Updates")
-        print("2. Tables for SSR Summary")
-        print("3. Amazon")
-        print("4. Bookscan")
-        print("5. Barnes & Noble")
-        print("6. Back to main menu")
-
-        subchoice = input("\nChoose an option: ").strip().lower()
+        print()
+        print("    1. All Updates")
+        print("    2. Tables for SSR Summary")
+        print("    3. Amazon")
+        print("    4. Bookscan")
+        print("    5. Barnes & Noble")
+        print("    6. Back to main menu")
+        print()
+        subchoice = input("Choose an option: ").strip().lower()
 
         if subchoice in ["1", "2", "3", "4", "5"]:
             print("Running table-update SQL check... Please wait.")
