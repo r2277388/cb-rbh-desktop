@@ -1,0 +1,29 @@
+project:
+  seed: 42
+  output_dir: artifacts
+
+query:
+  top_n_isbns: 50
+  sales_start_period: 201501
+  sales_top_period_start: 202401
+  sales_top_period_end: 202512
+  orders_lookback_days: 180
+
+pipeline:
+  frequency: MS
+  min_history_periods: 12
+  test_year: 2025
+  forecast_horizon_periods: 6
+  include_orders_as_feature: true
+
+paths:
+  sales_sql: sql/sales.sql
+  orders_sql: sql/hachette_orders.sql
+  cache_dir: data/cache
+  inventory_snapshot: data/raw/inventory_snapshot.csv
+
+models:
+  candidates:
+    - seasonal_naive
+    - random_forest
+    - xgboost

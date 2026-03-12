@@ -55,9 +55,9 @@ fi
 
 if [ -z "${VIRTUAL_ENV_DISABLE_PROMPT:-}" ] ; then
     _OLD_VIRTUAL_PS1="${PS1:-}"
-    PS1="(.venv) ${PS1:-}"
+    PS1="(amazon_roi) ${PS1:-}"
     export PS1
-    VIRTUAL_ENV_PROMPT="(.venv) "
+    VIRTUAL_ENV_PROMPT="(amazon_roi) "
     export VIRTUAL_ENV_PROMPT
 fi
 

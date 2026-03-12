@@ -36,6 +36,36 @@ SQL_QUERIES = {
 }
 
 
+def _format_for_display(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    numeric_cols = out.select_dtypes(include=["number"]).columns
+    for col in numeric_cols:
+        out[col] = pd.to_numeric(out[col], errors="coerce").map(
+            lambda x: "" if pd.isna(x) else f"{x:,.0f}"
+        )
+    return out
+
+
+def _print_grid_table(df: pd.DataFrame) -> None:
+    cols = [str(c) for c in df.columns]
+    rows = [[str(v) for v in row] for row in df.fillna("").itertuples(index=False, name=None)]
+
+    widths = []
+    for i, col in enumerate(cols):
+        max_cell = max((len(r[i]) for r in rows), default=0)
+        widths.append(max(len(col), max_cell))
+
+    sep = "+" + "+".join("-" * (w + 2) for w in widths) + "+"
+    header = "|" + "|".join(f" {col:<{widths[i]}} " for i, col in enumerate(cols)) + "|"
+
+    print(sep)
+    print(header)
+    print(sep)
+    for row in rows:
+        print("|" + "|".join(f" {row[i]:<{widths[i]}} " for i in range(len(cols))) + "|")
+    print(sep)
+
+
 def main():
     if len(sys.argv) < 2:
         print("Please provide a query choice: 1, 2, 3, 4, or 5.")
@@ -64,7 +94,8 @@ def main():
             .fillna("")
         )
 
-    print(df.to_string(index=False))
+    display_df = _format_for_display(df)
+    _print_grid_table(display_df)
     return 0
 
 
