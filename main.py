@@ -54,13 +54,14 @@ def display_options():
         "05. Amazon Sellthru SQL Upload",
         "06. Amazon Rolling Reports",
         "07. Amazon AMS Manager",
-        "08. SSR Daily Summary",
-        "09. UK Rolling File Combining",
-        "10. Hachette Orders - Shipping Estimates",
-        "11. Consolidate Inventory for the INVOBS",
-        "12. XGBoost Model",
-        "13. Check Table Updates",
-        "14. Exit",
+        "08. Frontlist Supercharged Data",
+        "09. SSR Daily Summary",
+        "10. UK Rolling File Combining",
+        "11. Hachette Orders - Shipping Estimates",
+        "12. Consolidate Inventory for the INVOBS",
+        "13. XGBoost Model",
+        "14. Check Table Updates",
+        "15. Exit",
     ]
     print("\nWhat would you like to run?")
     print()
@@ -80,15 +81,16 @@ def display_info(choice):
         "5": "amazon_sql_upload: Runs the amazon_sql_upload workflow (ASIN/ISBN conversion, uploads, etc.).",
         "6": "Amazon Rolling Reports: Runs a 10-week SQL freshness check first, then asks whether to continue with the full process.",
         "7": "Amazon AMS Manager: Manage/update AMS month configuration and run incremental or full AMS processing.",
-        "8": "SSR Daily Summary: Prepares the data for the SSR Daily Summary email.",
-        "9": "UK Rolling File Combining: This combines the sales, reserve and midas files together.",
-        "10": "Hachette Orders - Shipping Estimates: Generates a report for Hachette Orders.",
-        "11": """Consolidate Inventory for the INVOBS: Runs the Consolidated Inventory program for INVOBS.
+        "8": "Frontlist Supercharged Data: Builds the frontlist ISBN master file by merging Frontlist Tracking with cached Excel extracts and SQL source data.",
+        "9": "SSR Daily Summary: Prepares the data for the SSR Daily Summary email.",
+        "10": "UK Rolling File Combining: This combines the sales, reserve and midas files together.",
+        "11": "Hachette Orders - Shipping Estimates: Generates a report for Hachette Orders.",
+        "12": """Consolidate Inventory for the INVOBS: Runs the Consolidated Inventory program for INVOBS.
         This program takes the consolidated inventory data from Oracle, run by Ailing, and
         explodes out the CDU's into their components to give a component-only inventory file.""",
-        "12": "XGBoost Model: Launches the xgboost_model workflow menu.",
-        "13": "Check Table Updates: Runs SQL checks for table freshness and recent weeks for SSR/Amazon/Bookscan tables.",
-        "14": "Exit: Exits the program.",
+        "13": "XGBoost Model: Launches the xgboost_model workflow menu.",
+        "14": "Check Table Updates: Runs SQL checks for table freshness and recent weeks for SSR/Amazon/Bookscan tables.",
+        "15": "Exit: Exits the program.",
     }
     return info.get(choice, "Invalid choice. No information available.")
 
@@ -100,14 +102,15 @@ def run_program(choice):
         "4": ("Amazon Customer Orders", "amazon_customer_orders/main.py"),
         "5": ("amazon_sql_upload", "amazon_sql_upload/main.py"),
         "7": ("Amazon AMS Manager", "amazon_ams/manage_ams.py"),
-        "8": ("SSR Daily Summary", "ssr_daily_summary/main.py"),
-        "9": ("UK Rolling File Combining", "UK_Rolling_File_Combining/main.py"),
-        "10": ("Hachette Orders - Shipping Estimates", "hachette_orders/main.py"),
-        "11": (
+        "8": ("Frontlist Supercharged Data", "FLTracking_Supercharged/main.py"),
+        "9": ("SSR Daily Summary", "ssr_daily_summary/main.py"),
+        "10": ("UK Rolling File Combining", "UK_Rolling_File_Combining/main.py"),
+        "11": ("Hachette Orders - Shipping Estimates", "hachette_orders/main.py"),
+        "12": (
             "Consolidate Inventory for the INVOBS",
             "invobs_consolidated_inventory/main.py",
         ),
-        "12": ("XGBoost Model", "xgboost_model/main.py"),
+        "13": ("XGBoost Model", "xgboost_model/main.py"),
     }
 
     if choice == "1":
@@ -132,11 +135,11 @@ def run_program(choice):
             print(f"An error occurred while running {script_path}.")
         return
 
-    if choice == "13":
+    if choice == "14":
         run_check_table_updates_menu()
         return
 
-    if choice == "14":
+    if choice == "15":
         print(get_farewell_message())
         return
 
@@ -251,8 +254,8 @@ def main():
             print(display_info(choice_info))
             continue
 
-        if choice.lower() in ["14", "exit", "quit"]:
-            run_program("14")
+        if choice.lower() in ["15", "exit", "quit"]:
+            run_program("15")
             break
 
         run_program(choice)

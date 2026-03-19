@@ -1,6 +1,7 @@
 def sql_co():
     return r"""
-    DECLARE @start_date date = '2019-01-01';
+    DECLARE @start_date_weekly date = '2019-01-01';
+    DECLARE @start_date_ltd    date = '2012-01-01';
 
     DECLARE @last_date date;
     DECLARE @ty_year   int;
@@ -57,7 +58,7 @@ def sql_co():
             ISNULL(sta.CustomerOrders, 0) AS CustomerOrders,
             ISNULL(sta.OnHand, 0)         AS OnHand
         FROM [CBQ2].[cb].[Sellthrough_Amazon] sta
-        WHERE sta.[Week] >= @start_date
+        WHERE sta.[Week] BETWEEN @start_date_ltd AND @last_date
     )
     SELECT
         s.ISBN13,
@@ -76,6 +77,21 @@ def sql_co():
         SUM(CASE WHEN s.[Week] >= DATEFROMPARTS(@ly_year,1,1)
                       AND s.[Week] <  DATEFROMPARTS(@ty_year,1,1)
                  THEN s.CustomerOrders ELSE 0 END) AS LY_FY
+        ,SUM(s.CustomerOrders) AS LTD
+        ,SUM(CASE WHEN s.[Week] BETWEEN '2012-01-01' AND '2012-12-31'
+                 THEN s.CustomerOrders ELSE 0 END) AS [12-31-2012]
+        ,SUM(CASE WHEN s.[Week] BETWEEN '2013-01-01' AND '2013-12-31'
+                 THEN s.CustomerOrders ELSE 0 END) AS [12-31-2013]
+        ,SUM(CASE WHEN s.[Week] BETWEEN '2014-01-01' AND '2014-12-31'
+                 THEN s.CustomerOrders ELSE 0 END) AS [12-31-2014]
+        ,SUM(CASE WHEN s.[Week] BETWEEN '2015-01-01' AND '2015-12-31'
+                 THEN s.CustomerOrders ELSE 0 END) AS [12-31-2015]
+        ,SUM(CASE WHEN s.[Week] BETWEEN '2016-01-01' AND '2016-12-31'
+                 THEN s.CustomerOrders ELSE 0 END) AS [12-31-2016]
+        ,SUM(CASE WHEN s.[Week] BETWEEN '2017-01-01' AND '2017-12-31'
+                 THEN s.CustomerOrders ELSE 0 END) AS [12-31-2017]
+        ,SUM(CASE WHEN s.[Week] BETWEEN '2018-01-01' AND '2018-12-31'
+                 THEN s.CustomerOrders ELSE 0 END) AS [12-31-2018]
     INTO #agg
     FROM src s
     GROUP BY s.ISBN13;
@@ -83,7 +99,7 @@ def sql_co():
     -- Build week list
     DECLARE @weeks TABLE (wk date PRIMARY KEY);
     SET @wk = @last_date;
-    WHILE (@wk >= @start_date)
+    WHILE (@wk >= @start_date_weekly)
     BEGIN
         INSERT INTO @weeks(wk) VALUES(@wk);
         SET @wk = DATEADD(week, -1, @wk);
@@ -122,7 +138,7 @@ def sql_co():
             CONVERT(varchar(10), sta.[Week], 110) AS wk_label,
             ISNULL(sta.CustomerOrders, 0) AS CustomerOrders
         FROM [CBQ2].[cb].[Sellthrough_Amazon] sta
-        WHERE sta.[Week] >= @start_date
+        WHERE sta.[Week] BETWEEN @start_date_weekly AND @last_date
     ),
     p AS (
         SELECT *
@@ -144,12 +160,23 @@ def sql_co():
         ISNULL(ag.TYTD,0)                                   AS TYTD,
         ISNULL(ag.LYTD,0)                                   AS LYTD,
         ISNULL(ag.LY_FY,0)                                  AS LY_FY,
-        (' + @sum + N') AS [LTD],
-        ' + @cols_proj + N'
+        ISNULL(ag.LTD,0)                                    AS [LTD],
+        ' + @cols_proj + N',
+        ISNULL(ag.[12-31-2018],0)                           AS [12-31-2018],
+        ISNULL(ag.[12-31-2017],0)                           AS [12-31-2017],
+        ISNULL(ag.[12-31-2016],0)                           AS [12-31-2016],
+        ISNULL(ag.[12-31-2015],0)                           AS [12-31-2015],
+        ISNULL(ag.[12-31-2014],0)                           AS [12-31-2014],
+        ISNULL(ag.[12-31-2013],0)                           AS [12-31-2013],
+        ISNULL(ag.[12-31-2012],0)                           AS [12-31-2012]
     FROM p
     JOIN #items it  ON p.ISBN13 = it.ISBN13
     LEFT JOIN #agg ag ON p.ISBN13 = ag.ISBN13
     ORDER BY Pub, pt, ft, Title;';
 
-    EXEC sp_executesql @sql, N'@start_date date', @start_date = @start_date;
+    EXEC sp_executesql
+        @sql,
+        N'@start_date_weekly date, @last_date date',
+        @start_date_weekly = @start_date_weekly,
+        @last_date = @last_date;
     """

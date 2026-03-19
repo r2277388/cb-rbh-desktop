@@ -16,6 +16,17 @@ from paths import amazon_po_folder, amazon_rolling_folder, dp_folders
 #############
 
 
+def prune_zero_history_columns(df):
+    history_cols = [
+        col for col in df.columns
+        if isinstance(col, str) and len(col) == 10 and col.count("-") == 2
+    ]
+
+    keep_history_cols = [col for col in history_cols if pd.to_numeric(df[col], errors="coerce").fillna(0).sum() != 0]
+    keep_cols = [col for col in df.columns if col not in history_cols or col in keep_history_cols]
+    return df[keep_cols], keep_history_cols
+
+
 def save_reports_by_pub(
     df,
     report_type,
@@ -30,6 +41,12 @@ def save_reports_by_pub(
     for pub, folder in dp_folders.items():
         df_pub = df[df["Pub"] == pub]
         if not df_pub.empty:
+            df_pub, history_cols = prune_zero_history_columns(df_pub)
+            summary_cols = ["LTD", "LY_FY", "TYTD", "LYTD", "W52", "OH", "PO_Qty"]
+            decimal_cols = ["Price", "OH_Avg"]
+            pub_summary = build_column_totals(df_pub, history_cols + summary_cols)
+            pub_format_cols = history_cols + [col for col in summary_cols if col in df_pub.columns]
+
             filename = f"Week {week_number}-{full_year} Rolling Amazon ({date_formatted}) - {report_type}.xlsx"
             filepath = os.path.join(folder, filename)
             os.makedirs(folder, exist_ok=True)
@@ -40,8 +57,8 @@ def save_reports_by_pub(
             save_to_excel(
                 df_pub,
                 filepath,
-                summary=summary,
-                format_cols=format_cols,
+                summary=pub_summary,
+                format_cols=pub_format_cols,
                 decimal_cols=decimal_cols,
             )
             print(f"Saved {report_type} for {pub} to {filepath}")
@@ -123,7 +140,6 @@ def main():
     # Saving to the main folder
     print(rf"Saving {name1} to the main Rolling Reports folder...")
 
-    # My attempt to turn the ISBN column to numeric, if it exists
     if "ISBN" in df_customer.columns:
         df_customer["ISBN"] = pd.to_numeric(df_customer["ISBN"], errors="coerce")
 
