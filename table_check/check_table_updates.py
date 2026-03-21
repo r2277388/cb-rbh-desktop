@@ -1,4 +1,5 @@
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -22,22 +23,67 @@ SQL_QUERIES = {
         load_sql("table_check", "ssr_summary_tables.sql"),
     ),
     "3": (
+        "Ebs.Sales Prior 5 Days",
+        None,
+    ),
+    "4": (
         "Amazon",
         load_sql("table_check", "amazon_weeks.sql"),
     ),
-    "4": (
+    "5": (
         "Bookscan",
         load_sql("table_check", "bookscan_weeks.sql"),
     ),
-    "5": (
+    "6": (
         "Barnes & Noble",
         load_sql("table_check", "bn_weeks.sql"),
     ),
 }
 
 
+def _prior_period_yyyymm(today: datetime | None = None) -> str:
+    now = today or datetime.now()
+    year = now.year
+    month = now.month - 1
+    if month == 0:
+        year -= 1
+        month = 12
+    return f"{year}{month:02d}"
+
+
+def _current_period_yyyymm(today: datetime | None = None) -> str:
+    now = today or datetime.now()
+    return f"{now.year}{now.month:02d}"
+
+
+def build_ebs_sales_prior_5_days_sql() -> str:
+    current_period = _current_period_yyyymm()
+    prior_period = _prior_period_yyyymm()
+    return f"""
+SELECT TOP (5)
+    sd.TRX_DATE AS [Date],
+    SUM(CASE WHEN i.PUBLISHER_CODE = 'Chronicle' THEN sd.REVENUE_AMOUNT ELSE 0 END) AS cb_val,
+    SUM(CASE WHEN i.PUBLISHER_CODE <> 'Chronicle' THEN sd.REVENUE_AMOUNT ELSE 0 END) AS dp_val,
+    SUM(CASE WHEN i.PUBLISHER_CODE = 'Chronicle' THEN 1 ELSE 0 END) AS cb_row_cnt,
+    SUM(CASE WHEN i.PUBLISHER_CODE <> 'Chronicle' THEN 1 ELSE 0 END) AS dp_row_cnt
+FROM ebs.sales sd
+INNER JOIN ebs.item i
+    ON i.ITEM_ID = sd.ITEM_ID
+WHERE
+    sd.PERIOD BETWEEN '{prior_period}' AND '{current_period}'
+GROUP BY
+    sd.TRX_DATE
+ORDER BY
+    sd.TRX_DATE DESC;
+""".strip()
+
+
 def _format_for_display(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
+    force_numeric_cols = {"cb_val", "dp_val", "cb_row_cnt", "dp_row_cnt"}
+    for col in force_numeric_cols.intersection(out.columns):
+        out[col] = pd.to_numeric(out[col], errors="coerce")
+
     numeric_cols = out.select_dtypes(include=["number"]).columns
     for col in numeric_cols:
         out[col] = pd.to_numeric(out[col], errors="coerce").map(
@@ -68,15 +114,17 @@ def _print_grid_table(df: pd.DataFrame) -> None:
 
 def main():
     if len(sys.argv) < 2:
-        print("Please provide a query choice: 1, 2, 3, 4, or 5.")
+        print("Please provide a query choice: 1, 2, 3, 4, 5, or 6.")
         return 1
 
     choice = sys.argv[1].strip()
     if choice not in SQL_QUERIES:
-        print(f"Invalid query choice: {choice}. Use 1, 2, 3, 4, or 5.")
+        print(f"Invalid query choice: {choice}. Use 1, 2, 3, 4, 5, or 6.")
         return 1
 
     report_name, sql_query = SQL_QUERIES[choice]
+    if choice == "3":
+        sql_query = build_ebs_sales_prior_5_days_sql()
 
     engine = get_connection()
     df = fetch_data_from_db(engine, sql_query)

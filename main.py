@@ -201,10 +201,11 @@ def run_check_table_updates_menu():
         print()
         print("    1. All Updates")
         print("    2. Tables for SSR Summary")
-        print("    3. Amazon")
-        print("    4. Bookscan")
-        print("    5. Barnes & Noble")
-        print("    6. Back to main menu")
+        print("    3. Ebs.Sales Prior 5 Days")
+        print("    4. Amazon")
+        print("    5. Bookscan")
+        print("    6. Barnes & Noble")
+        print("    7. Back to main menu")
         print()
         try:
             subchoice = input("Choose an option: ").strip().lower()
@@ -212,7 +213,7 @@ def run_check_table_updates_menu():
             print("\nReturning to main menu.")
             return
 
-        if subchoice in ["1", "2", "3", "4", "5"]:
+        if subchoice in ["1", "2", "3", "4", "5", "6"]:
             print("Running table-update SQL check... Please wait.")
             try:
                 subprocess.run(
@@ -227,7 +228,7 @@ def run_check_table_updates_menu():
                 print("The table-update SQL check failed.")
             continue
 
-        if subchoice in ["6", "back", "b", "exit", "quit", "q"]:
+        if subchoice in ["7", "back", "b", "exit", "quit", "q"]:
             return
 
         print("Invalid choice. Please select a valid option.")
