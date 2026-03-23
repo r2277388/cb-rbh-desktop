@@ -1,4 +1,5 @@
 from datetime import datetime
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 import sys
 import tkinter as tk
@@ -16,6 +17,7 @@ from processes.amazon_preorders import (
     load_amazon_preorders,
     load_amazon_preorders_cached,
 )
+from processes.amazon_sellthrough import SQL_FILE as AMAZON_SELLTHROUGH_SQL_FILE
 from processes.amazon_sellthrough import load_amazon_sellthrough
 from processes.barnes_noble_weekly import (
     build_bn_date_header,
@@ -23,7 +25,9 @@ from processes.barnes_noble_weekly import (
     load_barnes_noble_weekly_cached,
     resolve_barnes_noble_weekly_path,
 )
+from processes.faire_orders import SQL_FILE as FAIRE_ORDERS_SQL_FILE
 from processes.faire_orders import load_faire_orders
+from processes.faire_qty import SQL_FILE as FAIRE_QTY_SQL_FILE
 from processes.faire_qty import load_faire_qty
 from processes.ingram_daily_report import (
     build_modified_date_header,
@@ -31,14 +35,24 @@ from processes.ingram_daily_report import (
     load_ingram_daily_report_cached,
     resolve_ingram_daily_report_path,
 )
-from processes.inventory_detail import load_inventory_detail, load_inventory_detail_cached
-from processes.inventory_detail import resolve_inventory_detail_path
-from processes.amazon_sellthrough import SQL_FILE as AMAZON_SELLTHROUGH_SQL_FILE
-from processes.faire_qty import SQL_FILE as FAIRE_QTY_SQL_FILE
-from processes.faire_orders import SQL_FILE as FAIRE_ORDERS_SQL_FILE
+from processes.inventory_detail import (
+    load_inventory_detail,
+    load_inventory_detail_cached,
+    resolve_inventory_detail_path,
+)
 
 
-FRONTLIST_DIR = Path(r"G:\SALES\2026 Sales Reports\Frontlist Tracking")
+def _load_shared_paths():
+    shared_path = Path(__file__).resolve().parents[2] / "paths" / "process_paths.py"
+    spec = spec_from_file_location("_shared_process_paths", shared_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Unable to load shared process paths from {shared_path}")
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+FRONTLIST_DIR = _load_shared_paths().FRONTLIST_TRACKING_FOLDER
 
 
 def resolve_frontlist_tracking_path(source_dir: Path = FRONTLIST_DIR) -> Path:

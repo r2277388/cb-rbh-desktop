@@ -1,18 +1,14 @@
 import sys
 import pandas as pd
 from pathlib import Path
+from paths import ORACLE_YPTICOD_FILE
 
 # Add the parent directory to sys.path
 sys.path.append(str(Path(__file__).resolve().parent))
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from loader_osd import upload_osd
 
-# Path components
-base_dir = Path(fr'J:\Metadata Reports')
-file_name = 'Oracle YPTICOD.xlsx'
-    
-# File paths and connection strings
-YPTICOD_FILE_PATH = base_dir / file_name
+YPTICOD_FILE_PATH = ORACLE_YPTICOD_FILE
 
 def upload_ypticod(file = YPTICOD_FILE_PATH):
     return pd.read_excel(file

@@ -1,11 +1,12 @@
 import numpy as np
 import pandas as pd
 from UPDATE_ams_config import month_list, tab_dict
+from loader_asin_mapping import default_file_path
 
 pd.reset_option("display.max_columns")
 
 
-file_asin_mapping = r"G:\SALES\Amazon\RBH\DOWNLOADED_FILES\Chronicle-AsinMapping.xlsx"
+file_asin_mapping = default_file_path
 
 df_asin_mapping = pd.read_excel(
     file_asin_mapping,

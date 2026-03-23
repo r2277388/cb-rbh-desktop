@@ -1,6 +1,7 @@
 import pandas as pd
 from pathlib import Path
 import os
+from paths import DOWNLOADS_FOLDER
 
 def get_latest_inventory_file(folder_path: Path, pattern: str) -> Path:
     """Return the latest inventory file in the folder matching the given pattern."""
@@ -55,12 +56,12 @@ def process_inventory_data(folder_path: str, pattern: str, columns: list) -> pd.
 
 def data_inventory():
     # Define the folder path and pattern for inventory filesW
-    folder_path = r'G:\SALES\Amazon\RBH\DOWNLOADED_FILES'
+    folder_path = DOWNLOADS_FOLDER
     pattern = '*Inventory*csv'
     columns = ['ASIN', 'Unfilled Customer Ordered Units']
 
     # Process the inventory data and print the first few rows
-    df = process_inventory_data(folder_path, pattern, columns)
+    df = process_inventory_data(str(folder_path), pattern, columns)
     df['Orders'] = df['Orders'].replace(',',"",regex=True).fillna(0).astype(int)
     df = df[df['Orders']>0]
     

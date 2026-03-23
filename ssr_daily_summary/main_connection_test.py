@@ -15,6 +15,7 @@ from sqlalchemy import text  # Import text
 from queries import (query1, query2, query3, query4, query5, query6, query7,
                       query8, query9)
 from functions import get_connection
+from paths import saved_query_location
 
 # %% Main Function
 
@@ -82,7 +83,7 @@ def main():
         pbar.update(1)
 
     # Saving to file
-    path = 'G:\\SALES\\2024 Sales Reports\\SSR\\SSR_Template\\rbh_daily_py.xlsx'
+    path = saved_query_location()
 
     with pd.ExcelWriter(path, engine='xlsxwriter') as writer:
         df_q1.to_excel(writer, sheet_name='df_q1', index=False)

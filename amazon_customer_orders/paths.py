@@ -14,10 +14,6 @@ def _load_shared_paths():
 
 _shared = _load_shared_paths()
 
-
-def saved_query_location():
-    return str(_shared.SSR_QUERY_OUTPUT_FILE)
-
-
-def saved_viz_location():
-    return str(_shared.SSR_VIZ_OUTPUT_FILE)
+DOWNLOADS_FOLDER = _shared.DOWNLOADS_FOLDER
+ORACLE_YPTICOD_FILE = _shared.ORACLE_YPTICOD_FILE
+AMAZON_CUSTOMER_ORDERS_OUTPUT_FILE = _shared.AMAZON_CUSTOMER_ORDERS_OUTPUT_FILE

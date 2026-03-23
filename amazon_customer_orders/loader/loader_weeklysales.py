@@ -3,6 +3,7 @@ import numpy as np
 from pathlib import Path
 import os
 import glob
+from paths import DOWNLOADS_FOLDER
 
 def load_sales_data(folder_path: Path, file_glob_pattern: str, columns: list) -> pd.DataFrame:
     files = glob.glob(str(folder_path) + file_glob_pattern)
@@ -38,7 +39,7 @@ def filter_nonzero_rows(df: pd.DataFrame) -> pd.DataFrame:
     return df_filtered
 
 def uploader_weeklysales() -> pd.DataFrame:
-    folder_path = Path(r'G:\SALES\Amazon\RBH\DOWNLOADED_FILES')
+    folder_path = DOWNLOADS_FOLDER
     file_glob_sales_weekly = r'\*Sales*Weekly*csv'
     cols_sales_weekly = [
         'ASIN', 'Ordered Revenue', 'Ordered Revenue - Prior Period (%)', 'Ordered Revenue - Same Period Last Year (%)',

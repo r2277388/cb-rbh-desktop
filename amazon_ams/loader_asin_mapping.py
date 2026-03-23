@@ -1,6 +1,18 @@
 import pandas as pd
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
 
-default_file_path = fr"G:\SALES\Amazon\RBH\DOWNLOADED_FILES\Chronicle-AsinMapping.xlsx"
+def _load_shared_paths():
+    shared_path = Path(__file__).resolve().parents[1] / "paths" / "process_paths.py"
+    spec = spec_from_file_location("_shared_process_paths", shared_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Unable to load shared process paths from {shared_path}")
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+default_file_path = _load_shared_paths().CHRONICLE_ASIN_MAPPING_FILE
 
 def load_asin_mapping(file_path=default_file_path):
     df = pd.read_excel(

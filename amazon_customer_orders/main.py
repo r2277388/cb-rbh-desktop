@@ -3,6 +3,7 @@ from pathlib import Path
 from tab_stats_cb import stats_cb
 from tab_glance_cb import glance_views
 from tab_TEMPLATE import top_titles
+from paths import AMAZON_CUSTOMER_ORDERS_OUTPUT_FILE
 
 from loader.loader_weeklysales import uploader_weeklysales
 from loader.loader_traffic import upload_traffic
@@ -52,7 +53,7 @@ def main():
         except Exception as e:
             print(f"Error processing {sheet_name}: {e}")
 
-    path = Path(fr'G:\SALES\Amazon\RBH\weekly_customer_order\atelier\amazon_weekly_customer_order_py.xlsx')
+    path = AMAZON_CUSTOMER_ORDERS_OUTPUT_FILE
     print(f"Amazon Customer Orders output path: {path}")
 
     try:

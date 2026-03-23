@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 # call the PO archive manager directly
+from paths import process_paths
 import tools.po_archive_manager as po_archive_manager
 
 
@@ -76,10 +77,10 @@ def display_options():
 def display_info(choice):
     info = {
         "1": "PO Archive Manager: Launches the PO archive helper to archive prior current_amaz_preorders and copy the new file into po_analysis.",
-        "2": """Amazon PO Report: Generates a detailed report based on Amazon Purchase Orders.
+        "2": f"""Amazon PO Report: Generates a detailed report based on Amazon Purchase Orders.
         Before running, save the Vendor Central PO File to:
-        G:\\SALES\\Amazon\\PURCHASE ORDERS\\atelier\\po_analysis\\PurchaseOrderItems.csv
-        A PO Report is saved off to: G:\\SALES\\Amazon\\PURCHASE ORDERS folder""",
+        {process_paths.AMAZON_PO_ANALYSIS_INPUT_FILE}
+        A PO Report is saved off to: {process_paths.AMAZON_PO_ROOT_FOLDER} folder""",
         "3": "Amazon NYP PreOrders: Generates a report for Amazon NYP PreOrders. Save the relevant data file to the appropriate location before running.",
         "4": "Amazon Customer Orders: Generates a report for Amazon Customer Orders. Save the relevant data file to the appropriate location before running.",
         "5": "amazon_sql_upload: Runs the amazon_sql_upload workflow (ASIN/ISBN conversion, uploads, etc.).",
@@ -109,9 +110,8 @@ def get_latest_matching_file(folder_path: str | Path, pattern: str) -> Path:
 
 
 def confirm_amazon_preorders_files() -> bool:
-    downloads_folder = Path(r"G:\SALES\Amazon\RBH\DOWNLOADED_FILES")
-    catalog_file = get_latest_matching_file(downloads_folder, "*Catalog*csv")
-    inventory_file = get_latest_matching_file(downloads_folder, "*Inventory*csv")
+    catalog_file = get_latest_matching_file(process_paths.DOWNLOADS_FOLDER, "*Catalog*csv")
+    inventory_file = get_latest_matching_file(process_paths.DOWNLOADS_FOLDER, "*Inventory*csv")
 
     while True:
         print()
@@ -134,15 +134,12 @@ def confirm_amazon_preorders_files() -> bool:
 
 
 def confirm_amazon_customer_orders_files() -> bool:
-    downloads_folder = Path(r"G:\SALES\Amazon\RBH\DOWNLOADED_FILES")
-    script_path = (Path(__file__).resolve().parent / "amazon_customer_orders" / "main.py").resolve()
-    weekly_sales_file = get_latest_matching_file(downloads_folder, "*Sales*Weekly*csv")
-    catalog_file = get_latest_matching_file(downloads_folder, "*Catalog*csv")
-    traffic_file = get_latest_matching_file(downloads_folder, "*Traffic*csv")
-    ypticod_file = Path(r"J:\Metadata Reports\Oracle YPTICOD.xlsx")
-    output_file = Path(
-        r"G:\SALES\Amazon\RBH\weekly_customer_order\atelier\amazon_weekly_customer_order_py.xlsx"
-    )
+    script_path = process_paths.AMAZON_CUSTOMER_ORDERS_SCRIPT
+    weekly_sales_file = get_latest_matching_file(process_paths.DOWNLOADS_FOLDER, "*Sales*Weekly*csv")
+    catalog_file = get_latest_matching_file(process_paths.DOWNLOADS_FOLDER, "*Catalog*csv")
+    traffic_file = get_latest_matching_file(process_paths.DOWNLOADS_FOLDER, "*Traffic*csv")
+    ypticod_file = process_paths.ORACLE_YPTICOD_FILE
+    output_file = process_paths.AMAZON_CUSTOMER_ORDERS_OUTPUT_FILE
 
     if not ypticod_file.exists():
         raise FileNotFoundError(f"Required file not found: {ypticod_file}")
@@ -172,28 +169,23 @@ def confirm_amazon_customer_orders_files() -> bool:
 
 
 def confirm_amazon_sql_upload_files() -> bool:
-    base_dir = Path(__file__).resolve().parent
-    script_path = (base_dir / "amazon_sql_upload" / "main.py").resolve()
-    manual_key_path = (base_dir / "amazon_sql_upload" / "asin_manual_key.py").resolve()
-    removal_list_path = (base_dir / "amazon_sql_upload" / "asin_removal_list.py").resolve()
+    script_path = process_paths.AMAZON_SQL_UPLOAD_SCRIPT
+    manual_key_path = process_paths.AMAZON_SQL_UPLOAD_MANUAL_KEY_FILE
+    removal_list_path = process_paths.AMAZON_SQL_UPLOAD_REMOVAL_LIST_FILE
 
     sales_file = get_latest_matching_file(
-        Path(r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Amazon\Sales"),
-        "*.csv",
+        process_paths.AMAZON_SQL_UPLOAD_SOURCE_FOLDERS["sales"], "*.csv"
     )
     inventory_file = get_latest_matching_file(
-        Path(r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Amazon\Inventory"),
-        "*.csv",
+        process_paths.AMAZON_SQL_UPLOAD_SOURCE_FOLDERS["inventory"], "*.csv"
     )
     traffic_file = get_latest_matching_file(
-        Path(r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Amazon\Traffic"),
-        "*.csv",
+        process_paths.AMAZON_SQL_UPLOAD_SOURCE_FOLDERS["traffic"], "*.csv"
     )
     catalog_file = get_latest_matching_file(
-        Path(r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Amazon\Catalog"),
-        "*.csv",
+        process_paths.AMAZON_SQL_UPLOAD_SOURCE_FOLDERS["catalog"], "*.csv"
     )
-    ypticod_file = Path(r"J:\Metadata Reports\Oracle YPTICOD.xlsx")
+    ypticod_file = process_paths.ORACLE_YPTICOD_FILE
 
     if not ypticod_file.exists():
         raise FileNotFoundError(f"Required file not found: {ypticod_file}")
@@ -227,11 +219,8 @@ def confirm_amazon_sql_upload_files() -> bool:
 
 
 def confirm_amazon_rolling_reports_check_files() -> bool:
-    base_dir = Path(__file__).resolve().parent
-    script_path = (base_dir / "amazon_rolling_reports" / "check_last_10_weeks.py").resolve()
-    sql_file = (
-        base_dir / "shared" / "sql" / "amazon_rolling_reports" / "last_10_weeks.sql"
-    ).resolve()
+    script_path = process_paths.AMAZON_ROLLING_CHECK_SCRIPT
+    sql_file = process_paths.AMAZON_ROLLING_SQL_FILE
 
     while True:
         print()
@@ -256,17 +245,15 @@ def confirm_amazon_rolling_reports_check_files() -> bool:
 
 
 def confirm_amazon_rolling_reports_run_files() -> bool:
-    base_dir = Path(__file__).resolve().parent
-    script_path = (base_dir / "amazon_rolling_reports" / "main.py").resolve()
-    po_folder = Path(r"G:\SALES\Amazon\PURCHASE ORDERS\2026")
-    latest_po_file = get_latest_matching_file(po_folder, "*.xlsx")
-    customer_orders_pickle = (base_dir / "rr_customer_orders.pkl").resolve()
-    units_shipped_pickle = (base_dir / "rr_units_shipped.pkl").resolve()
-    po_pickle = (base_dir / "latest_amazon_po.pkl").resolve()
-    customer_orders_sql = (base_dir / "amazon_rolling_reports" / "query_co.py").resolve()
-    units_shipped_sql = (base_dir / "amazon_rolling_reports" / "query_us.py").resolve()
-    date_check_sql = (base_dir / "amazon_rolling_reports" / "query_datecheck.py").resolve()
-    output_folder = Path(r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Amazon")
+    script_path = process_paths.AMAZON_ROLLING_REPORTS_SCRIPT
+    latest_po_file = get_latest_matching_file(process_paths.AMAZON_PO_FOLDER, "*.xlsx")
+    customer_orders_pickle = process_paths.AMAZON_ROLLING_CUSTOMER_ORDERS_PICKLE
+    units_shipped_pickle = process_paths.AMAZON_ROLLING_UNITS_SHIPPED_PICKLE
+    po_pickle = process_paths.AMAZON_ROLLING_PO_PICKLE
+    customer_orders_sql = process_paths.AMAZON_ROLLING_CUSTOMER_ORDERS_QUERY
+    units_shipped_sql = process_paths.AMAZON_ROLLING_UNITS_SHIPPED_QUERY
+    date_check_sql = process_paths.AMAZON_ROLLING_DATE_CHECK_QUERY
+    output_folder = process_paths.AMAZON_ROLLING_OUTPUT_FOLDER
 
     while True:
         print()
@@ -307,14 +294,13 @@ def load_module_from_path(module_name: str, file_path: Path):
 
 
 def confirm_amazon_ams_files() -> bool:
-    base_dir = Path(__file__).resolve().parent
-    manager_script = (base_dir / "amazon_ams" / "manage_ams.py").resolve()
-    process_script = (base_dir / "amazon_ams" / "main.py").resolve()
-    config_path = (base_dir / "amazon_ams" / "UPDATE_ams_config.py").resolve()
-    mapping_file = Path(r"G:\SALES\Amazon\RBH\DOWNLOADED_FILES\Chronicle-AsinMapping.xlsx")
-    output_pickle = (base_dir / "amazon_ams" / "combined_amazon_ads_by_asin.pkl").resolve()
-    output_excel = (base_dir / "amazon_ams" / "combined_amazon_ads_by_asin.xlsx").resolve()
-    error_log = (base_dir / "amazon_ams" / "processing_errors.log").resolve()
+    manager_script = process_paths.AMAZON_AMS_MANAGER_SCRIPT
+    process_script = process_paths.AMAZON_AMS_PROCESS_SCRIPT
+    config_path = process_paths.AMAZON_AMS_CONFIG_FILE
+    mapping_file = process_paths.CHRONICLE_ASIN_MAPPING_FILE
+    output_pickle = process_paths.AMAZON_AMS_OUTPUT_PICKLE
+    output_excel = process_paths.AMAZON_AMS_OUTPUT_EXCEL
+    error_log = process_paths.AMAZON_AMS_ERROR_LOG
 
     config_module = load_module_from_path("amazon_ams_config_preview", config_path)
     tab_dict = getattr(config_module, "tab_dict", {})
@@ -360,39 +346,28 @@ def confirm_amazon_ams_files() -> bool:
 
 
 def confirm_frontlist_supercharged_files() -> bool:
-    base_dir = Path(__file__).resolve().parent
-    script_path = (base_dir / "FLTracking_Supercharged" / "main.py").resolve()
-    output_dir = (base_dir / "FLTracking_Supercharged" / "output").resolve()
+    script_path = process_paths.FRONTLIST_SUPERCHARGED_SCRIPT
+    output_dir = process_paths.FRONTLIST_SUPERCHARGED_OUTPUT_DIR
 
-    frontlist_file = get_latest_matching_file(
-        Path(r"G:\SALES\2026 Sales Reports\Frontlist Tracking"),
-        "*.xlsx",
-    )
+    frontlist_file = get_latest_matching_file(process_paths.FRONTLIST_TRACKING_FOLDER, "*.xlsx")
     ingram_file = get_latest_matching_file(
-        Path(r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Ingram"),
-        "Daily Report*.xlsx",
+        process_paths.INGRAM_DAILY_REPORT_FOLDER, "Daily Report*.xlsx"
     )
     barnes_noble_file = get_latest_matching_file(
-        Path(r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Barnes & Noble"),
-        "Week *.xlsx",
+        process_paths.BN_WEEKLY_REPORT_FOLDER, "Week *.xlsx"
     )
-    inventory_file = next(Path(r"G:\OPS\Inventory\Daily\Finance_Only").glob("Inventory*.xlsx"), None)
-    amazon_preorders_file = Path(
-        r"G:\SALES\Amazon\PREORDERS\2026\current_amaz_preorders.xlsx"
+    inventory_file = next(
+        process_paths.INVENTORY_DAILY_FINANCE_ONLY_FOLDER.glob("Inventory*.xlsx"), None
     )
-    amazon_sellthrough_sql = (
-        base_dir / "FLTracking_Supercharged" / "sql" / "amazon_sellthrough_latest.sql"
-    ).resolve()
-    faire_qty_sql = (
-        base_dir / "FLTracking_Supercharged" / "sql" / "faire_qty.sql"
-    ).resolve()
-    faire_orders_sql = (
-        base_dir / "FLTracking_Supercharged" / "sql" / "faire_orders.sql"
-    ).resolve()
+    amazon_preorders_file = process_paths.CURRENT_AMAZON_PREORDERS_FILE
+    amazon_sellthrough_sql = process_paths.FRONTLIST_AMAZON_SELLTHROUGH_SQL
+    faire_qty_sql = process_paths.FRONTLIST_FAIRE_QTY_SQL
+    faire_orders_sql = process_paths.FRONTLIST_FAIRE_ORDERS_SQL
 
     if inventory_file is None:
         raise FileNotFoundError(
-            "No files found in G:\\OPS\\Inventory\\Daily\\Finance_Only with pattern Inventory*.xlsx"
+            f"No files found in {process_paths.INVENTORY_DAILY_FINANCE_ONLY_FOLDER} "
+            "with pattern Inventory*.xlsx"
         )
     if not amazon_preorders_file.exists():
         raise FileNotFoundError(f"Required file not found: {amazon_preorders_file}")
@@ -428,11 +403,8 @@ def confirm_frontlist_supercharged_files() -> bool:
 
 
 def confirm_bn_rolling_reports_files() -> bool:
-    base_dir = Path(__file__).resolve().parent
-    script_path = (base_dir / "bn_rolling_reports" / "main.py").resolve()
-    raw_base_folder = Path(
-        r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Barnes & Noble"
-    )
+    script_path = process_paths.BN_ROLLING_REPORTS_SCRIPT
+    raw_base_folder = process_paths.BN_RAW_BASE_FOLDER
     raw_folders = sorted(
         [
             path

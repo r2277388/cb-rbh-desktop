@@ -1,6 +1,7 @@
 import pandas as pd
 from pathlib import Path
 import os
+from paths import DOWNLOADS_FOLDER
 
 def get_latest_file(folder_path: Path, pattern: str) -> Path:
     """Return the latest file in the folder matching the given pattern."""
@@ -33,12 +34,12 @@ def process_latest_catalog(folder_path: str, pattern: str, columns: list, date_c
     return df
     
 def data_catalog():
-    folder_path = r'G:\SALES\Amazon\RBH\DOWNLOADED_FILES'
+    folder_path = DOWNLOADS_FOLDER
     pattern = '*Catalog*csv'
     columns = ['ASIN', 'EAN', 'ISBN', 'Model Number', 'Release Date']
     date_column = 'Release Date'
     
-    df_catalog = process_latest_catalog(folder_path, pattern, columns, date_column)
+    df_catalog = process_latest_catalog(str(folder_path), pattern, columns, date_column)
     return df_catalog
     
 def main():
