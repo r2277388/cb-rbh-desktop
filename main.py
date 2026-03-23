@@ -427,6 +427,95 @@ def confirm_frontlist_supercharged_files() -> bool:
         print("Invalid choice. Please select a valid option.")
 
 
+def confirm_bn_rolling_reports_files() -> bool:
+    base_dir = Path(__file__).resolve().parent
+    script_path = (base_dir / "bn_rolling_reports" / "main.py").resolve()
+    raw_base_folder = Path(
+        r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Barnes & Noble"
+    )
+    raw_folders = sorted(
+        [
+            path
+            for path in raw_base_folder.iterdir()
+            if path.is_dir() and path.name.lower().endswith("_raw_files")
+        ],
+        key=lambda path: path.name,
+    )
+    if not raw_folders:
+        raise FileNotFoundError(
+            f"No Barnes & Noble raw folders were found under {raw_base_folder}"
+        )
+
+    latest_raw_folder = raw_folders[-1]
+    pos_csvs = sorted(
+        [path for path in latest_raw_folder.iterdir() if path.is_file() and path.suffix.lower() == ".csv"],
+        key=lambda path: path.name.lower(),
+    )
+    sales_files = sorted(
+        [
+            path
+            for path in latest_raw_folder.iterdir()
+            if path.is_file()
+            and path.suffix.lower() == ".xlsx"
+            and path.name.lower().startswith("sales")
+            and not path.name.startswith("~$")
+        ],
+        key=lambda path: path.name.lower(),
+    )
+    inventory_files = sorted(
+        [
+            path
+            for path in latest_raw_folder.iterdir()
+            if path.is_file()
+            and path.suffix.lower() == ".xlsx"
+            and path.name.lower().startswith("inventory")
+            and not path.name.startswith("~$")
+        ],
+        key=lambda path: path.name.lower(),
+    )
+
+    def format_modified(path: Path) -> str:
+        return datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d %I:%M:%S %p")
+
+    while True:
+        print()
+        print("Barnes & Noble Rolling Reports will use these files:")
+        print(f"  Script:              {script_path}")
+        print(f"  Raw base folder:     {raw_base_folder}")
+        print(f"  Default raw folder:  {latest_raw_folder}")
+        print("  POS CSV files:")
+        for file_path in pos_csvs:
+            print(f"    {file_path}")
+        if sales_files:
+            print("  Sales workbook(s):")
+            for file_path in sales_files:
+                print(f"    {file_path}")
+                print(f"      Last modified: {format_modified(file_path)}")
+        else:
+            print("  Sales workbook(s):   None found in default raw folder")
+        if inventory_files:
+            print("  Inventory workbook(s):")
+            for file_path in inventory_files:
+                print(f"    {file_path}")
+                print(f"      Last modified: {format_modified(file_path)}")
+        else:
+            print("  Inventory workbook(s): None found in default raw folder")
+        print("  Output files:        Saved in the selected raw folder during submenu actions")
+        print()
+        print("    1. Continue")
+        print("    2. Return to main menu")
+        print()
+        choice = input("Choose an option: ").strip().lower()
+
+        if choice in {"1", "c", "continue"}:
+            return True
+
+        if choice in {"2", "b", "back", "return", "menu"}:
+            return False
+
+        print("Invalid choice. Please select a valid option.")
+
+
 def run_program(choice):
     reports = {
         "2": ("Amazon PO Report", "amazon_po/main.py"),
@@ -488,6 +577,13 @@ def run_program(choice):
             except (FileNotFoundError, ImportError, AttributeError) as e:
                 print(f"Unable to locate the Amazon AMS source files: {e}")
                 return
+        if choice == "8":
+            try:
+                if not confirm_bn_rolling_reports_files():
+                    return
+            except FileNotFoundError as e:
+                print(f"Unable to locate the Barnes & Noble Rolling Reports files: {e}")
+                return
         if choice == "9":
             try:
                 if not confirm_frontlist_supercharged_files():
@@ -495,7 +591,8 @@ def run_program(choice):
             except FileNotFoundError as e:
                 print(f"Unable to locate the Frontlist Supercharged source files: {e}")
                 return
-        print(f"Running the {report_name}... Please wait.")
+        if choice != "8":
+            print(f"Running the {report_name}... Please wait.")
         try:
             subprocess.run(["venv/Scripts/python", script_path], check=True)
             print(f"The {report_name} is now ready.")
