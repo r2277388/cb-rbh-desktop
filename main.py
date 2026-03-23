@@ -359,6 +359,74 @@ def confirm_amazon_ams_files() -> bool:
         print("Invalid choice. Please select a valid option.")
 
 
+def confirm_frontlist_supercharged_files() -> bool:
+    base_dir = Path(__file__).resolve().parent
+    script_path = (base_dir / "FLTracking_Supercharged" / "main.py").resolve()
+    output_dir = (base_dir / "FLTracking_Supercharged" / "output").resolve()
+
+    frontlist_file = get_latest_matching_file(
+        Path(r"G:\SALES\2026 Sales Reports\Frontlist Tracking"),
+        "*.xlsx",
+    )
+    ingram_file = get_latest_matching_file(
+        Path(r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Ingram"),
+        "Daily Report*.xlsx",
+    )
+    barnes_noble_file = get_latest_matching_file(
+        Path(r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Barnes & Noble"),
+        "Week *.xlsx",
+    )
+    inventory_file = next(Path(r"G:\OPS\Inventory\Daily\Finance_Only").glob("Inventory*.xlsx"), None)
+    amazon_preorders_file = Path(
+        r"G:\SALES\Amazon\PREORDERS\2026\current_amaz_preorders.xlsx"
+    )
+    amazon_sellthrough_sql = (
+        base_dir / "FLTracking_Supercharged" / "sql" / "amazon_sellthrough_latest.sql"
+    ).resolve()
+    faire_qty_sql = (
+        base_dir / "FLTracking_Supercharged" / "sql" / "faire_qty.sql"
+    ).resolve()
+    faire_orders_sql = (
+        base_dir / "FLTracking_Supercharged" / "sql" / "faire_orders.sql"
+    ).resolve()
+
+    if inventory_file is None:
+        raise FileNotFoundError(
+            "No files found in G:\\OPS\\Inventory\\Daily\\Finance_Only with pattern Inventory*.xlsx"
+        )
+    if not amazon_preorders_file.exists():
+        raise FileNotFoundError(f"Required file not found: {amazon_preorders_file}")
+
+    while True:
+        print()
+        print("Frontlist Supercharged Data will use these files:")
+        print(f"  Script:                  {script_path}")
+        print(f"  Frontlist Tracking:      {frontlist_file}")
+        print(f"  Inventory Detail:        {inventory_file}")
+        print(f"  Amazon Preorders:        {amazon_preorders_file}")
+        print(f"  Ingram Daily Report:     {ingram_file}")
+        print(f"  Barnes & Noble Weekly:   {barnes_noble_file}")
+        print(f"  Amazon Sellthrough SQL:  {amazon_sellthrough_sql}")
+        print(f"  Faire Qty SQL:           {faire_qty_sql}")
+        print(f"  Faire Orders SQL:        {faire_orders_sql}")
+        print("  SQL source:              sql-2-db / CBQ2")
+        print(f"  Cache/output folder:     {output_dir}")
+        print("  Final workbook:          Chosen in save dialog, defaulting to FLTracking_Supercharged/output")
+        print()
+        print("    1. Continue")
+        print("    2. Return to main menu")
+        print()
+        choice = input("Choose an option: ").strip().lower()
+
+        if choice in {"1", "c", "continue"}:
+            return True
+
+        if choice in {"2", "b", "back", "return", "menu"}:
+            return False
+
+        print("Invalid choice. Please select a valid option.")
+
+
 def run_program(choice):
     reports = {
         "2": ("Amazon PO Report", "amazon_po/main.py"),
@@ -419,6 +487,13 @@ def run_program(choice):
                     return
             except (FileNotFoundError, ImportError, AttributeError) as e:
                 print(f"Unable to locate the Amazon AMS source files: {e}")
+                return
+        if choice == "9":
+            try:
+                if not confirm_frontlist_supercharged_files():
+                    return
+            except FileNotFoundError as e:
+                print(f"Unable to locate the Frontlist Supercharged source files: {e}")
                 return
         print(f"Running the {report_name}... Please wait.")
         try:
