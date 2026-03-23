@@ -1,4 +1,5 @@
 import getpass
+import importlib.util
 import os
 import subprocess
 from datetime import datetime
@@ -170,6 +171,194 @@ def confirm_amazon_customer_orders_files() -> bool:
         print("Invalid choice. Please select a valid option.")
 
 
+def confirm_amazon_sql_upload_files() -> bool:
+    base_dir = Path(__file__).resolve().parent
+    script_path = (base_dir / "amazon_sql_upload" / "main.py").resolve()
+    manual_key_path = (base_dir / "amazon_sql_upload" / "asin_manual_key.py").resolve()
+    removal_list_path = (base_dir / "amazon_sql_upload" / "asin_removal_list.py").resolve()
+
+    sales_file = get_latest_matching_file(
+        Path(r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Amazon\Sales"),
+        "*.csv",
+    )
+    inventory_file = get_latest_matching_file(
+        Path(r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Amazon\Inventory"),
+        "*.csv",
+    )
+    traffic_file = get_latest_matching_file(
+        Path(r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Amazon\Traffic"),
+        "*.csv",
+    )
+    catalog_file = get_latest_matching_file(
+        Path(r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Amazon\Catalog"),
+        "*.csv",
+    )
+    ypticod_file = Path(r"J:\Metadata Reports\Oracle YPTICOD.xlsx")
+
+    if not ypticod_file.exists():
+        raise FileNotFoundError(f"Required file not found: {ypticod_file}")
+
+    while True:
+        print()
+        print("amazon_sql_upload will use these files:")
+        print(f"  Script:            {script_path}")
+        print(f"  Sales CSV:         {sales_file}")
+        print(f"  Inventory CSV:     {inventory_file}")
+        print(f"  Traffic CSV:       {traffic_file}")
+        print(f"  Catalog CSV:       {catalog_file}")
+        print(f"  Oracle YPTICOD:    {ypticod_file}")
+        print(f"  Manual key file:   {manual_key_path}")
+        print(f"  Removal list file: {removal_list_path}")
+        print("  SQL source:        sql-2-db / CBQ2 (EBS item ISBN key)")
+        print("  Output workbook:   Chosen in save dialog after the process starts")
+        print()
+        print("    1. Continue")
+        print("    2. Return to main menu")
+        print()
+        choice = input("Choose an option: ").strip().lower()
+
+        if choice in {"1", "c", "continue"}:
+            return True
+
+        if choice in {"2", "b", "back", "return", "menu"}:
+            return False
+
+        print("Invalid choice. Please select a valid option.")
+
+
+def confirm_amazon_rolling_reports_check_files() -> bool:
+    base_dir = Path(__file__).resolve().parent
+    script_path = (base_dir / "amazon_rolling_reports" / "check_last_10_weeks.py").resolve()
+    sql_file = (
+        base_dir / "shared" / "sql" / "amazon_rolling_reports" / "last_10_weeks.sql"
+    ).resolve()
+
+    while True:
+        print()
+        print("Amazon Rolling Reports check will use these files:")
+        print(f"  Script:            {script_path}")
+        print(f"  SQL file:          {sql_file}")
+        print("  SQL source:        sql-2-db / CBQ2")
+        print("  Table checked:     [CBQ2].[cb].[Sellthrough_Amazon]")
+        print()
+        print("    1. Continue")
+        print("    2. Return to previous menu")
+        print()
+        choice = input("Choose an option: ").strip().lower()
+
+        if choice in {"1", "c", "continue"}:
+            return True
+
+        if choice in {"2", "b", "back", "return", "menu"}:
+            return False
+
+        print("Invalid choice. Please select a valid option.")
+
+
+def confirm_amazon_rolling_reports_run_files() -> bool:
+    base_dir = Path(__file__).resolve().parent
+    script_path = (base_dir / "amazon_rolling_reports" / "main.py").resolve()
+    po_folder = Path(r"G:\SALES\Amazon\PURCHASE ORDERS\2026")
+    latest_po_file = get_latest_matching_file(po_folder, "*.xlsx")
+    customer_orders_pickle = (base_dir / "rr_customer_orders.pkl").resolve()
+    units_shipped_pickle = (base_dir / "rr_units_shipped.pkl").resolve()
+    po_pickle = (base_dir / "latest_amazon_po.pkl").resolve()
+    customer_orders_sql = (base_dir / "amazon_rolling_reports" / "query_co.py").resolve()
+    units_shipped_sql = (base_dir / "amazon_rolling_reports" / "query_us.py").resolve()
+    date_check_sql = (base_dir / "amazon_rolling_reports" / "query_datecheck.py").resolve()
+    output_folder = Path(r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Amazon")
+
+    while True:
+        print()
+        print("Amazon Rolling Reports will use these files:")
+        print(f"  Script:                  {script_path}")
+        print(f"  Latest Amazon PO file:   {latest_po_file}")
+        print(f"  PO pickle:               {po_pickle}")
+        print(f"  Customer Orders pickle:  {customer_orders_pickle}")
+        print(f"  Units Shipped pickle:    {units_shipped_pickle}")
+        print(f"  Customer Orders query:   {customer_orders_sql}")
+        print(f"  Units Shipped query:     {units_shipped_sql}")
+        print(f"  Date check query:        {date_check_sql}")
+        print("  SQL source:              sql-2-db / CBQ2")
+        print(f"  Main output folder:      {output_folder}")
+        print("  DP output folders:       Configured in amazon_rolling_reports/paths.py")
+        print()
+        print("    1. Continue")
+        print("    2. Return to previous menu")
+        print()
+        choice = input("Choose an option: ").strip().lower()
+
+        if choice in {"1", "c", "continue"}:
+            return True
+
+        if choice in {"2", "b", "back", "return", "menu"}:
+            return False
+
+        print("Invalid choice. Please select a valid option.")
+
+
+def load_module_from_path(module_name: str, file_path: Path):
+    spec = importlib.util.spec_from_file_location(module_name, file_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Unable to load module from {file_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def confirm_amazon_ams_files() -> bool:
+    base_dir = Path(__file__).resolve().parent
+    manager_script = (base_dir / "amazon_ams" / "manage_ams.py").resolve()
+    process_script = (base_dir / "amazon_ams" / "main.py").resolve()
+    config_path = (base_dir / "amazon_ams" / "UPDATE_ams_config.py").resolve()
+    mapping_file = Path(r"G:\SALES\Amazon\RBH\DOWNLOADED_FILES\Chronicle-AsinMapping.xlsx")
+    output_pickle = (base_dir / "amazon_ams" / "combined_amazon_ads_by_asin.pkl").resolve()
+    output_excel = (base_dir / "amazon_ams" / "combined_amazon_ads_by_asin.xlsx").resolve()
+    error_log = (base_dir / "amazon_ams" / "processing_errors.log").resolve()
+
+    config_module = load_module_from_path("amazon_ams_config_preview", config_path)
+    tab_dict = getattr(config_module, "tab_dict", {})
+    month_list = sorted(getattr(config_module, "month_list", []))
+
+    latest_month = month_list[-1] if month_list else None
+    latest_month_file = None
+    latest_month_tab = None
+    if latest_month and latest_month in tab_dict:
+        latest_month_file = tab_dict[latest_month].get("file")
+        latest_month_tab = tab_dict[latest_month].get("tab")
+
+    while True:
+        print()
+        print("Amazon AMS Manager will use these files:")
+        print(f"  Manager script:         {manager_script}")
+        print(f"  Full-process script:    {process_script}")
+        print(f"  Config file:            {config_path}")
+        print(f"  ASIN mapping file:      {mapping_file}")
+        if latest_month:
+            print(f"  Latest configured month:{latest_month}")
+            print(f"  Latest month file:      {latest_month_file}")
+            print(f"  Latest month tab:       {latest_month_tab}")
+        else:
+            print("  Latest configured month: none found in config")
+        print("  SQL source:             sql-2-db / CBQ2 (item metadata)")
+        print(f"  Output pickle:          {output_pickle}")
+        print(f"  Output workbook:        {output_excel}")
+        print(f"  Error log:              {error_log}")
+        print()
+        print("    1. Continue")
+        print("    2. Return to main menu")
+        print()
+        choice = input("Choose an option: ").strip().lower()
+
+        if choice in {"1", "c", "continue"}:
+            return True
+
+        if choice in {"2", "b", "back", "return", "menu"}:
+            return False
+
+        print("Invalid choice. Please select a valid option.")
+
+
 def run_program(choice):
     reports = {
         "2": ("Amazon PO Report", "amazon_po/main.py"),
@@ -217,6 +406,20 @@ def run_program(choice):
             except FileNotFoundError as e:
                 print(f"Unable to locate the Amazon Customer Orders source files: {e}")
                 return
+        if choice == "5":
+            try:
+                if not confirm_amazon_sql_upload_files():
+                    return
+            except FileNotFoundError as e:
+                print(f"Unable to locate the amazon_sql_upload source files: {e}")
+                return
+        if choice == "7":
+            try:
+                if not confirm_amazon_ams_files():
+                    return
+            except (FileNotFoundError, ImportError, AttributeError) as e:
+                print(f"Unable to locate the Amazon AMS source files: {e}")
+                return
         print(f"Running the {report_name}... Please wait.")
         try:
             subprocess.run(["venv/Scripts/python", script_path], check=True)
@@ -251,6 +454,12 @@ def run_amazon_rolling_reports_menu():
             return
 
         if subchoice == "1":
+            try:
+                if not confirm_amazon_rolling_reports_check_files():
+                    continue
+            except FileNotFoundError as e:
+                print(f"Unable to locate the Amazon Rolling Reports check files: {e}")
+                continue
             print("Running SQL check for the latest 10 weeks... Please wait.")
             try:
                 subprocess.run(
@@ -265,6 +474,12 @@ def run_amazon_rolling_reports_menu():
             continue
 
         if subchoice == "2":
+            try:
+                if not confirm_amazon_rolling_reports_run_files():
+                    continue
+            except FileNotFoundError as e:
+                print(f"Unable to locate the Amazon Rolling Reports source files: {e}")
+                continue
             print("Running the Amazon Rolling Reports... Please wait.")
             try:
                 subprocess.run(
