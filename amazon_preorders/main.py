@@ -14,10 +14,17 @@ def main():
     folder_path = Path(r"G:\SALES\Amazon\PREORDERS\2026")
 
     # Save the DataFrame to Excel
-    save_to_excel(df, folder_path)
+    dated_path, current_path = save_to_excel(df, folder_path)
+
+    print()
+    print("Saved Excel files:")
+    print(f"  {dated_path}")
+    print(f"  {current_path}")
+    print()
 
     # Print DataFrame information to confirm successful processing
-    print(df.info())
+    df.info()
+    print()
 
 
 if __name__ == "__main__":

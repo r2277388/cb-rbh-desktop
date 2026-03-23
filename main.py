@@ -1,6 +1,8 @@
 import getpass
+import os
 import subprocess
 from datetime import datetime
+from pathlib import Path
 
 # call the PO archive manager directly
 import tools.po_archive_manager as po_archive_manager
@@ -97,6 +99,77 @@ def display_info(choice):
     return info.get(choice, "Invalid choice. No information available.")
 
 
+def get_latest_matching_file(folder_path: str | Path, pattern: str) -> Path:
+    folder = Path(folder_path)
+    matches = list(folder.glob(pattern))
+    if not matches:
+        raise FileNotFoundError(f"No files found in {folder} with pattern {pattern}")
+    return max(matches, key=os.path.getctime)
+
+
+def confirm_amazon_preorders_files() -> bool:
+    downloads_folder = Path(r"G:\SALES\Amazon\RBH\DOWNLOADED_FILES")
+    catalog_file = get_latest_matching_file(downloads_folder, "*Catalog*csv")
+    inventory_file = get_latest_matching_file(downloads_folder, "*Inventory*csv")
+
+    while True:
+        print()
+        print("Amazon PreOrders will use these files:")
+        print(f"  Catalog:   {catalog_file}")
+        print(f"  Inventory: {inventory_file}")
+        print()
+        print("    1. Continue")
+        print("    2. Return to main menu")
+        print()
+        choice = input("Choose an option: ").strip().lower()
+
+        if choice in {"1", "c", "continue"}:
+            return True
+
+        if choice in {"2", "b", "back", "return", "menu"}:
+            return False
+
+        print("Invalid choice. Please select a valid option.")
+
+
+def confirm_amazon_customer_orders_files() -> bool:
+    downloads_folder = Path(r"G:\SALES\Amazon\RBH\DOWNLOADED_FILES")
+    script_path = (Path(__file__).resolve().parent / "amazon_customer_orders" / "main.py").resolve()
+    weekly_sales_file = get_latest_matching_file(downloads_folder, "*Sales*Weekly*csv")
+    catalog_file = get_latest_matching_file(downloads_folder, "*Catalog*csv")
+    traffic_file = get_latest_matching_file(downloads_folder, "*Traffic*csv")
+    ypticod_file = Path(r"J:\Metadata Reports\Oracle YPTICOD.xlsx")
+    output_file = Path(
+        r"G:\SALES\Amazon\RBH\weekly_customer_order\atelier\amazon_weekly_customer_order_py.xlsx"
+    )
+
+    if not ypticod_file.exists():
+        raise FileNotFoundError(f"Required file not found: {ypticod_file}")
+
+    while True:
+        print()
+        print("Amazon Customer Orders will use these files:")
+        print(f"  Script:            {script_path}")
+        print(f"  Weekly Sales:      {weekly_sales_file}")
+        print(f"  Catalog:           {catalog_file}")
+        print(f"  Traffic:           {traffic_file}")
+        print(f"  Oracle YPTICOD:    {ypticod_file}")
+        print(f"  Output workbook:   {output_file}")
+        print()
+        print("    1. Continue")
+        print("    2. Return to main menu")
+        print()
+        choice = input("Choose an option: ").strip().lower()
+
+        if choice in {"1", "c", "continue"}:
+            return True
+
+        if choice in {"2", "b", "back", "return", "menu"}:
+            return False
+
+        print("Invalid choice. Please select a valid option.")
+
+
 def run_program(choice):
     reports = {
         "2": ("Amazon PO Report", "amazon_po/main.py"),
@@ -130,6 +203,20 @@ def run_program(choice):
 
     if choice in reports:
         report_name, script_path = reports[choice]
+        if choice == "3":
+            try:
+                if not confirm_amazon_preorders_files():
+                    return
+            except FileNotFoundError as e:
+                print(f"Unable to locate the Amazon PreOrders source files: {e}")
+                return
+        if choice == "4":
+            try:
+                if not confirm_amazon_customer_orders_files():
+                    return
+            except FileNotFoundError as e:
+                print(f"Unable to locate the Amazon Customer Orders source files: {e}")
+                return
         print(f"Running the {report_name}... Please wait.")
         try:
             subprocess.run(["venv/Scripts/python", script_path], check=True)

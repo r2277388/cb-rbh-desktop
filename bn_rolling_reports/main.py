@@ -14,8 +14,8 @@ from pos_combiner import (
     preview_dataframe,
     resolve_raw_folder,
 )
-from inventory_working import build_inventory_working_file
-from sales_working import build_sales_working_file
+from inventory_working import build_inventory_working_file, find_inventory_source_file
+from sales_working import build_sales_working_file, find_sales_source_file
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -82,6 +82,26 @@ def view_existing_output() -> None:
     print(preview_dataframe(df))
 
 
+def confirm_source_file(process_name: str, source_file: Path) -> bool:
+    while True:
+        print()
+        print(f"{process_name} source file:")
+        print(f"  {source_file}")
+        print()
+        print("    1. Continue with this file")
+        print("    2. Return to prior menu")
+        print()
+        choice = input("Choose an option: ").strip().lower()
+
+        if choice in {"1", "c", "continue"}:
+            return True
+
+        if choice in {"2", "b", "back", "return", "menu"}:
+            return False
+
+        print("Invalid choice. Please select a valid option.")
+
+
 def run_menu() -> None:
     while True:
         print("\nBarnes & Noble Rolling Reports")
@@ -109,6 +129,9 @@ def run_menu() -> None:
 
         if choice == "3":
             raw_folder = prompt_for_raw_folder()
+            source_file = find_sales_source_file(raw_folder)
+            if not confirm_source_file("Sales", source_file):
+                continue
             result = build_sales_working_file(raw_folder=raw_folder)
             print()
             print(f"Sales source file: {result.source_file.name}")
@@ -120,6 +143,9 @@ def run_menu() -> None:
 
         if choice == "4":
             raw_folder = prompt_for_raw_folder()
+            source_file = find_inventory_source_file(raw_folder)
+            if not confirm_source_file("Inventory", source_file):
+                continue
             result = build_inventory_working_file(raw_folder=raw_folder)
             print()
             print(f"Inventory source file: {result.source_file.name}")

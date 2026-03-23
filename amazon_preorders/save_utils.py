@@ -2,7 +2,7 @@ from pathlib import Path
 import pandas as pd
 from datetime import date
 
-def save_to_excel(df: pd.DataFrame, folder: Path) -> None:
+def save_to_excel(df: pd.DataFrame, folder: Path) -> tuple[Path, Path]:
     """Save the DataFrame to Excel files with the date in the format 'yyyy_mm_dd'."""
     # Get the current date in the desired format
     current_date = date.today().strftime('%Y_%m_%d')
@@ -27,3 +27,5 @@ def save_to_excel(df: pd.DataFrame, folder: Path) -> None:
         df.loc[df['publisher'] == 'Chronicle'].to_excel(current_writer, sheet_name='nyp_cb', index=False)
         df.loc[df['publisher'] == 'Galison'].to_excel(current_writer, sheet_name='nyp_ga', index=False)
         df.loc[~df['publisher'].isin(['Chronicle', 'Galison'])].to_excel(current_writer, sheet_name='nyp_dp', index=False)
+
+    return dated_path, current_path
