@@ -38,6 +38,10 @@ SQL_QUERIES = {
         "Barnes & Noble",
         load_sql("table_check", "bn_weeks.sql"),
     ),
+    "7": (
+        "Freight Costs",
+        None,
+    ),
 }
 
 
@@ -78,9 +82,21 @@ ORDER BY
 """.strip()
 
 
+def build_freight_costs_sql() -> str:
+    return """
+SELECT TOP (5)
+    sr.FISCALPERIOD AS [period],
+    SUM(sr.cost) AS [Cost]
+FROM cb.shippingreport sr
+WHERE TRY_CONVERT(int, sr.FISCALPERIOD) IS NOT NULL
+GROUP BY sr.FISCALPERIOD
+ORDER BY TRY_CONVERT(int, sr.FISCALPERIOD) DESC;
+""".strip()
+
+
 def _format_for_display(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
-    force_numeric_cols = {"cb_val", "dp_val", "cb_row_cnt", "dp_row_cnt"}
+    force_numeric_cols = {"cb_val", "dp_val", "cb_row_cnt", "dp_row_cnt", "Cost"}
     for col in force_numeric_cols.intersection(out.columns):
         out[col] = pd.to_numeric(out[col], errors="coerce")
 
@@ -114,17 +130,19 @@ def _print_grid_table(df: pd.DataFrame) -> None:
 
 def main():
     if len(sys.argv) < 2:
-        print("Please provide a query choice: 1, 2, 3, 4, 5, or 6.")
+        print("Please provide a query choice: 1, 2, 3, 4, 5, 6, or 7.")
         return 1
 
     choice = sys.argv[1].strip()
     if choice not in SQL_QUERIES:
-        print(f"Invalid query choice: {choice}. Use 1, 2, 3, 4, 5, or 6.")
+        print(f"Invalid query choice: {choice}. Use 1, 2, 3, 4, 5, 6, or 7.")
         return 1
 
     report_name, sql_query = SQL_QUERIES[choice]
     if choice == "3":
         sql_query = build_ebs_sales_prior_5_days_sql()
+    elif choice == "7":
+        sql_query = build_freight_costs_sql()
 
     engine = get_connection()
     df = fetch_data_from_db(engine, sql_query)

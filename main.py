@@ -66,7 +66,8 @@ def display_options():
         "13. Consolidate Inventory for the INVOBS",
         "14. XGBoost Model",
         "15. Check Table Updates",
-        "16. Exit",
+        "16. Desk Procedures",
+        "17. Exit",
     ]
     print("\nWhat would you like to run?")
     print()
@@ -96,7 +97,8 @@ def display_info(choice):
         explodes out the CDU's into their components to give a component-only inventory file.""",
         "14": "XGBoost Model: Launches the xgboost_model workflow menu.",
         "15": "Check Table Updates: Runs SQL checks for table freshness and recent weeks for SSR/Amazon/Bookscan tables.",
-        "16": "Exit: Exits the program.",
+        "16": "Desk Procedures: Opens a menu of desk procedures and run instructions.",
+        "17": "Exit: Exits the program.",
     }
     return info.get(choice, "Invalid choice. No information available.")
 
@@ -505,6 +507,7 @@ def run_program(choice):
             "invobs_consolidated_inventory/main.py",
         ),
         "14": ("XGBoost Model", "xgboost_model/main.py"),
+        "16": ("Desk Procedures", "desk_procedures/main.py"),
     }
 
     if choice == "1":
@@ -577,6 +580,15 @@ def run_program(choice):
         return
 
     if choice == "16":
+        print("Opening Desk Procedures...")
+        try:
+            subprocess.run(["venv/Scripts/python", "desk_procedures/main.py"], check=True)
+            print("Returned from Desk Procedures.")
+        except subprocess.CalledProcessError:
+            print("An error occurred while running desk_procedures/main.py.")
+        return
+
+    if choice == "17":
         print(get_farewell_message())
         return
 
@@ -651,7 +663,8 @@ def run_check_table_updates_menu():
         print("    4. Amazon")
         print("    5. Bookscan")
         print("    6. Barnes & Noble")
-        print("    7. Back to main menu")
+        print("    7. Freight Costs")
+        print("    8. Back to main menu")
         print()
         try:
             subchoice = input("Choose an option: ").strip().lower()
@@ -659,7 +672,7 @@ def run_check_table_updates_menu():
             print("\nReturning to main menu.")
             return
 
-        if subchoice in ["1", "2", "3", "4", "5", "6"]:
+        if subchoice in ["1", "2", "3", "4", "5", "6", "7"]:
             print("Running table-update SQL check... Please wait.")
             try:
                 subprocess.run(
@@ -674,7 +687,7 @@ def run_check_table_updates_menu():
                 print("The table-update SQL check failed.")
             continue
 
-        if subchoice in ["7", "back", "b", "exit", "quit", "q"]:
+        if subchoice in ["8", "back", "b", "exit", "quit", "q"]:
             return
 
         print("Invalid choice. Please select a valid option.")
@@ -704,8 +717,8 @@ def main():
             print(display_info(choice_info))
             continue
 
-        if choice.lower() in ["16", "exit", "quit"]:
-            run_program("16")
+        if choice.lower() in ["17", "exit", "quit"]:
+            run_program("17")
             break
 
         run_program(choice)
