@@ -75,6 +75,9 @@ INNER JOIN ebs.item i
     ON i.ITEM_ID = sd.ITEM_ID
 WHERE
     sd.PERIOD BETWEEN '{prior_period}' AND '{current_period}'
+    AND cbq2.dbo.fnSaleTypeCode(sd.AR_TRX_TYPE_ID) = 'N'
+    AND i.PRODUCT_TYPE in ('bk', 'ft')
+    AND sd.INVOICE_LINE_TYPE = 'SALE'
 GROUP BY
     sd.TRX_DATE
 ORDER BY

@@ -67,7 +67,7 @@ def display_options():
         "14. XGBoost Model",
         "15. Check Table Updates",
         "16. Desk Procedures",
-        "17. Exit",
+        "99. Exit",
     ]
     print("\nWhat would you like to run?")
     print()
@@ -89,7 +89,7 @@ def display_info(choice):
         "7": "Amazon AMS Manager: Manage/update AMS month configuration and run incremental or full AMS processing.",
         "8": "Barnes & Noble Rolling Reports: Builds weekly Barnes & Noble rolling-report source files, starting with the combined POS non-book extract.",
         "9": "Frontlist Supercharged Data: Builds the frontlist ISBN master file by merging Frontlist Tracking with cached Excel extracts and SQL source data.",
-        "10": "SSR Daily Summary: Prepares the data for the SSR Daily Summary email.",
+        "10": "SSR Daily Summary: Opens the SSR Daily Summary menu, including Ebs.Sales Prior 5 Days and the summary process.",
         "11": "UK Rolling File Combining: This combines the sales, reserve and midas files together.",
         "12": "Hachette Orders - Shipping Estimates: Generates a report for Hachette Orders.",
         "13": """Consolidate Inventory for the INVOBS: Runs the Consolidated Inventory program for INVOBS.
@@ -98,7 +98,7 @@ def display_info(choice):
         "14": "XGBoost Model: Launches the xgboost_model workflow menu.",
         "15": "Check Table Updates: Runs SQL checks for table freshness and recent weeks for SSR/Amazon/Bookscan tables.",
         "16": "Desk Procedures: Opens a menu of desk procedures and run instructions.",
-        "17": "Exit: Exits the program.",
+        "99": "Exit: Exits the program.",
     }
     return info.get(choice, "Invalid choice. No information available.")
 
@@ -499,7 +499,6 @@ def run_program(choice):
         "7": ("Amazon AMS Manager", "amazon_ams/manage_ams.py"),
         "8": ("Barnes & Noble Rolling Reports", "bn_rolling_reports/main.py"),
         "9": ("Frontlist Supercharged Data", "FLTracking_Supercharged/main.py"),
-        "10": ("SSR Daily Summary", "ssr_daily_summary/main.py"),
         "11": ("UK Rolling File Combining", "UK_Rolling_File_Combining/main.py"),
         "12": ("Hachette Orders - Shipping Estimates", "hachette_orders/main.py"),
         "13": (
@@ -520,6 +519,10 @@ def run_program(choice):
 
     if choice == "6":
         run_amazon_rolling_reports_menu()
+        return
+
+    if choice == "10":
+        run_ssr_daily_summary_menu()
         return
 
     if choice in reports:
@@ -588,7 +591,7 @@ def run_program(choice):
             print("An error occurred while running desk_procedures/main.py.")
         return
 
-    if choice == "17":
+    if choice == "99":
         print(get_farewell_message())
         return
 
@@ -693,6 +696,79 @@ def run_check_table_updates_menu():
         print("Invalid choice. Please select a valid option.")
 
 
+def run_ssr_daily_summary_menu():
+    while True:
+        print("\nSSR Daily Summary")
+        print()
+        print("    1. Ebs.Sales Prior 5 Days")
+        print("    2. Run SSR Daily Reporting")
+        print("    3. Run SSR Aggregate Totals")
+        print("    4. Run SSR Visualization")
+        print("    5. Back to main menu")
+        print()
+        try:
+            subchoice = input("Choose an option: ").strip().lower()
+        except KeyboardInterrupt:
+            print("\nReturning to main menu.")
+            return
+
+        if subchoice == "1":
+            print("Running table-update SQL check... Please wait.")
+            try:
+                subprocess.run(
+                    [
+                        "venv/Scripts/python",
+                        "table_check/check_table_updates.py",
+                        "3",
+                    ],
+                    check=True,
+                )
+            except subprocess.CalledProcessError:
+                print("The table-update SQL check failed.")
+            continue
+
+        if subchoice == "2":
+            print("Running SSR Daily Reporting... Please wait.")
+            try:
+                subprocess.run(
+                    ["venv/Scripts/python", "ssr_daily_summary/ssr_preparation.py"],
+                    check=True,
+                )
+                print("SSR Daily Reporting is now ready.")
+            except subprocess.CalledProcessError:
+                print("An error occurred while running ssr_daily_summary/ssr_preparation.py.")
+            continue
+
+        if subchoice == "3":
+            print("Running SSR Aggregate Totals... Please wait.")
+            try:
+                subprocess.run(
+                    ["venv/Scripts/python", "ssr_daily_summary/ssr_summary.py"],
+                    check=True,
+                )
+                print("SSR Aggregate Totals are now ready.")
+            except subprocess.CalledProcessError:
+                print("An error occurred while running ssr_daily_summary/ssr_summary.py.")
+            continue
+
+        if subchoice == "4":
+            print("Running SSR Visualization... Please wait.")
+            try:
+                subprocess.run(
+                    ["venv/Scripts/python", "ssr_daily_summary/ssr_visualizations.py"],
+                    check=True,
+                )
+                print("SSR Visualization is now ready.")
+            except subprocess.CalledProcessError:
+                print("An error occurred while running ssr_daily_summary/ssr_visualizations.py.")
+            continue
+
+        if subchoice in ["5", "back", "b", "exit", "quit", "q"]:
+            return
+
+        print("Invalid choice. Please select a valid option.")
+
+
 def main():
     print(greet_user())
 
@@ -717,8 +793,8 @@ def main():
             print(display_info(choice_info))
             continue
 
-        if choice.lower() in ["17", "exit", "quit"]:
-            run_program("17")
+        if choice.lower() in ["99", "exit", "quit"]:
+            run_program("99")
             break
 
         run_program(choice)
