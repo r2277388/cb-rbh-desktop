@@ -4,6 +4,7 @@ import argparse
 from copy import copy
 from dataclasses import dataclass
 from datetime import datetime
+from collections import OrderedDict
 from pathlib import Path
 
 import pandas as pd
@@ -16,8 +17,10 @@ from config import (
     SALES_PREFIX,
     SALES_REQUIRED_HEADERS,
     SALES_TOTAL_ROW,
+    format_legacy_bn_removed_isbns_filename,
+    format_legacy_bn_output_filename,
 )
-from isbn_utils import normalize_isbn, normalize_isbn_series
+from isbn_utils import load_bn_upload_isbns, normalize_isbn, normalize_isbn_series
 from pos_combiner import format_output_filename, parse_week_ending, resolve_raw_folder
 
 
@@ -32,13 +35,19 @@ class SalesBuildResult:
     raw_folder: Path
     source_file: Path
     output_file: Path
+    removed_isbns_file: Path
     matched_updates: int
     appended_rows: int
+    excluded_rows: int
     final_shape: tuple[int, int]
 
 
 def format_sales_output_filename(week_ending: datetime) -> str:
-    return f"{SALES_PREFIX}_{week_ending:%Y%m%d}.xlsx"
+    return format_legacy_bn_output_filename(SALES_PREFIX, week_ending)
+
+
+def format_previous_sales_output_filename(week_ending: datetime) -> str:
+    return f"{SALES_PREFIX}_{week_ending:%Y_%m_%d}.xlsx"
 
 
 def find_sales_source_file(raw_folder: Path) -> Path:
@@ -71,12 +80,12 @@ def load_pos_dataframe(raw_folder: Path) -> pd.DataFrame:
         )
 
     df = pd.read_excel(pos_output, dtype={"ISBN": "string", "Imprint": "string"})
-    required = {"ISBN", "Imprint", "LW", "YTD"}
+    required = {"ISBN", "Imprint", "LW"}
     missing = required.difference(df.columns)
     if missing:
         raise ValueError(f"Combined POS file is missing required columns: {sorted(missing)}")
 
-    df = df.loc[:, ["ISBN", "Imprint", "LW", "YTD"]].copy()
+    df = df.loc[:, ["ISBN", "Imprint", "LW"]].copy()
     df["ISBN"] = normalize_isbn_series(df["ISBN"])
     df = df.loc[df["ISBN"].notna()].drop_duplicates(subset=["ISBN"], keep="first")
     return df
@@ -134,7 +143,7 @@ def coerce_numeric_cell(value):
 
 def coerce_fg_columns(ws, last_data_row: int) -> None:
     for row_idx in range(SALES_DATA_START_ROW, last_data_row + 1):
-        for col_idx in (6, 7):
+        for col_idx in (6, 7, 8):
             cell = ws.cell(row=row_idx, column=col_idx)
             cell.value = coerce_numeric_cell(cell.value)
 
@@ -172,31 +181,110 @@ def build_existing_sales_index(ws, last_data_row: int) -> dict[str, int]:
     return index
 
 
+def consolidate_sales_rows(ws, last_data_row: int) -> int:
+    aggregated: OrderedDict[str, dict[str, object]] = OrderedDict()
+
+    for row_idx in range(SALES_DATA_START_ROW, last_data_row + 1):
+        isbn = normalize_isbn(ws.cell(row=row_idx, column=1).value)
+        if not isbn:
+            continue
+
+        subject_code = ws.cell(row=row_idx, column=6).value
+        dept_code = ws.cell(row=row_idx, column=7).value
+        lw_value = coerce_numeric_cell(ws.cell(row=row_idx, column=8).value)
+
+        if isbn not in aggregated:
+            aggregated[isbn] = {
+                "subject_code": subject_code,
+                "dept_code": dept_code,
+                "lw": 0 if lw_value in (None, "") else lw_value,
+            }
+            continue
+
+        if not aggregated[isbn]["subject_code"] and subject_code not in (None, ""):
+            aggregated[isbn]["subject_code"] = subject_code
+        if not aggregated[isbn]["dept_code"] and dept_code not in (None, ""):
+            aggregated[isbn]["dept_code"] = dept_code
+        if lw_value not in (None, ""):
+            aggregated[isbn]["lw"] += lw_value
+
+    row_values = list(aggregated.items())
+    target_last_row = SALES_DATA_START_ROW + len(row_values) - 1
+
+    for offset, (isbn, values) in enumerate(row_values):
+        row_idx = SALES_DATA_START_ROW + offset
+        for col_idx in range(1, 24):
+            ws.cell(row=row_idx, column=col_idx).value = None
+        ws.cell(row=row_idx, column=1).value = isbn
+        ws.cell(row=row_idx, column=1).number_format = "@"
+        ws.cell(row=row_idx, column=6).value = values["subject_code"]
+        ws.cell(row=row_idx, column=7).value = values["dept_code"]
+        ws.cell(row=row_idx, column=8).value = values["lw"]
+
+    if target_last_row < last_data_row:
+        ws.delete_rows(target_last_row + 1, last_data_row - target_last_row)
+
+    return max(target_last_row, SALES_DATA_START_ROW - 1)
+
+
+def excel_safe_value(value):
+    return None if pd.isna(value) else value
+
+
 def append_missing_rows(ws, start_row: int, pos_missing: pd.DataFrame, style_row: int) -> int:
     appended = 0
     for _, row in pos_missing.iterrows():
         target_row = start_row + appended
         clone_row_styles(ws, style_row, target_row)
-        ws.cell(row=target_row, column=1).value = row["ISBN"]
+        for col_idx in range(1, 24):
+            ws.cell(row=target_row, column=col_idx).value = None
+        ws.cell(row=target_row, column=1).value = excel_safe_value(row["ISBN"])
         ws.cell(row=target_row, column=1).number_format = "@"
-        ws.cell(row=target_row, column=3).value = row["Imprint"]
-        ws.cell(row=target_row, column=8).value = row["LW"]
-        ws.cell(row=target_row, column=16).value = row["YTD"]
+        ws.cell(row=target_row, column=3).value = excel_safe_value(row["Imprint"])
+        ws.cell(row=target_row, column=8).value = excel_safe_value(row["LW"])
         appended += 1
     return appended
+
+
+def remove_disallowed_rows(ws, last_data_row: int, allowed_isbns: set[str]) -> int:
+    removed_rows: list[dict[str, object]] = []
+    for row_idx in range(last_data_row, SALES_DATA_START_ROW - 1, -1):
+        isbn = normalize_isbn(ws.cell(row=row_idx, column=1).value)
+        if not isbn or isbn not in allowed_isbns:
+            removed_rows.append(
+                {
+                    "ISBN": isbn or "",
+                    "Title": ws.cell(row=row_idx, column=2).value,
+                    "Author": ws.cell(row=row_idx, column=4).value,
+                    "Imprint": ws.cell(row=row_idx, column=3).value,
+                    "Reason": "Missing/invalid ISBN" if not isbn else "Not in BN upload whitelist",
+                }
+            )
+            ws.delete_rows(row_idx, 1)
+    removed_rows.reverse()
+    return removed_rows
+
+
+def save_removed_isbns_report(removed_rows: list[dict[str, object]], output_file: Path) -> None:
+    df = pd.DataFrame(
+        removed_rows,
+        columns=["ISBN", "Title", "Author", "Imprint", "Reason"],
+    )
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    df.to_excel(output_file, index=False)
 
 
 def refresh_grand_total_row(ws, last_data_row: int) -> None:
     if last_data_row < SALES_DATA_START_ROW:
         ws.cell(row=SALES_TOTAL_ROW, column=8).value = 0
-        ws.cell(row=SALES_TOTAL_ROW, column=16).value = 0
+        ws.cell(row=SALES_TOTAL_ROW, column=16).value = None
         return
 
-    for col_idx in (8, 16):
-        col_letter = get_column_letter(col_idx)
-        ws.cell(row=SALES_TOTAL_ROW, column=col_idx).value = (
-            f"=SUM({col_letter}{SALES_DATA_START_ROW}:{col_letter}{last_data_row})"
-        )
+    col_letter = get_column_letter(8)
+    ws.cell(row=SALES_TOTAL_ROW, column=8).value = (
+        f"=SUM({col_letter}{SALES_DATA_START_ROW}:{col_letter}{last_data_row})"
+    )
+    ws.cell(row=SALES_TOTAL_ROW, column=16).value = None
 
 
 def build_sales_working_file(
@@ -211,6 +299,14 @@ def build_sales_working_file(
         if output_file
         else resolved_raw_folder / format_sales_output_filename(week_ending)
     )
+    removed_isbns_path = (
+        resolved_raw_folder / format_legacy_bn_removed_isbns_filename(SALES_PREFIX, week_ending)
+    )
+
+    if not output_file:
+        previous_output = resolved_raw_folder / format_previous_sales_output_filename(week_ending)
+        if previous_output != output_path and previous_output.exists():
+            previous_output.unlink()
 
     workbook = load_workbook(sales_source)
     worksheet = workbook.active
@@ -219,9 +315,11 @@ def build_sales_working_file(
     remove_footer_rows(worksheet)
     last_data_row = get_last_data_row(worksheet)
     coerce_fg_columns(worksheet, last_data_row)
+    last_data_row = consolidate_sales_rows(worksheet, last_data_row)
 
     existing_index = build_existing_sales_index(worksheet, last_data_row)
     pos_df = load_pos_dataframe(resolved_raw_folder)
+    allowed_isbns = load_bn_upload_isbns()
 
     matched_updates = 0
     missing_rows = []
@@ -230,7 +328,6 @@ def build_sales_working_file(
         if isbn in existing_index:
             row_idx = existing_index[isbn]
             worksheet.cell(row=row_idx, column=8).value = row["LW"]
-            worksheet.cell(row=row_idx, column=16).value = row["YTD"]
             matched_updates += 1
         else:
             missing_rows.append(row)
@@ -247,18 +344,24 @@ def build_sales_working_file(
         )
         last_data_row += appended_rows
 
+    removed_rows = remove_disallowed_rows(worksheet, last_data_row, allowed_isbns)
+    excluded_rows = len(removed_rows)
+    last_data_row = get_last_data_row(worksheet)
     refresh_grand_total_row(worksheet, last_data_row)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     workbook.save(output_path)
+    save_removed_isbns_report(removed_rows, removed_isbns_path)
 
     final_shape = (max(last_data_row - SALES_DATA_START_ROW + 1, 0), 23)
     return SalesBuildResult(
         raw_folder=resolved_raw_folder,
         source_file=sales_source,
         output_file=output_path,
+        removed_isbns_file=removed_isbns_path,
         matched_updates=matched_updates,
         appended_rows=appended_rows,
+        excluded_rows=excluded_rows,
         final_shape=final_shape,
     )
 
@@ -284,8 +387,10 @@ def print_result_summary(result: SalesBuildResult) -> None:
     print(f"Sales source file: {result.source_file.name}")
     print(f"Matched ISBN overrides: {result.matched_updates:,}")
     print(f"Appended new ISBN rows: {result.appended_rows:,}")
+    print(f"Rows removed by ISBN whitelist: {result.excluded_rows:,}")
     print(f"Final data shape: {result.final_shape}")
     print(f"Saved file: {result.output_file}")
+    print(f"Removed ISBNs file: {result.removed_isbns_file}")
 
 
 def main() -> None:

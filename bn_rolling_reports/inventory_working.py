@@ -13,8 +13,10 @@ from config import (
     INVENTORY_PREFIX,
     INVENTORY_REQUIRED_HEADERS,
     INVENTORY_TOTAL_ROW,
+    format_legacy_bn_removed_isbns_filename,
+    format_legacy_bn_output_filename,
 )
-from isbn_utils import normalize_isbn, normalize_isbn_series
+from isbn_utils import load_bn_upload_isbns, normalize_isbn, normalize_isbn_series
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
 from pos_combiner import format_output_filename, parse_week_ending, resolve_raw_folder
@@ -30,13 +32,19 @@ class InventoryBuildResult:
     raw_folder: Path
     source_file: Path
     output_file: Path
+    removed_isbns_file: Path
     matched_updates: int
     appended_rows: int
+    excluded_rows: int
     final_shape: tuple[int, int]
 
 
 def format_inventory_output_filename(week_ending: datetime) -> str:
-    return f"{INVENTORY_PREFIX}_{week_ending:%Y%m%d}.xlsx"
+    return format_legacy_bn_output_filename(INVENTORY_PREFIX, week_ending)
+
+
+def format_previous_inventory_output_filename(week_ending: datetime) -> str:
+    return f"{INVENTORY_PREFIX}_{week_ending:%Y_%m_%d}.xlsx"
 
 
 def find_inventory_source_file(raw_folder: Path) -> Path:
@@ -93,8 +101,58 @@ def normalize_existing_headers(ws) -> None:
     if current_headers == INVENTORY_REQUIRED_HEADERS:
         return
 
+    for merged_range in list(ws.merged_cells.ranges):
+        if merged_range.min_row <= INVENTORY_HEADER_ROW and merged_range.max_row >= 1:
+            ws.unmerge_cells(str(merged_range))
+
+    ws.delete_cols(6, 6)
+
     for insert_at in (6, 10, 14, 18, 22, 26, 30):
         ws.insert_cols(insert_at, amount=1)
+
+    for col_idx in range(6, 34):
+        for row_idx in range(1, INVENTORY_HEADER_ROW + 1):
+            ws.cell(row=row_idx, column=col_idx).value = None
+
+    row1_labels = {
+        7: "DOH",
+        9: "SOH",
+        11: "DOO",
+        13: "SOO",
+    }
+    row3_labels = {
+        7: "Inventory",
+        8: "Inventory",
+        9: "Inventory",
+        11: "On Order",
+        12: "On Order",
+        13: "On Order",
+        15: "Due Out",
+        16: "Due Out",
+        17: "Due Out",
+        19: "Reorder Threshold",
+        20: "Reorder Threshold",
+        21: "Reorder Threshold",
+        23: "# of stores per weekly sales",
+        24: "# of stores per weekly sales",
+        25: "# of stores per weekly sales",
+        27: "# of stores on hand",
+        28: "# of stores on hand",
+        29: "# of stores on hand",
+        31: "# of stores per model",
+        32: "# of stores per model",
+        33: "# of stores per model",
+    }
+    for col_idx in (
+        7, 8, 9, 11, 12, 13, 15, 16, 17, 19, 20, 21, 23, 24, 25, 27, 28, 29, 31, 32, 33
+    ):
+        ws.cell(row=4, column=col_idx).value = "Barnes & Noble"
+
+    for col_idx, value in row1_labels.items():
+        ws.cell(row=1, column=col_idx).value = value
+
+    for col_idx, value in row3_labels.items():
+        ws.cell(row=3, column=col_idx).value = value
 
     for col_idx, header in enumerate(INVENTORY_REQUIRED_HEADERS, start=1):
         ws.cell(row=INVENTORY_HEADER_ROW, column=col_idx).value = header
@@ -154,6 +212,10 @@ def build_existing_inventory_index(ws, last_data_row: int) -> dict[str, int]:
     return index
 
 
+def excel_safe_value(value):
+    return None if pd.isna(value) else value
+
+
 def append_missing_rows(
     ws, start_row: int, pos_missing: pd.DataFrame, style_row: int
 ) -> int:
@@ -161,15 +223,43 @@ def append_missing_rows(
     for _, row in pos_missing.iterrows():
         target_row = start_row + appended
         clone_row_styles(ws, style_row, target_row)
-        ws.cell(row=target_row, column=1).value = row["ISBN"]
+        ws.cell(row=target_row, column=1).value = excel_safe_value(row["ISBN"])
         ws.cell(row=target_row, column=1).number_format = "@"
-        ws.cell(row=target_row, column=3).value = row["Imprint"]
-        ws.cell(row=target_row, column=7).value = row["OH_DC"]
-        ws.cell(row=target_row, column=9).value = row["OH_Stores"]
-        ws.cell(row=target_row, column=11).value = row["OO_DC"]
-        ws.cell(row=target_row, column=13).value = row["OO_Stores"]
+        ws.cell(row=target_row, column=3).value = excel_safe_value(row["Imprint"])
+        ws.cell(row=target_row, column=7).value = excel_safe_value(row["OH_DC"])
+        ws.cell(row=target_row, column=9).value = excel_safe_value(row["OH_Stores"])
+        ws.cell(row=target_row, column=11).value = excel_safe_value(row["OO_DC"])
+        ws.cell(row=target_row, column=13).value = excel_safe_value(row["OO_Stores"])
         appended += 1
     return appended
+
+
+def remove_disallowed_rows(ws, last_data_row: int, allowed_isbns: set[str]) -> int:
+    removed_rows: list[dict[str, object]] = []
+    for row_idx in range(last_data_row, INVENTORY_DATA_START_ROW - 1, -1):
+        isbn = normalize_isbn(ws.cell(row=row_idx, column=1).value)
+        if not isbn or isbn not in allowed_isbns:
+            removed_rows.append(
+                {
+                    "ISBN": isbn or "",
+                    "Title": ws.cell(row=row_idx, column=2).value,
+                    "Author": ws.cell(row=row_idx, column=4).value,
+                    "Imprint": ws.cell(row=row_idx, column=3).value,
+                    "Reason": "Missing/invalid ISBN" if not isbn else "Not in BN upload whitelist",
+                }
+            )
+            ws.delete_rows(row_idx, 1)
+    removed_rows.reverse()
+    return removed_rows
+
+
+def save_removed_isbns_report(removed_rows: list[dict[str, object]], output_file: Path) -> None:
+    df = pd.DataFrame(
+        removed_rows,
+        columns=["ISBN", "Title", "Author", "Imprint", "Reason"],
+    )
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    df.to_excel(output_file, index=False)
 
 
 def refresh_grand_total_row(ws, last_data_row: int) -> None:
@@ -200,6 +290,17 @@ def build_inventory_working_file(
         if output_file
         else resolved_raw_folder / format_inventory_output_filename(week_ending)
     )
+    removed_isbns_path = (
+        resolved_raw_folder
+        / format_legacy_bn_removed_isbns_filename(INVENTORY_PREFIX, week_ending)
+    )
+
+    if not output_file:
+        previous_output = (
+            resolved_raw_folder / format_previous_inventory_output_filename(week_ending)
+        )
+        if previous_output != output_path and previous_output.exists():
+            previous_output.unlink()
 
     workbook = load_workbook(inventory_source)
     worksheet = workbook.active
@@ -209,6 +310,7 @@ def build_inventory_working_file(
     last_data_row = get_last_data_row(worksheet)
     existing_index = build_existing_inventory_index(worksheet, last_data_row)
     pos_df = load_pos_dataframe(resolved_raw_folder)
+    allowed_isbns = load_bn_upload_isbns()
 
     matched_updates = 0
     missing_rows = []
@@ -240,18 +342,24 @@ def build_inventory_working_file(
         )
         last_data_row += appended_rows
 
+    removed_rows = remove_disallowed_rows(worksheet, last_data_row, allowed_isbns)
+    excluded_rows = len(removed_rows)
+    last_data_row = get_last_data_row(worksheet)
     refresh_grand_total_row(worksheet, last_data_row)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     workbook.save(output_path)
+    save_removed_isbns_report(removed_rows, removed_isbns_path)
 
     final_shape = (max(last_data_row - INVENTORY_DATA_START_ROW + 1, 0), 33)
     return InventoryBuildResult(
         raw_folder=resolved_raw_folder,
         source_file=inventory_source,
         output_file=output_path,
+        removed_isbns_file=removed_isbns_path,
         matched_updates=matched_updates,
         appended_rows=appended_rows,
+        excluded_rows=excluded_rows,
         final_shape=final_shape,
     )
 
@@ -277,8 +385,10 @@ def print_result_summary(result: InventoryBuildResult) -> None:
     print(f"Inventory source file: {result.source_file.name}")
     print(f"Matched ISBN overrides: {result.matched_updates:,}")
     print(f"Appended new ISBN rows: {result.appended_rows:,}")
+    print(f"Rows removed by ISBN whitelist: {result.excluded_rows:,}")
     print(f"Final data shape: {result.final_shape}")
     print(f"Saved file: {result.output_file}")
+    print(f"Removed ISBNs file: {result.removed_isbns_file}")
 
 
 def main() -> None:

@@ -46,7 +46,7 @@ def parse_week_ending(folder_name: str) -> datetime:
 
 
 def format_output_filename(week_ending: datetime) -> str:
-    return f"{OUTPUT_PREFIX}_{week_ending:%Y%m%d}.xlsx"
+    return f"{OUTPUT_PREFIX}_{week_ending:%Y_%m_%d}.xlsx"
 
 
 def get_candidate_raw_folders(base_folder: Path = BASE_FOLDER) -> list[Path]:

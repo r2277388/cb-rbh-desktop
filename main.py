@@ -4,10 +4,12 @@ import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
+from tkinter import Tk, filedialog
 
 # call the PO archive manager directly
 from paths import process_paths
 import tools.po_archive_manager as po_archive_manager
+from web_launcher import launch_browser_menu
 
 
 def get_full_name():
@@ -67,6 +69,7 @@ def display_options():
         "14. XGBoost Model",
         "15. Check Table Updates",
         "16. Desk Procedures",
+        "98. Graphical Menu",
         "99. Exit",
     ]
     print("\nWhat would you like to run?")
@@ -98,6 +101,7 @@ def display_info(choice):
         "14": "XGBoost Model: Launches the xgboost_model workflow menu.",
         "15": "Check Table Updates: Runs SQL checks for table freshness and recent weeks for SSR/Amazon/Bookscan tables.",
         "16": "Desk Procedures: Opens a menu of desk procedures and run instructions.",
+        "98": "Graphical Menu: Opens a browser-based launcher for the available processes.",
         "99": "Exit: Exits the program.",
     }
     return info.get(choice, "Invalid choice. No information available.")
@@ -404,7 +408,30 @@ def confirm_frontlist_supercharged_files() -> bool:
         print("Invalid choice. Please select a valid option.")
 
 
-def confirm_bn_rolling_reports_files() -> bool:
+def choose_bn_raw_folder_with_window(initial_dir: Path) -> Path | None:
+    root = Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    try:
+        selected = filedialog.askdirectory(
+            initialdir=str(initial_dir),
+            title="Choose the Barnes & Noble raw files folder",
+        )
+    finally:
+        root.destroy()
+
+    if not selected:
+        return None
+
+    path = Path(selected)
+    if not path.exists():
+        raise FileNotFoundError(f"Raw folder not found: {path}")
+    if not path.is_dir():
+        raise NotADirectoryError(f"Raw folder path is not a directory: {path}")
+    return path
+
+
+def confirm_bn_rolling_reports_files() -> Path | None:
     script_path = process_paths.BN_ROLLING_REPORTS_SCRIPT
     raw_base_folder = process_paths.BN_RAW_BASE_FOLDER
     raw_folders = sorted(
@@ -420,46 +447,50 @@ def confirm_bn_rolling_reports_files() -> bool:
             f"No Barnes & Noble raw folders were found under {raw_base_folder}"
         )
 
-    latest_raw_folder = raw_folders[-1]
-    pos_csvs = sorted(
-        [path for path in latest_raw_folder.iterdir() if path.is_file() and path.suffix.lower() == ".csv"],
-        key=lambda path: path.name.lower(),
-    )
-    sales_files = sorted(
-        [
-            path
-            for path in latest_raw_folder.iterdir()
-            if path.is_file()
-            and path.suffix.lower() == ".xlsx"
-            and path.name.lower().startswith("sales")
-            and not path.name.startswith("~$")
-        ],
-        key=lambda path: path.name.lower(),
-    )
-    inventory_files = sorted(
-        [
-            path
-            for path in latest_raw_folder.iterdir()
-            if path.is_file()
-            and path.suffix.lower() == ".xlsx"
-            and path.name.lower().startswith("inventory")
-            and not path.name.startswith("~$")
-        ],
-        key=lambda path: path.name.lower(),
-    )
+    selected_raw_folder = raw_folders[-1]
 
     def format_modified(path: Path) -> str:
         return datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d %I:%M:%S %p")
 
     while True:
+        pos_csvs = sorted(
+            [path for path in selected_raw_folder.iterdir() if path.is_file() and path.suffix.lower() == ".csv"],
+            key=lambda path: path.name.lower(),
+        )
+        sales_files = sorted(
+            [
+                path
+                for path in selected_raw_folder.iterdir()
+                if path.is_file()
+                and path.suffix.lower() == ".xlsx"
+                and path.name.lower().startswith("sales")
+                and not path.name.startswith("~$")
+            ],
+            key=lambda path: path.name.lower(),
+        )
+        inventory_files = sorted(
+            [
+                path
+                for path in selected_raw_folder.iterdir()
+                if path.is_file()
+                and path.suffix.lower() == ".xlsx"
+                and path.name.lower().startswith("inventory")
+                and not path.name.startswith("~$")
+            ],
+            key=lambda path: path.name.lower(),
+        )
+
         print()
         print("Barnes & Noble Rolling Reports will use these files:")
         print(f"  Script:              {script_path}")
         print(f"  Raw base folder:     {raw_base_folder}")
-        print(f"  Default raw folder:  {latest_raw_folder}")
+        print(f"  Default raw folder:  {selected_raw_folder}")
         print("  POS CSV files:")
-        for file_path in pos_csvs:
-            print(f"    {file_path}")
+        if pos_csvs:
+            for file_path in pos_csvs:
+                print(f"    {file_path}")
+        else:
+            print("    None found")
         if sales_files:
             print("  Sales workbook(s):")
             for file_path in sales_files:
@@ -477,15 +508,24 @@ def confirm_bn_rolling_reports_files() -> bool:
         print("  Output files:        Saved in the selected raw folder during submenu actions")
         print()
         print("    1. Continue")
-        print("    2. Return to main menu")
+        print("    2. Change raw folder")
+        print("    3. Return to main menu")
         print()
         choice = input("Choose an option: ").strip().lower()
 
         if choice in {"1", "c", "continue"}:
-            return True
+            return selected_raw_folder
 
-        if choice in {"2", "b", "back", "return", "menu"}:
-            return False
+        if choice in {"2", "change", "folder", "browse"}:
+            updated_folder = choose_bn_raw_folder_with_window(raw_base_folder)
+            if updated_folder is None:
+                print("No folder was selected.")
+                continue
+            selected_raw_folder = updated_folder
+            continue
+
+        if choice in {"3", "b", "back", "return", "menu"}:
+            return None
 
         print("Invalid choice. Please select a valid option.")
 
@@ -557,7 +597,8 @@ def run_program(choice):
                 return
         if choice == "8":
             try:
-                if not confirm_bn_rolling_reports_files():
+                selected_bn_raw_folder = confirm_bn_rolling_reports_files()
+                if selected_bn_raw_folder is None:
                     return
             except FileNotFoundError as e:
                 print(f"Unable to locate the Barnes & Noble Rolling Reports files: {e}")
@@ -572,7 +613,10 @@ def run_program(choice):
         if choice != "8":
             print(f"Running the {report_name}... Please wait.")
         try:
-            subprocess.run(["venv/Scripts/python", script_path], check=True)
+            command = ["venv/Scripts/python", script_path]
+            if choice == "8":
+                command.extend(["--default-raw-folder", str(selected_bn_raw_folder)])
+            subprocess.run(command, check=True)
             print(f"The {report_name} is now ready.")
         except subprocess.CalledProcessError:
             print(f"An error occurred while running {script_path}.")
@@ -589,6 +633,10 @@ def run_program(choice):
             print("Returned from Desk Procedures.")
         except subprocess.CalledProcessError:
             print("An error occurred while running desk_procedures/main.py.")
+        return
+
+    if choice == "98":
+        launch_browser_menu()
         return
 
     if choice == "99":

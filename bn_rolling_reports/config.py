@@ -1,5 +1,6 @@
 from pathlib import Path
 from importlib.util import module_from_spec, spec_from_file_location
+from datetime import datetime
 
 
 def _load_shared_paths():
@@ -16,9 +17,9 @@ _shared = _load_shared_paths()
 
 BASE_FOLDER = _shared.BN_RAW_BASE_FOLDER
 RAW_FOLDER_SUFFIX = "_raw_files"
-OUTPUT_PREFIX = "pos_combined"
-SALES_PREFIX = "sales_working"
-INVENTORY_PREFIX = "inventory_working"
+OUTPUT_PREFIX = "POS"
+SALES_PREFIX = "Sales"
+INVENTORY_PREFIX = "Inventory"
 REQUIRED_FILE_KEYWORDS = ("toy", "gift", "cal")
 REQUIRED_COLUMNS = [
     "EAN",
@@ -39,6 +40,16 @@ NUMERIC_COLUMNS = [
     "DC_OH_Tot",
     "DC_OO_Tot",
 ]
+
+
+def format_legacy_bn_output_filename(label: str, week_ending: datetime) -> str:
+    iso_week = week_ending.isocalendar().week
+    return f"{iso_week:02d} {week_ending:%m%d%Y} Barnes & Noble - {label}.xlsx"
+
+
+def format_legacy_bn_removed_isbns_filename(label: str, week_ending: datetime) -> str:
+    iso_week = week_ending.isocalendar().week
+    return f"{iso_week:02d} {week_ending:%m%d%Y} Barnes & Noble - {label} Removed ISBNs.xlsx"
 OUTPUT_COLUMN_RENAMES = {
     "EAN": "ISBN",
     "OH": "OH_Stores",

@@ -2,15 +2,12 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-
-import pandas as pd
+from tkinter import Tk, filedialog
 
 from config import BASE_FOLDER
 from pos_combiner import (
     build_combined_pos,
-    format_output_filename,
     get_candidate_raw_folders,
-    parse_week_ending,
     preview_dataframe,
     resolve_raw_folder,
 )
@@ -33,25 +30,89 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print the first 25 rows after building the combined file.",
     )
+    parser.add_argument(
+        "--default-raw-folder",
+        help="Preferred raw folder to use as the default in the interactive menu.",
+    )
     return parser
 
 
-def prompt_for_raw_folder() -> Path:
-    candidates = get_candidate_raw_folders()
-    if candidates:
-        latest = candidates[-1]
-        default_name = latest.name
-        prompt = (
-            f"Raw folder [{default_name}] under {BASE_FOLDER} "
-            "(press Enter to use default or paste a full folder path): "
-        )
-        user_value = input(prompt).strip()
-        return resolve_raw_folder(user_value or latest)
+def prompt_for_raw_folder(default_raw_folder: str | Path | None = None) -> Path:
+    def choose_raw_folder_in_window() -> Path | None:
+        initial_dir = str(BASE_FOLDER) if BASE_FOLDER.exists() else str(Path.home())
+        root = Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        try:
+            selected = filedialog.askdirectory(
+                initialdir=initial_dir,
+                title="Choose the Barnes & Noble raw files folder",
+            )
+        finally:
+            root.destroy()
 
-    user_value = input(
-        "Mapped base folder was not available. Paste the full raw folder path: "
-    ).strip()
-    return resolve_raw_folder(user_value)
+        if not selected:
+            return None
+        return resolve_raw_folder(selected)
+
+    candidates = get_candidate_raw_folders()
+    preferred = None
+    if default_raw_folder:
+        preferred = resolve_raw_folder(default_raw_folder)
+
+    if candidates:
+        latest = preferred or candidates[-1]
+        while True:
+            print()
+            print("Choose the Barnes & Noble raw folder:")
+            print(f"    1. Use latest folder: {latest}")
+            print("    2. Choose a folder in a window")
+            print("    3. Paste a full folder path")
+            print()
+            choice = input("Choose an option: ").strip().lower()
+
+            if choice in {"", "1", "latest", "default"}:
+                return resolve_raw_folder(latest)
+
+            if choice in {"2", "window", "browse", "folder"}:
+                selected = choose_raw_folder_in_window()
+                if selected is not None:
+                    return selected
+                print("No folder was selected.")
+                continue
+
+            if choice in {"3", "paste", "path"}:
+                user_value = input("Paste the full raw folder path: ").strip()
+                if user_value:
+                    return resolve_raw_folder(user_value)
+                print("No folder path was entered.")
+                continue
+
+            print("Invalid choice. Please select a valid option.")
+
+    while True:
+        print()
+        print("The default Barnes & Noble base folder was not available.")
+        print("    1. Choose a folder in a window")
+        print("    2. Paste a full raw folder path")
+        print()
+        choice = input("Choose an option: ").strip().lower()
+
+        if choice in {"1", "window", "browse", "folder"}:
+            selected = choose_raw_folder_in_window()
+            if selected is not None:
+                return selected
+            print("No folder was selected.")
+            continue
+
+        if choice in {"2", "paste", "path"}:
+            user_value = input("Paste the full raw folder path: ").strip()
+            if user_value:
+                return resolve_raw_folder(user_value)
+            print("No folder path was entered.")
+            continue
+
+        print("Invalid choice. Please select a valid option.")
 
 
 def print_result_summary(result) -> None:
@@ -67,47 +128,36 @@ def print_result_summary(result) -> None:
     print(f"Saved file: {result.output_file}")
 
 
-def view_existing_output() -> None:
-    raw_folder = prompt_for_raw_folder()
-    week_ending = parse_week_ending(raw_folder.name)
-    output_file = raw_folder / format_output_filename(week_ending)
-
-    if not output_file.exists():
-        print(f"Combined file not found yet: {output_file}")
-        return
-
-    df = pd.read_excel(output_file, dtype={"ISBN": "string", "Imprint": "string"})
+def print_sales_result_summary(result) -> None:
     print()
-    print(f"Showing first 25 rows from {output_file.name}")
-    print(preview_dataframe(df))
+    print(f"Sales source file: {result.source_file.name}")
+    print(f"Matched ISBN overrides: {result.matched_updates:,}")
+    print(f"Appended new ISBN rows: {result.appended_rows:,}")
+    print(f"Rows removed by ISBN whitelist: {result.excluded_rows:,}")
+    print(f"Final data shape: {result.final_shape}")
+    print(f"Saved file: {result.output_file}")
+    print(f"Removed ISBNs file: {result.removed_isbns_file}")
 
 
-def confirm_source_file(process_name: str, source_file: Path) -> bool:
-    while True:
-        print()
-        print(f"{process_name} source file:")
-        print(f"  {source_file}")
-        print()
-        print("    1. Continue with this file")
-        print("    2. Return to prior menu")
-        print()
-        choice = input("Choose an option: ").strip().lower()
-
-        if choice in {"1", "c", "continue"}:
-            return True
-
-        if choice in {"2", "b", "back", "return", "menu"}:
-            return False
-
-        print("Invalid choice. Please select a valid option.")
+def print_inventory_result_summary(result) -> None:
+    print()
+    print(f"Inventory source file: {result.source_file.name}")
+    print(f"Matched ISBN overrides: {result.matched_updates:,}")
+    print(f"Appended new ISBN rows: {result.appended_rows:,}")
+    print(f"Rows removed by ISBN whitelist: {result.excluded_rows:,}")
+    print(f"Final data shape: {result.final_shape}")
+    print(f"Saved file: {result.output_file}")
+    print(f"Removed ISBNs file: {result.removed_isbns_file}")
 
 
-def run_menu() -> None:
+def run_menu(default_raw_folder: str | Path | None = None) -> None:
+    raw_folder = resolve_raw_folder(default_raw_folder) if default_raw_folder else prompt_for_raw_folder()
+
     while True:
         print("\nBarnes & Noble Rolling Reports")
         print()
-        print("    1. Build combined POS file for the raw folder")
-        print("    2. View the existing combined POS file on screen")
+        print("    1. Build All Three")
+        print("    2. Build Combined POS File")
         print("    3. Build working Sales file from Sales*.xlsx and pos_combined")
         print("    4. Build working Inventory file from Inventory*.xlsx and pos_combined")
         print("    5. Exit")
@@ -115,7 +165,20 @@ def run_menu() -> None:
         choice = input("Choose an option: ").strip().lower()
 
         if choice == "1":
-            raw_folder = prompt_for_raw_folder()
+            pos_result = build_combined_pos(raw_folder=raw_folder)
+            print_result_summary(pos_result)
+            print()
+            print("First 25 rows:")
+            print(preview_dataframe(pos_result.dataframe))
+
+            sales_result = build_sales_working_file(raw_folder=raw_folder)
+            print_sales_result_summary(sales_result)
+
+            inventory_result = build_inventory_working_file(raw_folder=raw_folder)
+            print_inventory_result_summary(inventory_result)
+            continue
+
+        if choice == "2":
             result = build_combined_pos(raw_folder=raw_folder)
             print_result_summary(result)
             print()
@@ -123,36 +186,14 @@ def run_menu() -> None:
             print(preview_dataframe(result.dataframe))
             continue
 
-        if choice == "2":
-            view_existing_output()
-            continue
-
         if choice == "3":
-            raw_folder = prompt_for_raw_folder()
-            source_file = find_sales_source_file(raw_folder)
-            if not confirm_source_file("Sales", source_file):
-                continue
             result = build_sales_working_file(raw_folder=raw_folder)
-            print()
-            print(f"Sales source file: {result.source_file.name}")
-            print(f"Matched ISBN overrides: {result.matched_updates:,}")
-            print(f"Appended new ISBN rows: {result.appended_rows:,}")
-            print(f"Final data shape: {result.final_shape}")
-            print(f"Saved file: {result.output_file}")
+            print_sales_result_summary(result)
             continue
 
         if choice == "4":
-            raw_folder = prompt_for_raw_folder()
-            source_file = find_inventory_source_file(raw_folder)
-            if not confirm_source_file("Inventory", source_file):
-                continue
             result = build_inventory_working_file(raw_folder=raw_folder)
-            print()
-            print(f"Inventory source file: {result.source_file.name}")
-            print(f"Matched ISBN overrides: {result.matched_updates:,}")
-            print(f"Appended new ISBN rows: {result.appended_rows:,}")
-            print(f"Final data shape: {result.final_shape}")
-            print(f"Saved file: {result.output_file}")
+            print_inventory_result_summary(result)
             continue
 
         if choice in {"5", "q", "quit", "exit"}:
@@ -174,7 +215,7 @@ def main() -> None:
             print(preview_dataframe(result.dataframe))
         return
 
-    run_menu()
+    run_menu(default_raw_folder=args.default_raw_folder)
 
 
 if __name__ == "__main__":
