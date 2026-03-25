@@ -1,7 +1,11 @@
 import ast
+from pathlib import Path
+
+
+SCRIPT_DIR = Path(__file__).resolve().parent
 
 def add_to_removal_list():
-    removal_file = "asin_removal_list.py"
+    removal_file = SCRIPT_DIR / "asin_removal_list.py"
     # Load current list (supports both set and list formats)
     with open(removal_file, "r") as f:
         content = f.read()
@@ -24,7 +28,7 @@ def add_to_removal_list():
     print("The ASIN removal list has been updated!")
 
 def add_to_manual_key():
-    manual_file = "asin_manual_key.py"
+    manual_file = SCRIPT_DIR / "asin_manual_key.py"
     # Load current dictionary
     with open(manual_file, "r") as f:
         content = f.read()

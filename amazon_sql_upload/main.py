@@ -1,45 +1,11 @@
-import subprocess
 import tkinter as tk
-import sys
-from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog
 
 import pandas as pd
 from asin_isbn_conversion import asin_isbn_conversion
-from paths import (
-    amz_catalog,
-    amz_weekly_inventory,
-    amz_weekly_sales,
-    amz_weekly_traffic,
-    ypticod,
-)
 
 
 def main():
-    script_dir = Path(__file__).resolve().parent
-
-    ##############
-    # --- Show required save locations and ask for confirmation ---
-    root = tk.Tk()
-    root.withdraw()
-
-    folder_message = (
-        "For this process to run correctly, files should be saved in the following locations:\n\n"
-        f"Sales: {amz_weekly_sales}\n"
-        f"Inventory: {amz_weekly_inventory}\n"
-        f"Traffic: {amz_weekly_traffic}\n"
-        f"Catalog: {amz_catalog}\n"
-        f"YPTICOD: {ypticod}\n\n"
-        "Do you confirm these locations are correct?"
-    )
-    confirmed = messagebox.askyesno("Confirm File Locations", folder_message)
-    if not confirmed:
-        print("❌ Process cancelled by user.")
-        return
-
-    # Show latest weekly files being analyzed
-    subprocess.run([sys.executable, str(script_dir / "load_weekly_files.py")])
-
     ##############
     # Run the main data pipeline to get the cleaned DataFrame
     df = asin_isbn_conversion()
@@ -140,7 +106,15 @@ def main():
     )
     if update_dicts and update_dicts.lower() == "y":
         # Run the dictionary update script as a subprocess
-        subprocess.run([sys.executable, str(script_dir / "asin_add_to_dictionaries.py")])
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        script_dir = Path(__file__).resolve().parent
+        subprocess.run(
+            [sys.executable, str(script_dir / "asin_add_to_dictionaries.py")],
+            check=True,
+        )
     else:
         print("Skipping dictionary update.")
 
