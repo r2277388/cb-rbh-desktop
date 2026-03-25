@@ -8,7 +8,6 @@ from config import BASE_FOLDER
 from pos_combiner import (
     build_combined_pos,
     get_candidate_raw_folders,
-    preview_dataframe,
     resolve_raw_folder,
 )
 from inventory_working import build_inventory_working_file, find_inventory_source_file
@@ -165,33 +164,33 @@ def run_menu(default_raw_folder: str | Path | None = None) -> None:
         choice = input("Choose an option: ").strip().lower()
 
         if choice == "1":
+            print("\nRunning Step 1 of 3: Build Combined POS File...")
             pos_result = build_combined_pos(raw_folder=raw_folder)
             print_result_summary(pos_result)
-            print()
-            print("First 25 rows:")
-            print(preview_dataframe(pos_result.dataframe))
 
+            print("\nRunning Step 2 of 3: Build working Sales file...")
             sales_result = build_sales_working_file(raw_folder=raw_folder)
             print_sales_result_summary(sales_result)
 
+            print("\nRunning Step 3 of 3: Build working Inventory file...")
             inventory_result = build_inventory_working_file(raw_folder=raw_folder)
             print_inventory_result_summary(inventory_result)
             continue
 
         if choice == "2":
+            print("\nRunning Build Combined POS File...")
             result = build_combined_pos(raw_folder=raw_folder)
             print_result_summary(result)
-            print()
-            print("First 25 rows:")
-            print(preview_dataframe(result.dataframe))
             continue
 
         if choice == "3":
+            print("\nRunning Build working Sales file...")
             result = build_sales_working_file(raw_folder=raw_folder)
             print_sales_result_summary(result)
             continue
 
         if choice == "4":
+            print("\nRunning Build working Inventory file...")
             result = build_inventory_working_file(raw_folder=raw_folder)
             print_inventory_result_summary(result)
             continue
@@ -207,12 +206,9 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.raw_folder or args.output_file or args.preview:
+        print("\nRunning Build Combined POS File...")
         result = build_combined_pos(raw_folder=args.raw_folder, output_file=args.output_file)
         print_result_summary(result)
-        if args.preview:
-            print()
-            print("First 25 rows:")
-            print(preview_dataframe(result.dataframe))
         return
 
     run_menu(default_raw_folder=args.default_raw_folder)

@@ -46,13 +46,6 @@ WHERE
     )
 """
 
-ISBN_OVERRIDES = {
-    "0648103082402": "9781439782408",
-    "0648103082396": "9781439782392",
-    "0648103016018": "9781439716014",
-    "0648103025355": "9781439725351",
-}
-
 ISBN12_EXCEPTIONS_FALLBACK = Path(__file__).with_name("isbn12_exceptions.txt")
 BN_UPLOAD_ISBNS_CACHE_DIR = Path(__file__).with_name("cache")
 _ISBN12_NOTICE_PRINTED = False
@@ -94,9 +87,6 @@ def normalize_isbn(value: object, isbn12_exceptions: set[str] | None = None) -> 
     clean = re.sub(r"[-\s]", "", str(value).strip())
     if not clean or not clean.isdigit():
         return None
-
-    if clean in ISBN_OVERRIDES:
-        return ISBN_OVERRIDES[clean]
 
     if len(clean) == 13:
         return clean

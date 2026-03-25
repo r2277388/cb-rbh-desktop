@@ -79,13 +79,13 @@ def load_pos_dataframe(raw_folder: Path) -> pd.DataFrame:
             f"Combined POS file not found: {pos_output}. Run pos_combiner.py first."
         )
 
-    df = pd.read_excel(pos_output, dtype={"ISBN": "string", "Imprint": "string"})
-    required = {"ISBN", "Imprint", "LW"}
+    df = pd.read_excel(pos_output, dtype={"ISBN": "string"})
+    required = {"ISBN", "LW"}
     missing = required.difference(df.columns)
     if missing:
         raise ValueError(f"Combined POS file is missing required columns: {sorted(missing)}")
 
-    df = df.loc[:, ["ISBN", "Imprint", "LW"]].copy()
+    df = df.loc[:, ["ISBN", "LW"]].copy()
     df["ISBN"] = normalize_isbn_series(df["ISBN"])
     df = df.loc[df["ISBN"].notna()].drop_duplicates(subset=["ISBN"], keep="first")
     return df
@@ -101,6 +101,22 @@ def normalize_existing_headers(ws) -> None:
 
     for col_idx, header in enumerate(SALES_REQUIRED_HEADERS, start=1):
         ws.cell(row=SALES_HEADER_ROW, column=col_idx).value = header
+
+
+def align_sales_header_rows(ws) -> None:
+    a5 = ws.cell(row=5, column=1).value
+    a6 = ws.cell(row=6, column=1).value
+
+    if a6 == "ISBN":
+        return
+
+    if a5 == "ISBN":
+        ws.insert_rows(2, 1)
+        return
+
+    raise ValueError(
+        "Unexpected Sales header layout. Expected 'ISBN' in A5 or A6 before processing."
+    )
 
 
 def remove_footer_rows(ws) -> None:
@@ -143,7 +159,7 @@ def coerce_numeric_cell(value):
 
 def coerce_fg_columns(ws, last_data_row: int) -> None:
     for row_idx in range(SALES_DATA_START_ROW, last_data_row + 1):
-        for col_idx in (6, 7, 8):
+        for col_idx in (8, 10, 11):
             cell = ws.cell(row=row_idx, column=col_idx)
             cell.value = coerce_numeric_cell(cell.value)
 
@@ -191,13 +207,17 @@ def consolidate_sales_rows(ws, last_data_row: int) -> int:
 
         subject_code = ws.cell(row=row_idx, column=6).value
         dept_code = ws.cell(row=row_idx, column=7).value
-        lw_value = coerce_numeric_cell(ws.cell(row=row_idx, column=8).value)
+        total_value = coerce_numeric_cell(ws.cell(row=row_idx, column=8).value)
+        bn_com_value = coerce_numeric_cell(ws.cell(row=row_idx, column=10).value)
+        bn_value = coerce_numeric_cell(ws.cell(row=row_idx, column=11).value)
 
         if isbn not in aggregated:
             aggregated[isbn] = {
                 "subject_code": subject_code,
                 "dept_code": dept_code,
-                "lw": 0 if lw_value in (None, "") else lw_value,
+                "total_lw": 0 if total_value in (None, "") else total_value,
+                "bn_com_lw": 0 if bn_com_value in (None, "") else bn_com_value,
+                "bn_lw": 0 if bn_value in (None, "") else bn_value,
             }
             continue
 
@@ -205,8 +225,12 @@ def consolidate_sales_rows(ws, last_data_row: int) -> int:
             aggregated[isbn]["subject_code"] = subject_code
         if not aggregated[isbn]["dept_code"] and dept_code not in (None, ""):
             aggregated[isbn]["dept_code"] = dept_code
-        if lw_value not in (None, ""):
-            aggregated[isbn]["lw"] += lw_value
+        if total_value not in (None, ""):
+            aggregated[isbn]["total_lw"] += total_value
+        if bn_com_value not in (None, ""):
+            aggregated[isbn]["bn_com_lw"] += bn_com_value
+        if bn_value not in (None, ""):
+            aggregated[isbn]["bn_lw"] += bn_value
 
     row_values = list(aggregated.items())
     target_last_row = SALES_DATA_START_ROW + len(row_values) - 1
@@ -219,7 +243,10 @@ def consolidate_sales_rows(ws, last_data_row: int) -> int:
         ws.cell(row=row_idx, column=1).number_format = "@"
         ws.cell(row=row_idx, column=6).value = values["subject_code"]
         ws.cell(row=row_idx, column=7).value = values["dept_code"]
-        ws.cell(row=row_idx, column=8).value = values["lw"]
+        ws.cell(row=row_idx, column=8).value = values["total_lw"]
+        ws.cell(row=row_idx, column=9).value = None
+        ws.cell(row=row_idx, column=10).value = values["bn_com_lw"]
+        ws.cell(row=row_idx, column=11).value = values["bn_lw"]
 
     if target_last_row < last_data_row:
         ws.delete_rows(target_last_row + 1, last_data_row - target_last_row)
@@ -240,7 +267,6 @@ def append_missing_rows(ws, start_row: int, pos_missing: pd.DataFrame, style_row
             ws.cell(row=target_row, column=col_idx).value = None
         ws.cell(row=target_row, column=1).value = excel_safe_value(row["ISBN"])
         ws.cell(row=target_row, column=1).number_format = "@"
-        ws.cell(row=target_row, column=3).value = excel_safe_value(row["Imprint"])
         ws.cell(row=target_row, column=8).value = excel_safe_value(row["LW"])
         appended += 1
     return appended
@@ -277,13 +303,18 @@ def save_removed_isbns_report(removed_rows: list[dict[str, object]], output_file
 def refresh_grand_total_row(ws, last_data_row: int) -> None:
     if last_data_row < SALES_DATA_START_ROW:
         ws.cell(row=SALES_TOTAL_ROW, column=8).value = 0
+        ws.cell(row=SALES_TOTAL_ROW, column=9).value = 0
+        ws.cell(row=SALES_TOTAL_ROW, column=10).value = 0
+        ws.cell(row=SALES_TOTAL_ROW, column=11).value = 0
         ws.cell(row=SALES_TOTAL_ROW, column=16).value = None
         return
 
-    col_letter = get_column_letter(8)
-    ws.cell(row=SALES_TOTAL_ROW, column=8).value = (
-        f"=SUM({col_letter}{SALES_DATA_START_ROW}:{col_letter}{last_data_row})"
-    )
+    ws.cell(row=SALES_TOTAL_ROW, column=9).value = 0
+    for col_idx in (8, 10, 11):
+        col_letter = get_column_letter(col_idx)
+        ws.cell(row=SALES_TOTAL_ROW, column=col_idx).value = (
+            f"=SUM({col_letter}{SALES_DATA_START_ROW}:{col_letter}{last_data_row})"
+        )
     ws.cell(row=SALES_TOTAL_ROW, column=16).value = None
 
 
@@ -311,6 +342,7 @@ def build_sales_working_file(
     workbook = load_workbook(sales_source)
     worksheet = workbook.active
 
+    align_sales_header_rows(worksheet)
     normalize_existing_headers(worksheet)
     remove_footer_rows(worksheet)
     last_data_row = get_last_data_row(worksheet)

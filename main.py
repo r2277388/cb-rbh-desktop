@@ -9,7 +9,6 @@ from tkinter import Tk, filedialog
 # call the PO archive manager directly
 from paths import process_paths
 import tools.po_archive_manager as po_archive_manager
-from web_launcher import launch_browser_menu
 
 
 def get_full_name():
@@ -636,6 +635,14 @@ def run_program(choice):
         return
 
     if choice == "98":
+        try:
+            from web_launcher import launch_browser_menu
+        except ModuleNotFoundError as exc:
+            print(
+                "Graphical Menu is unavailable because a required package is missing. "
+                f"Install dependencies from requirements.txt and try again. Missing module: {exc.name}"
+            )
+            return
         launch_browser_menu()
         return
 
