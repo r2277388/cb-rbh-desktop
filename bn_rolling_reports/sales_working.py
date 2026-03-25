@@ -112,6 +112,8 @@ def align_sales_header_rows(ws) -> None:
 
     if a5 == "ISBN":
         ws.insert_rows(2, 1)
+        ws.insert_rows(6, 1)
+        ws.delete_rows(5, 1)
         return
 
     raise ValueError(
