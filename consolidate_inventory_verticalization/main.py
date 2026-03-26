@@ -27,11 +27,13 @@ PUBLISHER_CACHE_DIR = DESTINATION_FOLDER / "cache"
 PUBLISHER_LOOKUP_SQL = """
 SELECT
     i.ITEM_TITLE AS ISBN,
+    i.SHORT_TITLE AS Title,
     i.PUBLISHER_CODE AS Publisher
 FROM
     ebs.item i
 WHERE
     i.ISBN IS NOT NULL
+    AND i.PUBLISHING_GROUP NOT IN ('MKT', 'ZZZ')
 """
 
 
@@ -99,6 +101,30 @@ def prompt_for_period() -> str | None:
             continue
 
         return period
+
+
+def prompt_for_month_count() -> int | None:
+    while True:
+        print()
+        raw_value = input("Enter how many months to display, or type 'back': ").strip()
+
+        if not raw_value:
+            print("A month count is required.")
+            continue
+
+        if raw_value.lower() in {"back", "b", "return", "menu"}:
+            return None
+
+        if not raw_value.isdigit():
+            print("Invalid entry. Please enter a whole number.")
+            continue
+
+        month_count = int(raw_value)
+        if month_count <= 0:
+            print("Month count must be greater than zero.")
+            continue
+
+        return month_count
 
 
 def confirm_overwrite(destination: Path) -> bool:
@@ -415,7 +441,7 @@ def check_specific_period():
         print(f"  {'TOTAL':<8}{total_value:>14,}{total_inventory:>16,}{total_uc_avg:>13.2f}")
 
 
-def check_last_12_months():
+def check_last_n_months():
     if not PICKLE_FILE.exists():
         print()
         print(f"Pickle file not found: {PICKLE_FILE}")
@@ -435,7 +461,11 @@ def check_last_12_months():
         print("No Chronicle rows were found in the pickle.")
         return
 
-    recent_periods = sorted(df["period"].unique().tolist())[-12:]
+    month_count = prompt_for_month_count()
+    if month_count is None:
+        return
+
+    recent_periods = sorted(df["period"].unique().tolist())[-month_count:]
     recent_df = df[df["period"].isin(recent_periods)].copy()
 
     summary_rows = []
@@ -452,11 +482,16 @@ def check_last_12_months():
             row[f"{org}_value"] = int(round(org_value))
             row[f"{org}_inventory"] = int(round(org_inventory))
             row[f"{org}_uc"] = (org_value / org_inventory) if org_inventory else 0
+        total_value = float(period_df["Value"].sum())
+        total_inventory = float(period_df["Inventory"].sum())
+        row["total_value"] = int(round(total_value))
+        row["total_inventory"] = int(round(total_inventory))
+        row["total_uc"] = (total_value / total_inventory) if total_inventory else 0
         summary_rows.append(row)
 
     print()
-    print("Last 12 months (CB Only):")
-    print("  " + "-" * 124)
+    print(f"Last {len(recent_periods)} months (CB Only):")
+    print("  " + "-" * 160)
     print(
         f"  {'Period':<8}"
         f"{'Rows':>8}"
@@ -469,8 +504,11 @@ def check_last_12_months():
         f"{'CBC U/C':>12}"
         f"{'HBG U/C':>12}"
         f"{'CBP U/C':>12}"
+        f"{'Total Val':>12}"
+        f"{'Total Inv':>12}"
+        f"{'Total U/C':>12}"
     )
-    print("  " + "-" * 124)
+    print("  " + "-" * 160)
     for row in summary_rows:
         print(
             f"  {row['period']:<8}"
@@ -484,13 +522,209 @@ def check_last_12_months():
             f"{row['cbc_uc']:>12.2f}"
             f"{row['hbg_uc']:>12.2f}"
             f"{row['cbp_uc']:>12.2f}"
+            f"{row['total_value']:>12,}"
+            f"{row['total_inventory']:>12,}"
+            f"{row['total_uc']:>12.2f}"
         )
+
+
+def check_inventory_no_value_rows():
+    if not PICKLE_FILE.exists():
+        print()
+        print(f"Pickle file not found: {PICKLE_FILE}")
+        return
+
+    period = prompt_for_period()
+    if period is None:
+        return
+
+    df = load_existing_vertical_pickle()
+    period_df = df[df["period"].astype(str) == period].copy()
+    if period_df.empty:
+        print()
+        print(f"No rows were found in the pickle for period {period}.")
+        return
+
+    period_df = period_df[
+        period_df["Publisher"].fillna("").astype(str).str.strip() == "Chronicle"
+    ].copy()
+    period_df = period_df[
+        (pd.to_numeric(period_df["Inventory"], errors="coerce").fillna(0) != 0)
+        & (pd.to_numeric(period_df["Value"], errors="coerce").fillna(0) == 0)
+    ].copy()
+
+    if period_df.empty:
+        print()
+        print(f"No Chronicle rows with inventory and no value were found for period {period}.")
+        return
+
+    period_df["Inventory"] = pd.to_numeric(period_df["Inventory"], errors="coerce").fillna(0)
+    period_df["Value"] = pd.to_numeric(period_df["Value"], errors="coerce").fillna(0)
+    period_df = period_df.sort_values(["Inventory", "ISBN", "ORG"], ascending=[False, True, True])
+
+    print()
+    print(f"Chronicle rows with inventory but no value for period {period}:")
+    print("  " + "-" * 100)
+    print(f"  {'ISBN':<16}{'Title':<44}{'ORG':<8}{'Inventory':>16}{'Value':>16}")
+    print("  " + "-" * 100)
+    for _, row in period_df.iterrows():
+        title = ""
+        if pd.notna(row.get("Title")):
+            title = str(row["Title"])[:44]
+        print(
+            f"  {str(row['ISBN']):<16}"
+            f"{title:<44}"
+            f"{str(row['ORG']).upper():<8}"
+            f"{int(round(row['Inventory'])):>16,}"
+            f"{int(round(row['Value'])):>16,}"
+        )
+
+
+def check_value_no_inventory_rows():
+    if not PICKLE_FILE.exists():
+        print()
+        print(f"Pickle file not found: {PICKLE_FILE}")
+        return
+
+    period = prompt_for_period()
+    if period is None:
+        return
+
+    df = load_existing_vertical_pickle()
+    period_df = df[df["period"].astype(str) == period].copy()
+    if period_df.empty:
+        print()
+        print(f"No rows were found in the pickle for period {period}.")
+        return
+
+    period_df = period_df[
+        period_df["Publisher"].fillna("").astype(str).str.strip() == "Chronicle"
+    ].copy()
+    period_df = period_df[
+        (pd.to_numeric(period_df["Value"], errors="coerce").fillna(0) != 0)
+        & (pd.to_numeric(period_df["Inventory"], errors="coerce").fillna(0) == 0)
+    ].copy()
+
+    if period_df.empty:
+        print()
+        print(f"No Chronicle rows with value and no inventory were found for period {period}.")
+        return
+
+    period_df["Inventory"] = pd.to_numeric(period_df["Inventory"], errors="coerce").fillna(0)
+    period_df["Value"] = pd.to_numeric(period_df["Value"], errors="coerce").fillna(0)
+    period_df = period_df.sort_values(["Value", "ISBN", "ORG"], ascending=[False, True, True])
+
+    print()
+    print(f"Chronicle rows with value but no inventory for period {period}:")
+    print("  " + "-" * 100)
+    print(f"  {'ISBN':<16}{'Title':<44}{'ORG':<8}{'Value':>16}{'Inventory':>16}")
+    print("  " + "-" * 100)
+    for _, row in period_df.iterrows():
+        title = ""
+        if pd.notna(row.get("Title")):
+            title = str(row["Title"])[:44]
+        print(
+            f"  {str(row['ISBN']):<16}"
+            f"{title:<44}"
+            f"{str(row['ORG']).upper():<8}"
+            f"{int(round(row['Value'])):>16,}"
+            f"{int(round(row['Inventory'])):>16,}"
+        )
+
+
+def check_negative_rows():
+    if not PICKLE_FILE.exists():
+        print()
+        print(f"Pickle file not found: {PICKLE_FILE}")
+        return
+
+    period = prompt_for_period()
+    if period is None:
+        return
+
+    df = load_existing_vertical_pickle()
+    period_df = df[df["period"].astype(str) == period].copy()
+    if period_df.empty:
+        print()
+        print(f"No rows were found in the pickle for period {period}.")
+        return
+
+    period_df = period_df[
+        period_df["Publisher"].fillna("").astype(str).str.strip() == "Chronicle"
+    ].copy()
+    period_df["Inventory"] = pd.to_numeric(period_df["Inventory"], errors="coerce").fillna(0)
+    period_df["Value"] = pd.to_numeric(period_df["Value"], errors="coerce").fillna(0)
+    period_df = period_df[
+        (period_df["Value"] < 0) | (period_df["Inventory"] < 0)
+    ].copy()
+
+    if period_df.empty:
+        print()
+        print(f"No Chronicle rows with negative value or inventory were found for period {period}.")
+        return
+
+    period_df["SortMagnitude"] = period_df[["Value", "Inventory"]].abs().max(axis=1)
+    period_df = period_df.sort_values(
+        ["SortMagnitude", "ISBN", "ORG"], ascending=[False, True, True]
+    )
+
+    print()
+    print(f"Chronicle rows with negative value or inventory for period {period}:")
+    print("  " + "-" * 100)
+    print(f"  {'ISBN':<16}{'Title':<44}{'ORG':<8}{'Value':>16}{'Inventory':>16}")
+    print("  " + "-" * 100)
+    for _, row in period_df.iterrows():
+        title = ""
+        if pd.notna(row.get("Title")):
+            title = str(row["Title"])[:44]
+        print(
+            f"  {str(row['ISBN']):<16}"
+            f"{title:<44}"
+            f"{str(row['ORG']).upper():<8}"
+            f"{int(round(row['Value'])):>16,}"
+            f"{int(round(row['Inventory'])):>16,}"
+        )
+
+
+def run_invobs_from_depot():
+    period = prompt_for_period()
+    if period is None:
+        return
+
+    source_file = DESTINATION_FOLDER / f"All_Consolidated_Inventories_{period}.xlsx"
+    if not source_file.exists():
+        print()
+        print(f"Monthly consolidated file not found: {source_file}")
+        return
+
+    print()
+    print("Running Consolidate Inventory for the INVOBS...")
+    print(f"  Period:           {period}")
+    print(f"  Source workbook:  {source_file}")
+
+    script_path = REPO_ROOT / "invobs_consolidated_inventory" / "main.py"
+    try:
+        import subprocess
+
+        subprocess.run(
+            [
+                str(REPO_ROOT / "venv" / "Scripts" / "python"),
+                str(script_path),
+                "--source-file",
+                str(source_file),
+            ],
+            check=True,
+        )
+        print("The INVOBS consolidated inventory file is now ready.")
+    except subprocess.CalledProcessError:
+        print("An error occurred while running invobs_consolidated_inventory/main.py.")
 
 
 def coerce_vertical_dtypes(df: pd.DataFrame) -> pd.DataFrame:
     typed_df = df.copy()
     typed_df["period"] = typed_df["period"].astype("string")
     typed_df["ISBN"] = typed_df["ISBN"].astype("string")
+    typed_df["Title"] = typed_df["Title"].astype("string")
     typed_df["ORG"] = typed_df["ORG"].astype("string")
     typed_df["Publisher"] = typed_df["Publisher"].astype("string")
     typed_df["Value"] = pd.to_numeric(typed_df["Value"], errors="coerce").fillna(0)
@@ -508,22 +742,26 @@ def load_publisher_lookup() -> pd.DataFrame:
     cache_path = get_publisher_cache_path()
     if cache_path.exists():
         cached_df = pd.read_pickle(cache_path)
-        return cached_df[["ISBN", "Publisher"]].copy()
+        required_columns = {"ISBN", "Title", "Publisher"}
+        if required_columns.issubset(set(cached_df.columns)):
+            return cached_df[["ISBN", "Title", "Publisher"]].copy()
 
     engine = get_connection()
     publisher_df = fetch_data_from_db(engine, PUBLISHER_LOOKUP_SQL)
     if publisher_df.empty:
-        return pd.DataFrame(columns=["ISBN", "Publisher"])
+        return pd.DataFrame(columns=["ISBN", "Title", "Publisher"])
 
-    if "ISBN" not in publisher_df.columns or "Publisher" not in publisher_df.columns:
-        raise ValueError("Publisher lookup query must return ISBN and Publisher columns.")
+    required_columns = {"ISBN", "Title", "Publisher"}
+    if not required_columns.issubset(set(publisher_df.columns)):
+        raise ValueError("Publisher lookup query must return ISBN, Title, and Publisher columns.")
 
     publisher_df = publisher_df.copy()
     publisher_df["ISBN"] = publisher_df["ISBN"].map(normalize_isbn)
+    publisher_df["Title"] = publisher_df["Title"].astype("string").str.strip()
     publisher_df["Publisher"] = publisher_df["Publisher"].astype("string").str.strip()
     publisher_df = publisher_df[publisher_df["ISBN"].notna()].copy()
     publisher_df = publisher_df.drop_duplicates(subset=["ISBN"], keep="first")
-    publisher_df = publisher_df[["ISBN", "Publisher"]].reset_index(drop=True)
+    publisher_df = publisher_df[["ISBN", "Title", "Publisher"]].reset_index(drop=True)
 
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     publisher_df.to_pickle(cache_path)
@@ -534,6 +772,7 @@ def attach_publishers(df: pd.DataFrame) -> pd.DataFrame:
     publisher_lookup = load_publisher_lookup()
     if publisher_lookup.empty:
         enriched_df = df.copy()
+        enriched_df["Title"] = pd.Series(pd.NA, index=enriched_df.index, dtype="string")
         enriched_df["Publisher"] = pd.Series(pd.NA, index=enriched_df.index, dtype="string")
         return enriched_df
 
@@ -544,14 +783,16 @@ def attach_publishers(df: pd.DataFrame) -> pd.DataFrame:
 def load_existing_vertical_pickle() -> pd.DataFrame:
     if not PICKLE_FILE.exists():
         empty_df = pd.DataFrame(
-            columns=["period", "ISBN", "Publisher", "ORG", "Value", "Inventory"]
+            columns=["period", "ISBN", "Title", "Publisher", "ORG", "Value", "Inventory"]
         )
         return coerce_vertical_dtypes(empty_df)
 
     existing_df = pd.read_pickle(PICKLE_FILE)
-    expected_columns = ["period", "ISBN", "Publisher", "ORG", "Value", "Inventory"]
-    if "Publisher" not in existing_df.columns:
-        existing_df = attach_publishers(existing_df[["period", "ISBN", "ORG", "Value", "Inventory"]])
+    expected_columns = ["period", "ISBN", "Title", "Publisher", "ORG", "Value", "Inventory"]
+    if "Publisher" not in existing_df.columns or "Title" not in existing_df.columns:
+        existing_df = attach_publishers(
+            existing_df[["period", "ISBN", "ORG", "Value", "Inventory"]]
+        )
         existing_df.insert(0, "period", existing_df.pop("period"))
     missing_columns = [column for column in expected_columns if column not in existing_df.columns]
     if missing_columns:
@@ -618,7 +859,7 @@ def process_consolidated_file(source_file: Path, period: str):
     output_df = vertical_df[["ISBN", "ORG", "Value", "Inventory"]].copy()
     output_df.insert(0, "period", period)
     output_df = attach_publishers(output_df)
-    output_df = output_df[["period", "ISBN", "Publisher", "ORG", "Value", "Inventory"]]
+    output_df = output_df[["period", "ISBN", "Title", "Publisher", "ORG", "Value", "Inventory"]]
     combined_df = save_vertical_pickle(output_df)
 
     print()
@@ -641,7 +882,11 @@ def run_menu():
         print("    1. Add Monthly Consolidated File to Depot")
         print("    2. Update Vertical File")
         print("    3. Check Specific Period")
-        print("    4. Check Last 12 Months (CB Only)")
+        print("    4. Check Last N Months (CB Only)")
+        print("    5. Check Inventory With No Value (CB Only)")
+        print("    6. Check Value With No Inventory (CB Only)")
+        print("    7. Check Negative Value or Inventory (CB Only)")
+        print("    8. Consolidate Inventory for the INVOBS")
         print("    99. Exit")
         print()
         choice = input("Choose an option: ").strip().lower()
@@ -659,7 +904,23 @@ def run_menu():
             continue
 
         if choice == "4":
-            check_last_12_months()
+            check_last_n_months()
+            continue
+
+        if choice == "5":
+            check_inventory_no_value_rows()
+            continue
+
+        if choice == "6":
+            check_value_no_inventory_rows()
+            continue
+
+        if choice == "7":
+            check_negative_rows()
+            continue
+
+        if choice == "8":
+            run_invobs_from_depot()
             continue
 
         if choice in {"99", "exit", "quit", "q", "back", "b"}:

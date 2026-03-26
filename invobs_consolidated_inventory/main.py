@@ -1,9 +1,19 @@
+import argparse
+import sys
+from pathlib import Path
+
 import pandas as pd
 from tkinter import Tk
 from tkinter.filedialog import asksaveasfilename
 from dict_cdu import create_cdu_dict
 from dict_unit_cost2 import df_to_nested_dict
 from load_consolidated_inventory import consolidate_inventory
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from paths import process_paths
 
 def process_inventory(df_inventory, cdu_dict, dict_uc):
     # Initialize a list to store total units and values for each component ISBN
@@ -78,11 +88,13 @@ def process_inventory(df_inventory, cdu_dict, dict_uc):
     result_df['total_units'] = result_df['total_units_cbc'] + result_df['total_units_hbg'] + result_df['total_units_cbp']
     return result_df
 
-if __name__ == "__main__":
+def run(source_file=None):
     print(">>> Running your_main_script.py")
     # Create dictionaries
     dict_cdu = create_cdu_dict()
-    df_full_inventory = consolidate_inventory()  # This runs once
+    df_full_inventory = consolidate_inventory(source_file)  # This runs once
+    if df_full_inventory is None:
+        return
     dict_uc = df_to_nested_dict(df_full_inventory)
 
     df_inventory = df_full_inventory[['ISBN', 'units_cbc', 'units_hbg', 'units_cbp']]
@@ -113,3 +125,14 @@ if __name__ == "__main__":
         print(f"Results saved to {output_file_path}")
     else:
         print("No save location selected. Exiting.")
+
+
+def main():
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--source-file")
+    args, _ = parser.parse_known_args()
+    run(source_file=args.source_file)
+
+
+if __name__ == "__main__":
+    main()

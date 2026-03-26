@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import sys
+from pathlib import Path
 from tkinter import Tk
 import openpyxl
 from tkinter.filedialog import askopenfilename
@@ -26,6 +27,24 @@ def apply_filters(df, pgrp_filter, bkft_filter):
     df = df[df['bkft'].isin(bkft_filter)]
     df.reset_index(drop=True, inplace=True)
     return df
+
+
+def choose_data_sheet(sheet_names):
+    preferred_prefix = "all_consolidated_inventories_v_"
+    preferred_matches = [
+        sheet_name
+        for sheet_name in sheet_names
+        if sheet_name.lower().startswith(preferred_prefix)
+    ]
+    if preferred_matches:
+        return preferred_matches[0]
+
+    for sheet_name in sheet_names:
+        lower_name = sheet_name.lower()
+        if "consolidated" in lower_name:
+            return sheet_name
+
+    return sheet_names[0] if sheet_names else None
 
 # # Main function to execute the steps
 # def consolidate_inventory():
@@ -67,15 +86,20 @@ def apply_filters(df, pgrp_filter, bkft_filter):
     
 #     return df_filtered
 
-def consolidate_inventory():
+def consolidate_inventory(file_consolidated_inventory=None):
     print(">>> consolidate_inventory() started")
-    Tk().withdraw()
-    print(">>> File dialog opening...")
-    file_consolidated_inventory = askopenfilename(
-        title="Select the Consolidated Inventory File",
-        filetypes=[("Excel Files", "*.xlsx"), ("All Files", "*.*")]
-    )
-    print(f">>> File selected: {file_consolidated_inventory}")
+
+    if file_consolidated_inventory is None:
+        Tk().withdraw()
+        print(">>> File dialog opening...")
+        file_consolidated_inventory = askopenfilename(
+            title="Select the Consolidated Inventory File",
+            filetypes=[("Excel Files", "*.xlsx"), ("All Files", "*.*")]
+        )
+        print(f">>> File selected: {file_consolidated_inventory}")
+    else:
+        file_consolidated_inventory = str(Path(file_consolidated_inventory))
+        print(f">>> Using provided file: {file_consolidated_inventory}")
 
     if not file_consolidated_inventory:
         print("No file selected. Exiting.")
@@ -84,21 +108,10 @@ def consolidate_inventory():
     # List available sheet names
     wb = openpyxl.load_workbook(file_consolidated_inventory, read_only=True)
     sheetnames = wb.sheetnames
-    print("Available sheets:")
-    for idx, name in enumerate(sheetnames, 1):
-        print(f"{idx}: {name}")
-
-    # Prompt for sheet number
-    while True:
-        try:
-            sheet_num = int(input("Enter the number of the sheet to use: "))
-            if 1 <= sheet_num <= len(sheetnames):
-                sheet_name = sheetnames[sheet_num - 1]
-                break
-            else:
-                print(f"Please enter a number between 1 and {len(sheetnames)}.")
-        except ValueError:
-            print("Please enter a valid number.")
+    sheet_name = choose_data_sheet(sheetnames)
+    if sheet_name is None:
+        print("No worksheets were found. Exiting.")
+        return None
 
     print(f">>> Sheet selected: {sheet_name}")
 
