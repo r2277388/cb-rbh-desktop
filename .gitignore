@@ -53,6 +53,7 @@ pgrp_forecasts.csv
 # =========================
 *.pkl
 *.parquet
+bn_rolling_reports/cache/
 reprint_project/cache/saldet_cache.pkl
 reprint_project/cache/hachette_order_status_cache.pkl
 reprint_project/cache/inventory_cache.pkl

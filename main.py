@@ -65,9 +65,10 @@ def display_options():
         "11. UK Rolling File Combining",
         "12. Hachette Orders - Shipping Estimates",
         "13. Consolidate Inventory for the INVOBS",
-        "14. XGBoost Model",
-        "15. Check Table Updates",
-        "16. Desk Procedures",
+        "14. Consolidate Inventory Verticalization",
+        "15. XGBoost Model",
+        "16. Check Table Updates",
+        "17. Desk Procedures",
         "98. Graphical Menu",
         "99. Exit",
     ]
@@ -97,9 +98,10 @@ def display_info(choice):
         "13": """Consolidate Inventory for the INVOBS: Runs the Consolidated Inventory program for INVOBS.
         This program takes the consolidated inventory data from Oracle, run by Ailing, and
         explodes out the CDU's into their components to give a component-only inventory file.""",
-        "14": "XGBoost Model: Launches the xgboost_model workflow menu.",
-        "15": "Check Table Updates: Runs SQL checks for table freshness and recent weeks for SSR/Amazon/Bookscan tables.",
-        "16": "Desk Procedures: Opens a menu of desk procedures and run instructions.",
+        "14": "Consolidate Inventory Verticalization: Opens the inventory verticalization workflow menu, including adding a new month file to the consolidated inventory folder with a standard name.",
+        "15": "XGBoost Model: Launches the xgboost_model workflow menu.",
+        "16": "Check Table Updates: Runs SQL checks for table freshness and recent weeks for SSR/Amazon/Bookscan tables.",
+        "17": "Desk Procedures: Opens a menu of desk procedures and run instructions.",
         "98": "Graphical Menu: Opens a browser-based launcher for the available processes.",
         "99": "Exit: Exits the program.",
     }
@@ -544,8 +546,12 @@ def run_program(choice):
             "Consolidate Inventory for the INVOBS",
             "invobs_consolidated_inventory/main.py",
         ),
-        "14": ("XGBoost Model", "xgboost_model/main.py"),
-        "16": ("Desk Procedures", "desk_procedures/main.py"),
+        "14": (
+            "Consolidate Inventory Verticalization",
+            "consolidate_inventory_verticalization/main.py",
+        ),
+        "15": ("XGBoost Model", "xgboost_model/main.py"),
+        "17": ("Desk Procedures", "desk_procedures/main.py"),
     }
 
     if choice == "1":
@@ -621,11 +627,11 @@ def run_program(choice):
             print(f"An error occurred while running {script_path}.")
         return
 
-    if choice == "15":
+    if choice == "16":
         run_check_table_updates_menu()
         return
 
-    if choice == "16":
+    if choice == "17":
         print("Opening Desk Procedures...")
         try:
             subprocess.run(["venv/Scripts/python", "desk_procedures/main.py"], check=True)

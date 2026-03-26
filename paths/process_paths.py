@@ -35,6 +35,9 @@ INGRAM_DAILY_REPORT_FOLDER = Path(
 BN_WEEKLY_REPORT_FOLDER = Path(
     r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Barnes & Noble"
 )
+CONSOLIDATED_INVENTORY_VERTICALIZATION_FOLDER = Path(
+    r"F:\RBH_Finternal\consolidated_inventory"
+)
 INVENTORY_DAILY_FINANCE_ONLY_FOLDER = Path(r"G:\OPS\Inventory\Daily\Finance_Only")
 CURRENT_AMAZON_PREORDERS_FILE = Path(
     r"G:\SALES\Amazon\PREORDERS\2026\current_amaz_preorders.xlsx"
@@ -130,6 +133,9 @@ AMAZON_ROLLING_SQL_FILE = repo_path(
     "shared", "sql", "amazon_rolling_reports", "last_10_weeks.sql"
 )
 AMAZON_ROLLING_REPORTS_SCRIPT = repo_path("amazon_rolling_reports", "main.py")
+CONSOLIDATED_INVENTORY_VERTICALIZATION_SCRIPT = repo_path(
+    "consolidate_inventory_verticalization", "main.py"
+)
 AMAZON_ROLLING_CUSTOMER_ORDERS_PICKLE = repo_path("rr_customer_orders.pkl")
 AMAZON_ROLLING_UNITS_SHIPPED_PICKLE = repo_path("rr_units_shipped.pkl")
 AMAZON_ROLLING_PO_PICKLE = repo_path("latest_amazon_po.pkl")
