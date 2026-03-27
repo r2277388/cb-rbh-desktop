@@ -2,10 +2,11 @@ import shutil
 import sys
 import re
 import argparse
+import getpass
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
-from tkinter import Tk, filedialog
+from tkinter import Tk, filedialog, messagebox
 
 import pandas as pd
 
@@ -23,6 +24,17 @@ DESTINATION_FOLDER = process_paths.CONSOLIDATED_INVENTORY_VERTICALIZATION_FOLDER
 DEFAULT_SOURCE_FOLDER = Path(r"F:\2026\Oracle Reports")
 ORG_CODES = {"cbc", "hbg", "cbp"}
 PICKLE_FILE = DESTINATION_FOLDER / "ConsolidatedInventory.pkl"
+SHAREPOINT_FOLDER_SUFFIX = Path(
+    r"OneDrive - chroniclebooks.com\CB Fabric and Power BI Project - Excel Data and Reports Needed for Power BI"
+)
+KNOWN_SHAREPOINT_FOLDERS = {
+    "rbh": Path(
+        r"C:\Users\rbh\OneDrive - chroniclebooks.com\CB Fabric and Power BI Project - Excel Data and Reports Needed for Power BI"
+    ),
+    "sdm": Path(
+        r"C:\Users\sdm\OneDrive - chroniclebooks.com\CB Fabric and Power BI Project - Excel Data and Reports Needed for Power BI"
+    ),
+}
 PUBLISHER_CACHE_DIR = DESTINATION_FOLDER / "cache"
 PUBLISHER_LOOKUP_SQL = """
 SELECT
@@ -127,6 +139,30 @@ def prompt_for_month_count() -> int | None:
         return month_count
 
 
+def prompt_for_row_count() -> int | None:
+    while True:
+        print()
+        raw_value = input("Enter how many rows to display, or type 'back': ").strip()
+
+        if not raw_value:
+            print("A row count is required.")
+            continue
+
+        if raw_value.lower() in {"back", "b", "return", "menu"}:
+            return None
+
+        if not raw_value.isdigit():
+            print("Invalid entry. Please enter a whole number.")
+            continue
+
+        row_count = int(raw_value)
+        if row_count <= 0:
+            print("Row count must be greater than zero.")
+            continue
+
+        return row_count
+
+
 def confirm_overwrite(destination: Path) -> bool:
     while True:
         print()
@@ -177,6 +213,61 @@ def add_new_month_file():
     print()
     print(f"Saved: {destination}")
     inspect_saved_workbook(destination)
+
+
+def show_last_10_depot_files():
+    DESTINATION_FOLDER.mkdir(parents=True, exist_ok=True)
+
+    files = sorted(
+        DESTINATION_FOLDER.glob("All_Consolidated_Inventories_*.xlsx"),
+        key=lambda path: path.name,
+        reverse=True,
+    )[:10]
+
+    print()
+    print("Last 10 Consolidated Inventories in the Depot:")
+    if not files:
+        print("  No consolidated inventory files were found.")
+        return
+
+    for file_path in files:
+        modified = datetime.fromtimestamp(file_path.stat().st_mtime).strftime("%Y-%m-%d %I:%M:%S %p")
+        print(f"  {file_path.name}  |  {modified}")
+
+
+def view_depot_location():
+    print()
+    print("ConInv Depot location:")
+    print(f"  {DESTINATION_FOLDER}")
+
+
+def run_depot_menu():
+    while True:
+        print("\nBash Depot Files")
+        print()
+        print("    1. Add Monthly Consolidated File to Bash Depot")
+        print("    2. View Last 10 Consolidated Inventories in the Depot")
+        print("    3. View Location of Bash Depot")
+        print("    4. Back")
+        print()
+        choice = input("Choose an option: ").strip().lower()
+
+        if choice == "1":
+            add_new_month_file()
+            continue
+
+        if choice == "2":
+            show_last_10_depot_files()
+            continue
+
+        if choice == "3":
+            view_depot_location()
+            continue
+
+        if choice in {"4", "back", "b", "return", "menu"}:
+            return
+
+        print("Invalid choice. Please select a valid option.")
 
 
 def inspect_saved_workbook(workbook_path: Path):
@@ -439,6 +530,35 @@ def check_specific_period():
             print(f"  {org:<8}{value:>14,}{inventory:>16,}{uc_avg:>13.2f}")
         print("  " + "-" * 61)
         print(f"  {'TOTAL':<8}{total_value:>14,}{total_inventory:>16,}{total_uc_avg:>13.2f}")
+
+
+def preview_verticalized_coninv():
+    if not PICKLE_FILE.exists():
+        print()
+        print(f"Pickle file not found: {PICKLE_FILE}")
+        return
+
+    period = prompt_for_period()
+    if period is None:
+        return
+
+    row_count = prompt_for_row_count()
+    if row_count is None:
+        return
+
+    df = load_existing_vertical_pickle()
+    period_df = df[df["period"].astype(str) == period].copy()
+    if period_df.empty:
+        print()
+        print(f"No rows were found in the pickle for period {period}.")
+        return
+
+    period_df = period_df.sort_values(["ISBN", "ORG"]).reset_index(drop=True)
+    preview_df = period_df.head(row_count).copy()
+
+    print()
+    print(f"Top {len(preview_df):,} rows of verticalized ConInv for SharePoint ({period}):")
+    print(preview_df.to_string(index=False))
 
 
 def check_last_n_months():
@@ -842,6 +962,90 @@ def update_vertical_file():
     process_consolidated_file(source_file, period)
 
 
+def show_last_10_periods_in_sharepoint_file():
+    if not PICKLE_FILE.exists():
+        print()
+        print(f"Pickle file not found: {PICKLE_FILE}")
+        return
+
+    df = load_existing_vertical_pickle()
+    periods = sorted(df["period"].astype(str).unique().tolist(), reverse=True)[:10]
+
+    print()
+    print("Last 10 periods in the SharePoint file:")
+    if not periods:
+        print("  No periods were found.")
+        return
+
+    for period in periods:
+        print(f"  {period}")
+
+
+def refresh_verticalized_coninv_to_sharepoint():
+    if not PICKLE_FILE.exists():
+        print()
+        print(f"Source pickle not found: {PICKLE_FILE}")
+        return
+
+    username = getpass.getuser().strip().lower()
+    sharepoint_destination_folder = KNOWN_SHAREPOINT_FOLDERS.get(username)
+    if sharepoint_destination_folder is None:
+        sharepoint_destination_folder = Path(r"C:\Users") / username / SHAREPOINT_FOLDER_SUFFIX
+
+    if not sharepoint_destination_folder.exists():
+        desktop_pickle_file = Path.home() / "Desktop" / "Consolidated_Inventory.pkl"
+        shutil.copy2(PICKLE_FILE, desktop_pickle_file)
+        root = Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        try:
+            messagebox.showwarning(
+                "CB Fabric Folder Not Found",
+                "I don't see your link to the 'CB Fabric' folder.\n\n"
+                f"I saved a copy here:\n{desktop_pickle_file}\n\n"
+                "You'll have to upload it yourself.",
+            )
+        finally:
+            root.destroy()
+
+        print()
+        print("SharePoint destination folder was not found.")
+        print(f"Saved a manual-upload copy to: {desktop_pickle_file}")
+        return
+
+    sharepoint_pickle_file = sharepoint_destination_folder / "Consolidated_Inventory.pkl"
+    shutil.copy2(PICKLE_FILE, sharepoint_pickle_file)
+
+    print()
+    print("Refreshed verticalized ConInv to SharePoint:")
+    print(f"  Source:       {PICKLE_FILE}")
+    print(f"  Destination:  {sharepoint_pickle_file}")
+
+
+def run_verticalize_menu():
+    while True:
+        print("\nVerticalize ConInv in Bash Depot and Add to pickle file")
+        print()
+        print("    1. Verticalize file from Bash Depot and append to pickle file")
+        print("    2. See Last 10 Periods In SharePoint file")
+        print("    3. Back")
+        print()
+        choice = input("Choose an option: ").strip().lower()
+
+        if choice == "1":
+            update_vertical_file()
+            continue
+
+        if choice == "2":
+            show_last_10_periods_in_sharepoint_file()
+            continue
+
+        if choice in {"3", "back", "b", "return", "menu"}:
+            return
+
+        print("Invalid choice. Please select a valid option.")
+
+
 def process_consolidated_file(source_file: Path, period: str):
     excel_file = pd.ExcelFile(source_file)
     selected_sheet = choose_data_sheet(excel_file)
@@ -877,49 +1081,59 @@ def process_consolidated_file(source_file: Path, period: str):
 
 def run_menu():
     while True:
-        print("\nConsolidate Inventory Verticalization")
+        print("\nConsolidated Inventory Manager (ConInv)")
         print()
-        print("    1. Add Monthly Consolidated File to Depot")
-        print("    2. Update Vertical File")
-        print("    3. Check Specific Period")
-        print("    4. Check Last N Months (CB Only)")
-        print("    5. Check Inventory With No Value (CB Only)")
-        print("    6. Check Value With No Inventory (CB Only)")
-        print("    7. Check Negative Value or Inventory (CB Only)")
-        print("    8. Consolidate Inventory for the INVOBS")
+        print("    1. Add New ConInv Report to Bash Depot")
+        print("    2. Verticalize ConInv from Bash Depot into Pickle")
+        print("    3. Copy ConInv Pickle to SharePoint")
+        print("    4. Summarize/View Top N Rows of ConInv (Pickle file)")
+        print("    5. Summarize a Specific Verticalized Month (Period) of the ConInv (Pickle file)")
+        print("    6. Summarize Last N Months (CB Only) of ConInv (Pickle file)")
+        print("    7. Summarize Rows of ConInv (Pickle file) with Inventory but No Value (CB Only) e.g. CDUs")
+        print("    8. Summarize Rows of ConInv (Pickle file) with Values but No Inventory (CB Only)")
+        print("    9. Summarize Chronicle Rows of ConInv with Negative Values or Negative Inventory")
+        print("    10. Consolidate Inventory for the INVOBS")
         print("    99. Exit")
         print()
         choice = input("Choose an option: ").strip().lower()
 
         if choice == "1":
-            add_new_month_file()
+            run_depot_menu()
             continue
 
         if choice == "2":
-            update_vertical_file()
+            run_verticalize_menu()
             continue
 
         if choice == "3":
-            check_specific_period()
+            refresh_verticalized_coninv_to_sharepoint()
             continue
 
         if choice == "4":
-            check_last_n_months()
+            preview_verticalized_coninv()
             continue
 
         if choice == "5":
-            check_inventory_no_value_rows()
+            check_specific_period()
             continue
 
         if choice == "6":
-            check_value_no_inventory_rows()
+            check_last_n_months()
             continue
 
         if choice == "7":
-            check_negative_rows()
+            check_inventory_no_value_rows()
             continue
 
         if choice == "8":
+            check_value_no_inventory_rows()
+            continue
+
+        if choice == "9":
+            check_negative_rows()
+            continue
+
+        if choice == "10":
             run_invobs_from_depot()
             continue
 
