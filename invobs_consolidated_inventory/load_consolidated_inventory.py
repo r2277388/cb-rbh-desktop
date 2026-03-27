@@ -1,158 +1,102 @@
-import pandas as pd
-import numpy as np
 import sys
 from pathlib import Path
-from tkinter import Tk
-import openpyxl
-from tkinter.filedialog import askopenfilename
 
-# Function to load the data
-def load_data(file_path, sheet_name):
-    df = pd.read_excel(file_path,
-                       skiprows=3,
-                       na_values=[''],
-                       sheet_name=sheet_name,
-                       keep_default_na=False)
-    df = df.fillna(0)
-    df.columns = [
-        "Item", "pgrp", "bkft", "title", "price", "ship", "ans", "uc_cbc", "uc_hbg", 
-        "uc_cbp", "uc_all", "val_cbc", "units_cbc", "val_hbg", "units_hbg", 
-        "val_cbp", "units_cbp", "total_Units", "total_value"
-    ]
-    return df
+import pandas as pd
 
-# Function to apply filters
-def apply_filters(df, pgrp_filter, bkft_filter):
-    df = df[df['pgrp'].isin(pgrp_filter)]
-    df = df[df['bkft'].isin(bkft_filter)]
-    df.reset_index(drop=True, inplace=True)
-    return df
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from bn_rolling_reports.isbn_utils import normalize_isbn
+from paths import process_paths
+from shared.db.connection import get_connection
+from shared.db.query_runner import fetch_data_from_db
+
+CONINV_PICKLE_FILE = process_paths.CONSOLIDATED_INVENTORY_VERTICALIZATION_FOLDER / "ConsolidatedInventory.pkl"
+INVOBS_ALLOWED_ISBNS_SQL = """
+SELECT
+    i.ITEM_TITLE AS ISBN
+FROM ebs.item i
+WHERE
+    i.ISBN IS NOT NULL
+    AND i.PUBLISHING_GROUP NOT IN ('MKT', 'ZZZ')
+    AND i.PUBLISHER_CODE = 'Chronicle'
+    AND i.PRODUCT_TYPE IN ('BK', 'FT', 'RP', 'CP')
+"""
 
 
-def choose_data_sheet(sheet_names):
-    preferred_prefix = "all_consolidated_inventories_v_"
-    preferred_matches = [
-        sheet_name
-        for sheet_name in sheet_names
-        if sheet_name.lower().startswith(preferred_prefix)
-    ]
-    if preferred_matches:
-        return preferred_matches[0]
+def load_allowed_invobs_isbns() -> set[str]:
+    engine = get_connection()
+    df = fetch_data_from_db(engine, INVOBS_ALLOWED_ISBNS_SQL)
+    if "ISBN" not in df.columns:
+        raise ValueError("INVOBS ISBN query must return an ISBN column.")
 
-    for sheet_name in sheet_names:
-        lower_name = sheet_name.lower()
-        if "consolidated" in lower_name:
-            return sheet_name
+    return {
+        isbn
+        for isbn in (normalize_isbn(value) for value in df["ISBN"].dropna().tolist())
+        if isbn
+    }
 
-    return sheet_names[0] if sheet_names else None
 
-# # Main function to execute the steps
-# def consolidate_inventory():
-#     print(">>> consolidate_inventory() started")
-#     # Open a file dialog to select the input file
-#     Tk().withdraw()  # Hide the root Tkinter window
-#     print(">>> File dialog opening...")
-#     file_consolidated_inventory = askopenfilename(
-#         title="Select the Consolidated Inventory File",
-#         filetypes=[("Excel Files", "*.xlsx"), ("All Files", "*.*")]
-#     )
-    
-#     print(f">>> File selected: {file_consolidated_inventory}")
-    
-#     if not file_consolidated_inventory:
-#         print("No file selected. Exiting.")
-#         return None
+def consolidate_inventory_from_pickle(period: str) -> pd.DataFrame:
+    if not CONINV_PICKLE_FILE.exists():
+        raise FileNotFoundError(f"ConInv pickle not found: {CONINV_PICKLE_FILE}")
 
-#     print(">>> Asking for sheet name 1")
-#     # Prompt the user for the sheet name
-#     sheet_name = input("Enter the name of the sheet containing the data: ")
-#     print(f">>> Sheet name received: {sheet_name}")
+    df = pd.read_pickle(CONINV_PICKLE_FILE).copy()
+    df["period"] = df["period"].astype(str)
+    df["ISBN"] = df["ISBN"].astype(str).str.strip()
+    df["ORG"] = df["ORG"].astype(str).str.lower().str.strip()
+    df["Publisher"] = df["Publisher"].astype(str).str.strip()
+    df["Value"] = pd.to_numeric(df["Value"], errors="coerce").fillna(0)
+    df["Inventory"] = pd.to_numeric(df["Inventory"], errors="coerce").fillna(0)
 
-#     # Load data
-#     df = load_data(file_consolidated_inventory, sheet_name)
-    
-#     # Filters
-#     pgrp_filter = ['ART', 'LIF', 'CHL', 'ENT', 'FWN', 'PTC', 'RID', 'GAM', 'BAR-LIF', 'BAR-ENT', 'BAR-ART', 'CCB', 'CPB','CPA']
-#     bkft_filter = ['BK', 'FT','CP','RP']
-    
-#     # Apply filters
-#     df_filtered = apply_filters(df, pgrp_filter, bkft_filter)
-    
-#     # Rename column correctly
-#     df_filtered = df_filtered.rename(columns={'Item': 'ISBN'})
-    
-#     # Ensure ISBN is 13 digits
-#     df_filtered['ISBN'] = df_filtered['ISBN'].astype(str).str.zfill(13)
-    
-#     return df_filtered
+    df = df[df["period"] == str(period)].copy()
+    if df.empty:
+        raise ValueError(f"No ConInv rows were found for period {period}.")
 
-def consolidate_inventory(file_consolidated_inventory=None):
-    print(">>> consolidate_inventory() started")
+    allowed_isbns = load_allowed_invobs_isbns()
+    df = df[df["ISBN"].isin(allowed_isbns)].copy()
+    if df.empty:
+        raise ValueError(f"No Chronicle BK/FT/RP/CP ISBN rows remained for period {period}.")
 
-    if file_consolidated_inventory is None:
-        Tk().withdraw()
-        print(">>> File dialog opening...")
-        file_consolidated_inventory = askopenfilename(
-            title="Select the Consolidated Inventory File",
-            filetypes=[("Excel Files", "*.xlsx"), ("All Files", "*.*")]
+    pivot = (
+        df.pivot_table(
+            index="ISBN",
+            columns="ORG",
+            values=["Value", "Inventory"],
+            aggfunc="sum",
+            fill_value=0,
         )
-        print(f">>> File selected: {file_consolidated_inventory}")
-    else:
-        file_consolidated_inventory = str(Path(file_consolidated_inventory))
-        print(f">>> Using provided file: {file_consolidated_inventory}")
+        .sort_index(axis=1)
+        .reset_index()
+    )
 
-    if not file_consolidated_inventory:
-        print("No file selected. Exiting.")
-        return None
+    pivot.columns = [
+        "ISBN" if col == ("ISBN", "") else f"{col[0].lower()}_{col[1].lower()}"
+        for col in pivot.columns.to_flat_index()
+    ]
 
-    # List available sheet names
-    wb = openpyxl.load_workbook(file_consolidated_inventory, read_only=True)
-    sheetnames = wb.sheetnames
-    sheet_name = choose_data_sheet(sheetnames)
-    if sheet_name is None:
-        print("No worksheets were found. Exiting.")
-        return None
+    result = pd.DataFrame()
+    result["ISBN"] = pivot["ISBN"]
+    result["val_cbc"] = pivot["value_cbc"] if "value_cbc" in pivot.columns else 0
+    result["val_hbg"] = pivot["value_hbg"] if "value_hbg" in pivot.columns else 0
+    result["val_cbp"] = pivot["value_cbp"] if "value_cbp" in pivot.columns else 0
+    result["units_cbc"] = pivot["inventory_cbc"] if "inventory_cbc" in pivot.columns else 0
+    result["units_hbg"] = pivot["inventory_hbg"] if "inventory_hbg" in pivot.columns else 0
+    result["units_cbp"] = pivot["inventory_cbp"] if "inventory_cbp" in pivot.columns else 0
+    return result
 
-    print(f">>> Sheet selected: {sheet_name}")
 
-    # Load data
-    print(f">>> Loading data from sheet: {sheet_name}")
-    df = load_data(file_consolidated_inventory, sheet_name)
-    print(">>> Data loaded!")
-    print("Loaded DataFrame shape:", df.shape)
-
-    # Filters
-    pgrp_filter = ['ART', 'LIF', 'CHL', 'ENT', 'FWN', 'PTC', 'RID', 'GAM', 'BAR-LIF', 'BAR-ENT', 'BAR-ART', 'CCB', 'CPB','CPA']
-    bkft_filter = ['BK', 'FT','CP','RP']
-
-    # Apply filters
-    print(">>> Applying filters...")
-    df_filtered = apply_filters(df, pgrp_filter, bkft_filter)
-    print(">>> Filters applied.")
-    print("Filtered DataFrame shape:", df_filtered.shape)
-
-    # Rename column correctly
-    print(">>> Renaming column...")
-    df_filtered = df_filtered.rename(columns={'Item': 'ISBN'})
-    print(">>> Column renamed.")
-    print("Filtered DataFrame shape after renaming:", df_filtered.shape)
-
-    # Ensure ISBN is 13 digits
-    print(">>> Padding ISBN...")
-    df_filtered['ISBN'] = df_filtered['ISBN'].astype(str).str.zfill(13)
-    print(">>> ISBN padded.")
-    print("Filtered DataFrame shape after padding:", df_filtered.shape)
-    print(df_filtered.info())
-
-    return df_filtered
+def consolidate_inventory(period):
+    print(">>> consolidate_inventory() started")
+    print(f">>> Loading ConInv from pickle for period: {period}")
+    df_from_pickle = consolidate_inventory_from_pickle(str(period))
+    print(">>> ConInv pickle data loaded!")
+    print("Loaded DataFrame shape:", df_from_pickle.shape)
+    return df_from_pickle
 
 def main():
-    print(">>> You should NOT see this if running from main3.py")
-    df = consolidate_inventory()
-    print(df.shape)
-    # if df is not None:
-    #     print(df.info())
-    #     print(df.head())
+    raise SystemExit("Use consolidate_inventory(period) or run main.py with --period.")
 
 if __name__ == "__main__":
     main()

@@ -88,11 +88,11 @@ def process_inventory(df_inventory, cdu_dict, dict_uc):
     result_df['total_units'] = result_df['total_units_cbc'] + result_df['total_units_hbg'] + result_df['total_units_cbp']
     return result_df
 
-def run(source_file=None):
-    print(">>> Running your_main_script.py")
+def run(period):
+    print(">>> Running pickle-based INVOBS flow")
     # Create dictionaries
     dict_cdu = create_cdu_dict()
-    df_full_inventory = consolidate_inventory(source_file)  # This runs once
+    df_full_inventory = consolidate_inventory(period)
     if df_full_inventory is None:
         return
     dict_uc = df_to_nested_dict(df_full_inventory)
@@ -109,6 +109,7 @@ def run(source_file=None):
     Tk().withdraw()  # Hide the root Tkinter window
     output_file_path = asksaveasfilename(
         title="Save the Consolidated Inventory File",
+        initialfile=f"Consolidated_Inventory_{period}.xlsx",
         defaultextension=".xlsx",
         filetypes=[("Excel Files", "*.xlsx"), ("All Files", "*.*")]
     )
@@ -129,9 +130,9 @@ def run(source_file=None):
 
 def main():
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--source-file")
+    parser.add_argument("--period", required=True)
     args, _ = parser.parse_known_args()
-    run(source_file=args.source_file)
+    run(period=args.period)
 
 
 if __name__ == "__main__":

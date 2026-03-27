@@ -811,16 +811,10 @@ def run_invobs_from_depot():
     if period is None:
         return
 
-    source_file = DESTINATION_FOLDER / f"All_Consolidated_Inventories_{period}.xlsx"
-    if not source_file.exists():
-        print()
-        print(f"Monthly consolidated file not found: {source_file}")
-        return
-
     print()
     print("Running Consolidate Inventory for the INVOBS...")
     print(f"  Period:           {period}")
-    print(f"  Source workbook:  {source_file}")
+    print(f"  Source pickle:    {PICKLE_FILE}")
 
     script_path = REPO_ROOT / "invobs_consolidated_inventory" / "main.py"
     try:
@@ -830,8 +824,8 @@ def run_invobs_from_depot():
             [
                 str(REPO_ROOT / "venv" / "Scripts" / "python"),
                 str(script_path),
-                "--source-file",
-                str(source_file),
+                "--period",
+                str(period),
             ],
             check=True,
         )

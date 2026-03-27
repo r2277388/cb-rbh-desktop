@@ -21,7 +21,7 @@ PROCEDURES = {
         "path": BASE_DIR / "procedures" / "launcher_process_runbook.html",
     },
     "4": {
-        "title": "Update INVOBS Consolidated Inventory",
+        "title": "Update Consolidated Inventory Manager (ConInv)",
         "type": "html",
         "path": BASE_DIR / "procedures" / "update_invobs_consolidated_inventory.html",
     },
