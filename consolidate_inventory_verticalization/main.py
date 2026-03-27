@@ -139,6 +139,26 @@ def prompt_for_month_count() -> int | None:
         return month_count
 
 
+def prompt_for_isbn() -> str | None:
+    while True:
+        print()
+        raw_value = input("Enter the ISBN to review, or type 'back': ").strip()
+
+        if not raw_value:
+            print("An ISBN is required.")
+            continue
+
+        if raw_value.lower() in {"back", "b", "return", "menu"}:
+            return None
+
+        normalized = normalize_isbn(raw_value)
+        if normalized is None:
+            print("Invalid ISBN. Enter a numeric ISBN/EAN.")
+            continue
+
+        return normalized
+
+
 def prompt_for_row_count() -> int | None:
     while True:
         print()
@@ -648,6 +668,111 @@ def check_last_n_months():
         )
 
 
+def check_last_n_months_for_isbn():
+    if not PICKLE_FILE.exists():
+        print()
+        print(f"Pickle file not found: {PICKLE_FILE}")
+        return
+
+    df = load_existing_vertical_pickle()
+    if df.empty:
+        print()
+        print("The pickle file is empty.")
+        return
+
+    isbn = prompt_for_isbn()
+    if isbn is None:
+        return
+
+    month_count = prompt_for_month_count()
+    if month_count is None:
+        return
+
+    df = df.copy()
+    df["period"] = df["period"].astype(str)
+    df["ORG"] = df["ORG"].astype(str).str.lower().str.strip()
+    recent_periods = sorted(df["period"].unique().tolist())[-month_count:]
+
+    isbn_df = df[df["ISBN"] == isbn].copy()
+    if isbn_df.empty:
+        print()
+        print(f"No rows were found in the pickle for ISBN {isbn}.")
+        return
+
+    display_title = ""
+    title_series = isbn_df["Title"].dropna().astype(str).str.strip()
+    if not title_series.empty:
+        display_title = title_series.iloc[0]
+
+    display_publisher = ""
+    publisher_series = isbn_df["Publisher"].dropna().astype(str).str.strip()
+    if not publisher_series.empty:
+        display_publisher = publisher_series.iloc[0]
+
+    summary_rows = []
+    for period in sorted(recent_periods, reverse=True):
+        period_df = isbn_df[isbn_df["period"] == period].copy()
+        row = {
+            "period": period,
+            "row_count": int(len(period_df)),
+        }
+        for org in ["cbc", "hbg", "cbp"]:
+            org_df = period_df[period_df["ORG"] == org]
+            org_value = float(org_df["Value"].sum())
+            org_inventory = float(org_df["Inventory"].sum())
+            row[f"{org}_value"] = int(round(org_value))
+            row[f"{org}_inventory"] = int(round(org_inventory))
+            row[f"{org}_uc"] = (org_value / org_inventory) if org_inventory else 0
+        total_value = float(period_df["Value"].sum())
+        total_inventory = float(period_df["Inventory"].sum())
+        row["total_value"] = int(round(total_value))
+        row["total_inventory"] = int(round(total_inventory))
+        row["total_uc"] = (total_value / total_inventory) if total_inventory else 0
+        summary_rows.append(row)
+
+    print()
+    print(f"Last {len(recent_periods)} months for ISBN {isbn}:")
+    if display_title:
+        print(f"  Title:      {display_title}")
+    if display_publisher:
+        print(f"  Publisher:  {display_publisher}")
+    print("  " + "-" * 160)
+    print(
+        f"  {'Period':<8}"
+        f"{'Rows':>8}"
+        f"{'CBC Val':>12}"
+        f"{'HBG Val':>12}"
+        f"{'CBP Val':>12}"
+        f"{'CBC Inv':>12}"
+        f"{'HBG Inv':>12}"
+        f"{'CBP Inv':>12}"
+        f"{'CBC U/C':>12}"
+        f"{'HBG U/C':>12}"
+        f"{'CBP U/C':>12}"
+        f"{'Total Val':>12}"
+        f"{'Total Inv':>12}"
+        f"{'Total U/C':>12}"
+    )
+    print("  " + "-" * 160)
+    for row in summary_rows:
+        print(
+            f"  {row['period']:<8}"
+            f"{row['row_count']:>8,}"
+            f"{row['cbc_value']:>12,}"
+            f"{row['hbg_value']:>12,}"
+            f"{row['cbp_value']:>12,}"
+            f"{row['cbc_inventory']:>12,}"
+            f"{row['hbg_inventory']:>12,}"
+            f"{row['cbp_inventory']:>12,}"
+            f"{row['cbc_uc']:>12.2f}"
+            f"{row['hbg_uc']:>12.2f}"
+            f"{row['cbp_uc']:>12.2f}"
+            f"{row['total_value']:>12,}"
+            f"{row['total_inventory']:>12,}"
+            f"{row['total_uc']:>12.2f}"
+        )
+
+
 def check_inventory_no_value_rows():
     if not PICKLE_FILE.exists():
         print()
@@ -1087,6 +1212,7 @@ def run_menu():
         print("    8. Summarize Rows of ConInv (Pickle file) with Values but No Inventory (CB Only)")
         print("    9. Summarize Chronicle Rows of ConInv with Negative Values or Negative Inventory")
         print("    10. Consolidate Inventory for the INVOBS")
+        print("    11. Summarize Last N Months of Total U/C for One ISBN")
         print("    99. Exit")
         print()
         choice = input("Choose an option: ").strip().lower()
@@ -1129,6 +1255,10 @@ def run_menu():
 
         if choice == "10":
             run_invobs_from_depot()
+            continue
+
+        if choice == "11":
+            check_last_n_months_for_isbn()
             continue
 
         if choice in {"99", "exit", "quit", "q", "back", "b"}:
