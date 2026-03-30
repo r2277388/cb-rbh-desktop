@@ -60,6 +60,7 @@ def save_reports_by_pub(
                 summary=pub_summary,
                 format_cols=pub_format_cols,
                 decimal_cols=decimal_cols,
+                rolling_main_layout=True,
             )
             print(f"Saved {report_type} for {pub} to {filepath}")
             print()
@@ -152,6 +153,7 @@ def main():
         summary=totals_co,
         format_cols=format_cols,
         decimal_cols=decimal_cols,
+        rolling_main_layout=True,
     )
     # Saving to the dp folders
     print("Saving to the dp folders...")
@@ -198,6 +200,7 @@ def main():
         summary=totals_us,
         format_cols=format_cols,
         decimal_cols=decimal_cols,
+        rolling_main_layout=True,
     )
     # Saving to the dp folders
     print("Saving to the dp folders...")

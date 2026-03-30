@@ -213,7 +213,17 @@ def confirm_amazon_sql_upload_files() -> bool:
         print(f"  Manual key file:   {manual_key_path}")
         print(f"  Removal list file: {removal_list_path}")
         print("  SQL source:        sql-2-db / CBQ2 (EBS item ISBN key)")
-        print("  Output workbook:   Chosen in save dialog after the process starts")
+        print(
+            f"  Default output:    {process_paths.amazon_sql_upload_output_file()}"
+        )
+        print(
+            f"  Output folder:     {process_paths.AMAZON_SQL_UPLOAD_OUTPUT_DIR}"
+        )
+        print(
+            f"  Weekly workbook:   {process_paths.AMAZON_WEEKLY_REPORTS_DIR}\\w##_yyyy_mm_dd.xlsx"
+        )
+        print("  Weekly cbq upload workbook:   Auto-created from the cleaned six-column dataset")
+        print("  Save dialog:       Opens with this default file prefilled")
         print()
         print("    1. Continue")
         print("    2. Return to main menu")

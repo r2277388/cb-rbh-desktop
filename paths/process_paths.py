@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import datetime
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -13,6 +14,7 @@ ORACLE_YPTICOD_FILE = Path(r"J:\Metadata Reports\Oracle YPTICOD.xlsx")
 AMAZON_WEEKLY_BASE_FOLDER = Path(
     r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Amazon"
 )
+AMAZON_WEEKLY_REPORTS_DIR = AMAZON_WEEKLY_BASE_FOLDER
 USER_DESKTOP = Path(r"C:\Users\rbh\Desktop")
 AMAZON_SQL_UPLOAD_SOURCE_FOLDERS = {
     "sales": AMAZON_WEEKLY_BASE_FOLDER / "Sales",
@@ -50,6 +52,7 @@ CHRONICLE_ASIN_MAPPING_FILE = DOWNLOADS_FOLDER / "Chronicle-AsinMapping.xlsx"
 AMAZON_CUSTOMER_ORDERS_OUTPUT_FILE = Path(
     r"G:\SALES\Amazon\RBH\weekly_customer_order\atelier\amazon_weekly_customer_order_py.xlsx"
 )
+AMAZON_SQL_UPLOAD_OUTPUT_DIR = Path(r"G:\SALES\Amazon\RBH\WeeklyVC")
 UK_ROLLING_SOURCE_FOLDER = Path(
     r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Abrams & Chronicle\Script Files"
 )
@@ -163,3 +166,13 @@ FRONTLIST_FAIRE_ORDERS_SQL = repo_path(
 )
 BN_ROLLING_REPORTS_SCRIPT = repo_path("bn_rolling_reports", "main.py")
 REPRINT_INDICATOR_AUTOMATION_SCRIPT = repo_path("reprint_indicator_automation", "main.py")
+
+
+def amazon_sql_upload_output_file(for_date: datetime | None = None) -> Path:
+    date_value = for_date or datetime.now()
+    return AMAZON_SQL_UPLOAD_OUTPUT_DIR / f"amazon_update_{date_value.strftime('%Y%m%d')}.xlsx"
+
+
+def amazon_weekly_report_file(for_date: datetime) -> Path:
+    iso_week = for_date.isocalendar().week
+    return AMAZON_WEEKLY_REPORTS_DIR / f"w{iso_week:02d}__{for_date.strftime('%Y_%m_%d')}.xlsx"

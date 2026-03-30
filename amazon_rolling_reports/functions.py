@@ -41,20 +41,67 @@ def build_column_totals(df, columns):
     """Return a dict of column totals for the given columns."""
     return {col: df[col].sum() for col in columns if col in df.columns}
 
-def save_to_excel(df, filename, summary=None, format_cols=None, decimal_cols=None):
+
+def _parse_history_date(value):
+    if not isinstance(value, str):
+        return None
+    parsed = pd.to_datetime(value, format="%Y-%m-%d", errors="coerce")
+    if pd.isna(parsed):
+        return None
+    return parsed
+
+
+def save_to_excel(
+    df,
+    filename,
+    summary=None,
+    format_cols=None,
+    decimal_cols=None,
+    rolling_main_layout=False,
+):
     with pd.ExcelWriter(filename, engine='xlsxwriter') as writer:
         worksheet_name = 'Sheet1'
-        df.to_excel(writer, sheet_name=worksheet_name, startrow=3, index=False)
+        header_row = 4 if rolling_main_layout else 3
+        data_start_row = header_row + 1
+        df.to_excel(writer, sheet_name=worksheet_name, startrow=header_row, index=False)
         worksheet = writer.sheets[worksheet_name]
         workbook = writer.book
-        last_data_row = len(df) + 3
+        last_data_row = len(df) + header_row
         last_col = len(df.columns) - 1
 
-        header_format = workbook.add_format({
+        default_header_format = workbook.add_format({
             'bold': True,
             'align': 'center',
             'valign': 'vcenter',
             'bg_color': '#D8E4BC',
+            'border': 1,
+        })
+        pre_date_header_format = workbook.add_format({
+            'bold': True,
+            'align': 'center',
+            'valign': 'vcenter',
+            'bg_color': '#B8CCE4',
+            'border': 1,
+        })
+        q5_header_format = workbook.add_format({
+            'bold': True,
+            'align': 'center',
+            'valign': 'vcenter',
+            'bg_color': '#FDE9D9',
+            'border': 1,
+        })
+        odd_month_header_format = workbook.add_format({
+            'bold': True,
+            'align': 'center',
+            'valign': 'vcenter',
+            'bg_color': '#D8E4BC',
+            'border': 1,
+        })
+        even_month_header_format = workbook.add_format({
+            'bold': True,
+            'align': 'center',
+            'valign': 'vcenter',
+            'bg_color': '#E6B8B7',
             'border': 1,
         })
         summary_label_format = workbook.add_format({
@@ -86,7 +133,32 @@ def save_to_excel(df, filename, summary=None, format_cols=None, decimal_cols=Non
         })
 
         for col_idx, col_name in enumerate(df.columns):
-            worksheet.write(3, col_idx, col_name, header_format)
+            header_format = default_header_format
+            history_date = _parse_history_date(col_name) if rolling_main_layout else None
+            if rolling_main_layout:
+                if col_idx <= 16:
+                    header_format = pre_date_header_format
+                    if col_idx == 16:
+                        header_format = q5_header_format
+                elif history_date is not None:
+                    header_format = (
+                        odd_month_header_format
+                        if history_date.month % 2 == 1
+                        else even_month_header_format
+                    )
+
+            worksheet.write(header_row, col_idx, col_name, header_format)
+
+            if rolling_main_layout and history_date is not None:
+                worksheet.write(
+                    header_row - 1,
+                    col_idx,
+                    history_date.isocalendar().week,
+                    header_format,
+                )
+
+        if rolling_main_layout and len(df.columns) > 16:
+            worksheet.write(header_row - 1, 16, 'WeekNum', pre_date_header_format)
 
         # Add total and subtotal rows above the header row.
         if summary:
@@ -102,7 +174,7 @@ def save_to_excel(df, filename, summary=None, format_cols=None, decimal_cols=Non
                 if col not in summary or col_idx == label_col_idx:
                     continue
 
-                start_cell = xl_rowcol_to_cell(4, col_idx)
+                start_cell = xl_rowcol_to_cell(data_start_row, col_idx)
                 end_cell = xl_rowcol_to_cell(last_data_row, col_idx)
                 total_formula = f'=SUM({start_cell}:{end_cell})'
                 subtotal_formula = f'=SUBTOTAL(9,{start_cell}:{end_cell})'
@@ -118,8 +190,8 @@ def save_to_excel(df, filename, summary=None, format_cols=None, decimal_cols=Non
 
         worksheet.set_row(0, None)
         worksheet.set_row(1, None)
-        worksheet.autofilter(3, 0, last_data_row, last_col)
-        worksheet.freeze_panes(4, 0)
+        worksheet.autofilter(header_row, 0, last_data_row, last_col)
+        worksheet.freeze_panes(data_start_row, 0)
 
         # Format integer columns
         if format_cols:
