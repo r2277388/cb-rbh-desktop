@@ -1,7 +1,9 @@
 import getpass
 import importlib.util
 import os
+import shutil
 import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 from tkinter import Tk, filedialog
@@ -52,22 +54,25 @@ def get_farewell_message():
 
 def display_options():
     options = [
-        "01. Amazon PO Archive Manager",
-        "02. Amazon PO Report",
-        "03. Amazon PreOrders",
-        "04. Amazon Customer Orders",
-        "05. Amazon Sellthru SQL Upload",
-        "06. Amazon Rolling Reports",
-        "07. Amazon AMS Manager",
+        "01. Amazon (1) PO Archive Manager",
+        "02. Amazon (2) PO Report",
+        "03. Amazon (3) PreOrders",
+        "04. Amazon (4) Customer Orders",
+        "05. Amazon (5) Sellthru SQL Upload",
+        "06. Amazon (6) Rolling Reports",
+        "07. Amazon (7) AMS Manager",
         "08. Barnes & Noble Rolling Reports",
-        "09. Frontlist Supercharged Data",
-        "10. SSR Daily Summary",
-        "11. UK Rolling File Combining",
-        "12. Hachette Orders - Shipping Estimates",
-        "13. Consolidate Inventory Manager",
-        "14. XGBoost Model",
-        "15. Check Table Updates",
-        "16. Desk Procedures",
+        "09. Consolidate Inventory Manager",
+        "10. Frontlist Supercharged Data",
+        "11. Hachette Orders - Shipping Estimates",
+        "12. Reprint Indicator Report Updater",
+        "13. SSR Daily Summary",
+        "14. UK Rolling File Combining",
+        "15. XGBoost Model",
+        "94. Check Table Updates",
+        "95. Install Main Venv Requirements",
+        "96. Open Main Venv Shell",
+        "97. Desk Procedures",
         "98. Graphical Menu",
         "99. Exit",
     ]
@@ -79,25 +84,28 @@ def display_options():
 
 def display_info(choice):
     info = {
-        "1": "PO Archive Manager: Launches the PO archive helper to archive prior current_amaz_preorders and copy the new file into po_analysis.",
-        "2": f"""Amazon PO Report: Generates a detailed report based on Amazon Purchase Orders.
+        "1": "Amazon (1) PO Archive Manager: Launches the PO archive helper to archive prior current_amaz_preorders and copy the new file into po_analysis.",
+        "2": f"""Amazon (2) PO Report: Generates a detailed report based on Amazon Purchase Orders.
         Before running, save the Vendor Central PO File to:
         {process_paths.AMAZON_PO_ANALYSIS_INPUT_FILE}
         A PO Report is saved off to: {process_paths.AMAZON_PO_ROOT_FOLDER} folder""",
-        "3": "Amazon NYP PreOrders: Generates a report for Amazon NYP PreOrders. Save the relevant data file to the appropriate location before running.",
-        "4": "Amazon Customer Orders: Generates a report for Amazon Customer Orders. Save the relevant data file to the appropriate location before running.",
-        "5": "amazon_sql_upload: Runs the amazon_sql_upload workflow (ASIN/ISBN conversion, uploads, etc.).",
-        "6": "Amazon Rolling Reports: Runs a 10-week SQL freshness check first, then asks whether to continue with the full process.",
-        "7": "Amazon AMS Manager: Manage/update AMS month configuration and run incremental or full AMS processing.",
+        "3": "Amazon (3) PreOrders: Generates a report for Amazon NYP PreOrders. Save the relevant data file to the appropriate location before running.",
+        "4": "Amazon (4) Customer Orders: Generates a report for Amazon Customer Orders. Save the relevant data file to the appropriate location before running.",
+        "5": "Amazon (5) Sellthru SQL Upload: Runs the amazon_sql_upload workflow (ASIN/ISBN conversion, uploads, etc.).",
+        "6": "Amazon (6) Rolling Reports: Runs a 10-week SQL freshness check first, then asks whether to continue with the full process.",
+        "7": "Amazon (7) AMS Manager: Manage/update AMS month configuration and run incremental or full AMS processing.",
         "8": "Barnes & Noble Rolling Reports: Builds weekly Barnes & Noble rolling-report source files, starting with the combined POS non-book extract.",
-        "9": "Frontlist Supercharged Data: Builds the frontlist ISBN master file by merging Frontlist Tracking with cached Excel extracts and SQL source data.",
-        "10": "SSR Daily Summary: Opens the SSR Daily Summary menu, including Ebs.Sales Prior 5 Days and the summary process.",
-        "11": "UK Rolling File Combining: This combines the sales, reserve and midas files together.",
-        "12": "Hachette Orders - Shipping Estimates: Generates a report for Hachette Orders.",
-        "13": "Consolidate Inventory Manager: Opens the consolidated inventory workflow menu, including depot file intake, verticalization, summaries, and related inventory tools.",
-        "14": "XGBoost Model: Launches the xgboost_model workflow menu.",
-        "15": "Check Table Updates: Runs SQL checks for table freshness and recent weeks for SSR/Amazon/Bookscan tables.",
-        "16": "Desk Procedures: Opens a menu of desk procedures and run instructions.",
+        "9": "Consolidate Inventory Manager: Opens the consolidated inventory workflow menu, including depot file intake, verticalization, summaries, and related inventory tools.",
+        "10": "Frontlist Supercharged Data: Builds the frontlist ISBN master file by merging Frontlist Tracking with cached Excel extracts and SQL source data.",
+        "11": "Hachette Orders - Shipping Estimates: Generates a report for Hachette Orders.",
+        "12": "Reprint Indicator Report Updater: Refreshes the template workbook when requested, rebuilds the BL_Detail and FL_Detail tabs from MetaData, then exports a detached workbook with links removed.",
+        "13": "SSR Daily Summary: Opens the SSR Daily Summary menu, including Ebs.Sales Prior 5 Days and the summary process.",
+        "14": "UK Rolling File Combining: This combines the sales, reserve and midas files together.",
+        "15": "XGBoost Model: Launches the xgboost_model workflow menu.",
+        "94": "Check Table Updates: Runs SQL checks for table freshness and recent weeks for SSR/Amazon/Bookscan tables.",
+        "95": "Install Main Venv Requirements: Runs `pip install -r requirements.txt` using the repo's main virtual environment.",
+        "96": "Open Main Venv Shell: Opens a PowerShell window with the repo's main virtual environment activated.",
+        "97": "Desk Procedures: Opens a menu of desk procedures and run instructions.",
         "98": "Graphical Menu: Opens a browser-based launcher for the available processes.",
         "99": "Exit: Exits the program.",
     }
@@ -294,6 +302,52 @@ def load_module_from_path(module_name: str, file_path: Path):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def interpreter_has_module(python_executable: str, module_name: str) -> bool:
+    try:
+        result = subprocess.run(
+            [
+                python_executable,
+                "-c",
+                (
+                    "import importlib.util, sys; "
+                    f"sys.exit(0 if importlib.util.find_spec('{module_name}') else 1)"
+                ),
+            ],
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return False
+
+    return result.returncode == 0
+
+
+def get_excel_automation_python() -> str:
+    candidates: list[str] = []
+
+    if sys.executable:
+        candidates.append(sys.executable)
+
+    path_python = shutil.which("python")
+    if path_python:
+        candidates.append(path_python)
+
+    candidates.append(r"C:\Python310\python.exe")
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        normalized = os.path.normcase(os.path.abspath(candidate))
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        if interpreter_has_module(candidate, "pythoncom"):
+            return candidate
+
+    raise RuntimeError(
+        "Could not find a Python interpreter with pywin32/pythoncom for Excel automation."
+    )
 
 
 def confirm_amazon_ams_files() -> bool:
@@ -529,21 +583,25 @@ def confirm_bn_rolling_reports_files() -> Path | None:
 
 def run_program(choice):
     reports = {
-        "2": ("Amazon PO Report", "amazon_po/main.py"),
-        "3": ("Amazon NYP PreOrders", "amazon_preorders/main.py"),
-        "4": ("Amazon Customer Orders", "amazon_customer_orders/main.py"),
-        "5": ("amazon_sql_upload", "amazon_sql_upload/main.py"),
-        "7": ("Amazon AMS Manager", "amazon_ams/manage_ams.py"),
+        "2": ("Amazon (2) PO Report", "amazon_po/main.py"),
+        "3": ("Amazon (3) PreOrders", "amazon_preorders/main.py"),
+        "4": ("Amazon (4) Customer Orders", "amazon_customer_orders/main.py"),
+        "5": ("Amazon (5) Sellthru SQL Upload", "amazon_sql_upload/main.py"),
+        "7": ("Amazon (7) AMS Manager", "amazon_ams/manage_ams.py"),
         "8": ("Barnes & Noble Rolling Reports", "bn_rolling_reports/main.py"),
-        "9": ("Frontlist Supercharged Data", "FLTracking_Supercharged/main.py"),
-        "11": ("UK Rolling File Combining", "UK_Rolling_File_Combining/main.py"),
-        "12": ("Hachette Orders - Shipping Estimates", "hachette_orders/main.py"),
-        "13": (
+        "9": (
             "Consolidate Inventory Manager",
             "consolidate_inventory_verticalization/main.py",
         ),
-        "14": ("XGBoost Model", "xgboost_model/main.py"),
-        "16": ("Desk Procedures", "desk_procedures/main.py"),
+        "10": ("Frontlist Supercharged Data", "FLTracking_Supercharged/main.py"),
+        "11": ("Hachette Orders - Shipping Estimates", "hachette_orders/main.py"),
+        "12": (
+            "Reprint Indicator Report Updater",
+            str(process_paths.REPRINT_INDICATOR_AUTOMATION_SCRIPT),
+        ),
+        "14": ("UK Rolling File Combining", "UK_Rolling_File_Combining/main.py"),
+        "15": ("XGBoost Model", "xgboost_model/main.py"),
+        "97": ("Desk Procedures", "desk_procedures/main.py"),
     }
 
     if choice == "1":
@@ -558,7 +616,7 @@ def run_program(choice):
         run_amazon_rolling_reports_menu()
         return
 
-    if choice == "10":
+    if choice == "13":
         run_ssr_daily_summary_menu()
         return
 
@@ -569,28 +627,28 @@ def run_program(choice):
                 if not confirm_amazon_preorders_files():
                     return
             except FileNotFoundError as e:
-                print(f"Unable to locate the Amazon PreOrders source files: {e}")
+                print(f"Unable to locate the Amazon (3) PreOrders source files: {e}")
                 return
         if choice == "4":
             try:
                 if not confirm_amazon_customer_orders_files():
                     return
             except FileNotFoundError as e:
-                print(f"Unable to locate the Amazon Customer Orders source files: {e}")
+                print(f"Unable to locate the Amazon (4) Customer Orders source files: {e}")
                 return
         if choice == "5":
             try:
                 if not confirm_amazon_sql_upload_files():
                     return
             except FileNotFoundError as e:
-                print(f"Unable to locate the amazon_sql_upload source files: {e}")
+                print(f"Unable to locate the Amazon (5) Sellthru SQL Upload source files: {e}")
                 return
         if choice == "7":
             try:
                 if not confirm_amazon_ams_files():
                     return
             except (FileNotFoundError, ImportError, AttributeError) as e:
-                print(f"Unable to locate the Amazon AMS source files: {e}")
+                print(f"Unable to locate the Amazon (7) AMS Manager source files: {e}")
                 return
         if choice == "8":
             try:
@@ -600,7 +658,7 @@ def run_program(choice):
             except FileNotFoundError as e:
                 print(f"Unable to locate the Barnes & Noble Rolling Reports files: {e}")
                 return
-        if choice == "9":
+        if choice == "10":
             try:
                 if not confirm_frontlist_supercharged_files():
                     return
@@ -610,7 +668,11 @@ def run_program(choice):
         if choice != "8":
             print(f"Running the {report_name}... Please wait.")
         try:
-            command = ["venv/Scripts/python", script_path]
+            python_executable = "venv/Scripts/python"
+            if choice == "12":
+                python_executable = get_excel_automation_python()
+
+            command = [python_executable, script_path]
             if choice == "8":
                 command.extend(["--default-raw-folder", str(selected_bn_raw_folder)])
             subprocess.run(command, check=True)
@@ -619,11 +681,44 @@ def run_program(choice):
             print(f"An error occurred while running {script_path}.")
         return
 
-    if choice == "15":
+    if choice == "94":
         run_check_table_updates_menu()
         return
 
-    if choice == "16":
+    if choice == "95":
+        print("Installing requirements into the main venv... Please wait.")
+        try:
+            subprocess.run(
+                ["venv/Scripts/python", "-m", "pip", "install", "-r", "requirements.txt"],
+                check=True,
+            )
+            print("Main venv requirements are up to date.")
+        except subprocess.CalledProcessError:
+            print("An error occurred while installing requirements.txt into the main venv.")
+        return
+
+    if choice == "96":
+        activate_script = Path("venv") / "Scripts" / "Activate.ps1"
+        if not activate_script.exists():
+            print(f"Main venv activation script not found: {activate_script}")
+            return
+        print("Opening a PowerShell window with the main venv activated.")
+        try:
+            subprocess.Popen(
+                [
+                    "powershell",
+                    "-NoExit",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    f"& '{activate_script.resolve()}'",
+                ]
+            )
+        except OSError as e:
+            print(f"Unable to open the main venv shell: {e}")
+        return
+
+    if choice == "97":
         print("Opening Desk Procedures...")
         try:
             subprocess.run(["venv/Scripts/python", "desk_procedures/main.py"], check=True)

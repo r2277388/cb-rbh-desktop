@@ -162,3 +162,4 @@ FRONTLIST_FAIRE_ORDERS_SQL = repo_path(
     "FLTracking_Supercharged", "sql", "faire_orders.sql"
 )
 BN_ROLLING_REPORTS_SCRIPT = repo_path("bn_rolling_reports", "main.py")
+REPRINT_INDICATOR_AUTOMATION_SCRIPT = repo_path("reprint_indicator_automation", "main.py")
