@@ -45,10 +45,11 @@ def build_column_totals(df, columns):
 def _parse_history_date(value):
     if not isinstance(value, str):
         return None
-    parsed = pd.to_datetime(value, format="%Y-%m-%d", errors="coerce")
-    if pd.isna(parsed):
-        return None
-    return parsed
+    for date_format in ("%m-%d-%Y", "%Y-%m-%d"):
+        parsed = pd.to_datetime(value, format=date_format, errors="coerce")
+        if not pd.isna(parsed):
+            return parsed
+    return None
 
 
 def save_to_excel(
@@ -83,11 +84,11 @@ def save_to_excel(
             'bg_color': '#B8CCE4',
             'border': 1,
         })
-        q5_header_format = workbook.add_format({
+        weeknum_label_format = workbook.add_format({
             'bold': True,
             'align': 'center',
             'valign': 'vcenter',
-            'bg_color': '#FDE9D9',
+            'bg_color': '#DDD9C4',
             'border': 1,
         })
         odd_month_header_format = workbook.add_format({
@@ -101,7 +102,7 @@ def save_to_excel(
             'bold': True,
             'align': 'center',
             'valign': 'vcenter',
-            'bg_color': '#E6B8B7',
+            'bg_color': '#F2DCDB',
             'border': 1,
         })
         summary_label_format = workbook.add_format({
@@ -136,10 +137,8 @@ def save_to_excel(
             header_format = default_header_format
             history_date = _parse_history_date(col_name) if rolling_main_layout else None
             if rolling_main_layout:
-                if col_idx <= 16:
+                if col_idx <= 17:
                     header_format = pre_date_header_format
-                    if col_idx == 16:
-                        header_format = q5_header_format
                 elif history_date is not None:
                     header_format = (
                         odd_month_header_format
@@ -157,14 +156,17 @@ def save_to_excel(
                     header_format,
                 )
 
-        if rolling_main_layout and len(df.columns) > 16:
-            worksheet.write(header_row - 1, 16, 'WeekNum', pre_date_header_format)
+        if rolling_main_layout and len(df.columns) > 18:
+            worksheet.write(header_row - 1, 17, 'WeekNum', weeknum_label_format)
 
         # Add total and subtotal rows above the header row.
         if summary:
             label_col_idx = 7 if len(df.columns) > 7 else 0
+            unformatted_summary_cols = {10, 12}
             for row_idx in (0, 1):
                 for col_idx in range(label_col_idx, len(df.columns)):
+                    if col_idx in unformatted_summary_cols:
+                        continue
                     worksheet.write_blank(row_idx, col_idx, None, blank_summary_format)
 
             worksheet.write(0, label_col_idx, 'Total', summary_label_format)
@@ -199,7 +201,12 @@ def save_to_excel(
             for col in format_cols:
                 if col in df.columns:
                     col_idx = df.columns.get_loc(col)
-                    worksheet.set_column(col_idx, col_idx, None, number_format)
+                    width = None
+                    if rolling_main_layout and col_idx == 16:
+                        width = 10.5
+                    elif rolling_main_layout and col_idx == 17:
+                        width = 11
+                    worksheet.set_column(col_idx, col_idx, width, number_format)
 
         # Format decimal columns
         if decimal_cols:
@@ -212,6 +219,14 @@ def save_to_excel(
         if "ISBN" in df.columns:
             isbn_format = workbook.add_format({'num_format': '0'})
             col_idx = df.columns.get_loc("ISBN")
-            worksheet.set_column(col_idx, col_idx, None, isbn_format)
+            worksheet.set_column(col_idx, col_idx, 13.5, isbn_format)
+
+        if "Title" in df.columns:
+            col_idx = df.columns.get_loc("Title")
+            worksheet.set_column(col_idx, col_idx, 41)
+
+        if rolling_main_layout and len(df.columns) > 17:
+            number_format = workbook.add_format({'num_format': '#,##0'})
+            worksheet.set_column(17, 17, 11, number_format)
 
         print(f"Excel saved to: {filename}")

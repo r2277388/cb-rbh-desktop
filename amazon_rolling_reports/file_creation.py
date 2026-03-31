@@ -16,6 +16,11 @@ def create_rolling_report(pickle_file,pickle_po):
         print("PO_Qty or AvgLast6W column missing!")
         return df_combined
 
+    if 'TYTD' in df_combined.columns and 'LYTD' in df_combined.columns:
+        tytd = pd.to_numeric(df_combined['TYTD'], errors='coerce').fillna(0)
+        lytd = pd.to_numeric(df_combined['LYTD'], errors='coerce').fillna(0)
+        df_combined['YTD Var'] = tytd - lytd
+
     # Reorder columns: place PO_Qty after PubDate and before OH, and OH_Avg after OH
     cols = list(df_combined.columns)
     if 'PO_Qty' in cols and 'PubDate' in cols and 'OH' in cols:
@@ -26,6 +31,10 @@ def create_rolling_report(pickle_file,pickle_po):
         cols.remove('OH_Avg')
         oh_index = cols.index('OH')
         cols.insert(oh_index + 1, 'OH_Avg')
+    if 'YTD Var' in cols and 'LYTD' in cols:
+        cols.remove('YTD Var')
+        lytd_index = cols.index('LYTD')
+        cols.insert(lytd_index + 1, 'YTD Var')
     df_combined = df_combined[cols]
     return df_combined
 

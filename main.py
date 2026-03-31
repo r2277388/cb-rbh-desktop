@@ -761,8 +761,11 @@ def run_amazon_rolling_reports_menu():
         print("\nAmazon Rolling Reports")
         print()
         print("    1. Check Amazon upload table (last 10 weeks)")
-        print("    2. Run normal Amazon Rolling Reports process")
-        print("    3. Back to main menu")
+        print("    2. Full refresh + all reports")
+        print("    3. Rebuild all reports from current pickles")
+        print("    4. Full refresh + main two reports only")
+        print("    5. Rebuild main two reports only from current pickles")
+        print("    6. Back to main menu")
         print()
         try:
             subchoice = input("Choose an option: ").strip().lower()
@@ -797,18 +800,77 @@ def run_amazon_rolling_reports_menu():
             except FileNotFoundError as e:
                 print(f"Unable to locate the Amazon Rolling Reports source files: {e}")
                 continue
-            print("Running the Amazon Rolling Reports... Please wait.")
+            print("Running full refresh + all Amazon Rolling Reports... Please wait.")
             try:
                 subprocess.run(
                     ["venv/Scripts/python", "amazon_rolling_reports/main.py"],
                     check=True,
                 )
-                print("The Amazon Rolling Reports is now ready.")
+                print("The Amazon Rolling Reports are now ready.")
             except subprocess.CalledProcessError:
                 print("An error occurred while running amazon_rolling_reports/main.py.")
             return
 
-        if subchoice in ["3", "back", "b", "exit", "quit", "q"]:
+        if subchoice == "3":
+            try:
+                if not confirm_amazon_rolling_reports_run_files():
+                    continue
+            except FileNotFoundError as e:
+                print(f"Unable to locate the Amazon Rolling Reports source files: {e}")
+                continue
+            print("Rebuilding all Amazon Rolling Reports from current pickles... Please wait.")
+            try:
+                subprocess.run(
+                    ["venv/Scripts/python", "amazon_rolling_reports/main.py", "--report-only"],
+                    check=True,
+                )
+                print("The Amazon Rolling Reports are now ready.")
+            except subprocess.CalledProcessError:
+                print("An error occurred while running amazon_rolling_reports/main.py --report-only.")
+            return
+
+        if subchoice == "4":
+            try:
+                if not confirm_amazon_rolling_reports_run_files():
+                    continue
+            except FileNotFoundError as e:
+                print(f"Unable to locate the Amazon Rolling Reports source files: {e}")
+                continue
+            print("Running full refresh + main-two Amazon Rolling Reports only... Please wait.")
+            try:
+                subprocess.run(
+                    ["venv/Scripts/python", "amazon_rolling_reports/main.py", "--main-only"],
+                    check=True,
+                )
+                print("The main Amazon Rolling Reports are now ready.")
+            except subprocess.CalledProcessError:
+                print("An error occurred while running amazon_rolling_reports/main.py --main-only.")
+            return
+
+        if subchoice == "5":
+            try:
+                if not confirm_amazon_rolling_reports_run_files():
+                    continue
+            except FileNotFoundError as e:
+                print(f"Unable to locate the Amazon Rolling Reports source files: {e}")
+                continue
+            print("Rebuilding the main-two Amazon Rolling Reports from current pickles... Please wait.")
+            try:
+                subprocess.run(
+                    [
+                        "venv/Scripts/python",
+                        "amazon_rolling_reports/main.py",
+                        "--main-only",
+                        "--report-only",
+                    ],
+                    check=True,
+                )
+                print("The main Amazon Rolling Reports are now ready.")
+            except subprocess.CalledProcessError:
+                print("An error occurred while running amazon_rolling_reports/main.py --main-only --report-only.")
+            return
+
+        if subchoice in ["6", "back", "b", "exit", "quit", "q"]:
             return
 
         print("Invalid choice. Please select a valid option.")

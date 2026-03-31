@@ -21,7 +21,7 @@ def save_latest_amazon_po_as_pickle(folder, pkl_filename, usecols=['ISBN', 'Acce
         df = pd.read_excel(latest_file, usecols=usecols, dtype=str)
         df = df.rename(columns ={"Accepted Quantity": "PO_Qty"})
         df.to_pickle(pkl_filename)
-        print(f"✅ Saved latest Amazon PO file as pickle: {pkl_filename}")
+        print(f"Saved latest Amazon PO file as pickle: {pkl_filename}")
         return df
     else:
         print(f"No .xlsx files found in the folder: {folder}")

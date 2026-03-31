@@ -1,5 +1,7 @@
+import argparse
 import os
 import time
+from datetime import datetime
 
 import pandas as pd
 from file_creation import create_rolling_report
@@ -27,6 +29,30 @@ def prune_zero_history_columns(df):
     return df[keep_cols], keep_history_cols
 
 
+def get_history_columns(df):
+    return [
+        col for col in df.columns
+        if isinstance(col, str) and len(col) == 10 and col.count("-") == 2
+    ]
+
+
+def get_report_period_from_df(df):
+    history_cols = get_history_columns(df)
+    if not history_cols:
+        raise ValueError("Could not determine report week because no history date columns were found.")
+
+    parsed_dates = pd.to_datetime(history_cols, format="%m-%d-%Y", errors="coerce")
+    valid_dates = [value for value in parsed_dates if not pd.isna(value)]
+    if not valid_dates:
+        raise ValueError("Could not parse any history date columns to determine the report week.")
+
+    latest_date = max(valid_dates)
+    date_formatted = latest_date.strftime("%m_%d_%Y")
+    week_number = latest_date.isocalendar().week
+    full_year = latest_date.strftime("%Y")
+    return date_formatted, week_number, full_year
+
+
 def save_reports_by_pub(
     df,
     report_type,
@@ -42,7 +68,7 @@ def save_reports_by_pub(
         df_pub = df[df["Pub"] == pub]
         if not df_pub.empty:
             df_pub, history_cols = prune_zero_history_columns(df_pub)
-            summary_cols = ["LTD", "LY_FY", "TYTD", "LYTD", "W52", "OH", "PO_Qty"]
+            summary_cols = ["LTD", "LY_FY", "TYTD", "LYTD", "YTD Var", "W52", "OH", "PO_Qty"]
             decimal_cols = ["Price", "OH_Avg"]
             pub_summary = build_column_totals(df_pub, history_cols + summary_cols)
             pub_format_cols = history_cols + [col for col in summary_cols if col in df_pub.columns]
@@ -88,39 +114,64 @@ def prompt_update(filename, update_func, *args):
         print(f"Using existing {filename}.\n")
 
 
+def build_parser():
+    parser = argparse.ArgumentParser(description="Build Amazon rolling reports.")
+    parser.add_argument(
+        "--main-only",
+        action="store_true",
+        help="Save only the two main rolling report workbooks and skip publisher versions.",
+    )
+    parser.add_argument(
+        "--report-only",
+        action="store_true",
+        help="Reuse the current local pickles and rebuild the reports without any SQL checks or refresh prompts.",
+    )
+    return parser
+
+
 def main():
+    args = build_parser().parse_args()
     start_time = time.time()
-
-    # --- PO file ---
     pickle_po_file = "latest_amazon_po.pkl"
-    print("PO file status:")
-    lastdate_display()
-    prompt_update(
-        pickle_po_file,
-        save_latest_amazon_po_as_pickle,
-        amazon_po_folder,
-        pickle_po_file,
-    )
+    if args.report_only:
+        print("Report-only mode: using existing local pickles without SQL refresh.")
+        required_files = [
+            pickle_po_file,
+            "rr_customer_orders.pkl",
+            "rr_units_shipped.pkl",
+        ]
+        missing_files = [filename for filename in required_files if not os.path.exists(filename)]
+        if missing_files:
+            raise FileNotFoundError(
+                "Report-only mode requires existing local pickle files. Missing: "
+                + ", ".join(missing_files)
+            )
+    else:
+        print("PO file status:")
+        lastdate_display()
+        prompt_update(
+            pickle_po_file,
+            save_latest_amazon_po_as_pickle,
+            amazon_po_folder,
+            pickle_po_file,
+        )
 
-    # --- Customer Orders ---
-    pickle_file1 = "rr_customer_orders.pkl"
-    print("Customer Orders file status:")
-    prompt_update(
-        pickle_file1, run_query_and_save, sql_co, pickle_file1, "Customer Orders"
-    )
+        # --- Customer Orders ---
+        pickle_file1 = "rr_customer_orders.pkl"
+        print("Customer Orders file status:")
+        prompt_update(
+            pickle_file1, run_query_and_save, sql_co, pickle_file1, "Customer Orders"
+        )
 
-    # --- Units Shipped ---
-    pickle_file2 = "rr_units_shipped.pkl"
-    print("Units Shipped file status:")
-    prompt_update(
-        pickle_file2, run_query_and_save, sql_us, pickle_file2, "Units Shipped"
-    )
+        # --- Units Shipped ---
+        pickle_file2 = "rr_units_shipped.pkl"
+        print("Units Shipped file status:")
+        prompt_update(
+            pickle_file2, run_query_and_save, sql_us, pickle_file2, "Units Shipped"
+        )
 
-    date_formatted, week_number, full_year = lastdate_formats()
-
-    # Get the latest Amazon PO file and save as pickle
-    pickle_po_file = "latest_amazon_po.pkl"
-    save_latest_amazon_po_as_pickle(amazon_po_folder, pickle_po_file)
+        # Get the latest Amazon PO file and save as pickle
+        save_latest_amazon_po_as_pickle(amazon_po_folder, pickle_po_file)
 
     ###### CUSTOMER ORDERS ############################################
 
@@ -128,15 +179,16 @@ def main():
     pickle_file1 = "rr_customer_orders.pkl"
     name1 = "Customer Orders"
     df_customer = create_rolling_report(pickle_file1, pickle_po_file)
-    sort_col = df_customer.columns[17]
+    date_formatted, week_number, full_year = get_report_period_from_df(df_customer)
+    date_cols = get_history_columns(df_customer)
+    sort_col = date_cols[0] if date_cols else df_customer.columns[-1]
     df_customer = df_customer.sort_values(by=sort_col, ascending=False)
 
-    date_cols = [col for col in df_customer.columns if "-" in col and len(col) == 10]
-    summary_cols = ["LTD", "LY_FY", "TYTD", "LYTD", "W52", "OH", "PO_Qty"]
+    summary_cols = ["LTD", "LY_FY", "TYTD", "LYTD", "YTD Var", "W52", "OH", "PO_Qty"]
     decimal_cols = ["Price", "OH_Avg"]
 
     totals_co = build_column_totals(df_customer, date_cols + summary_cols)
-    format_cols = date_cols + ["LTD", "LY_FY", "TYTD", "LYTD", "W52", "OH", "PO_Qty"]
+    format_cols = date_cols + ["LTD", "LY_FY", "TYTD", "LYTD", "YTD Var", "W52", "OH", "PO_Qty"]
 
     # Saving to the main folder
     print(rf"Saving {name1} to the main Rolling Reports folder...")
@@ -156,18 +208,21 @@ def main():
         rolling_main_layout=True,
     )
     # Saving to the dp folders
-    print("Saving to the dp folders...")
-    save_reports_by_pub(
-        df_customer,
-        "Customer Orders",
-        week_number,
-        full_year,
-        date_formatted,
-        dp_folders,
-        summary=totals_co,
-        format_cols=format_cols,
-        decimal_cols=decimal_cols,
-    )
+    if args.main_only:
+        print("Skipping publisher versions for Customer Orders (--main-only).")
+    else:
+        print("Saving to the dp folders...")
+        save_reports_by_pub(
+            df_customer,
+            "Customer Orders",
+            week_number,
+            full_year,
+            date_formatted,
+            dp_folders,
+            summary=totals_co,
+            format_cols=format_cols,
+            decimal_cols=decimal_cols,
+        )
 
     # UNITS SHIPPED #############################################
     print("#############################################")
@@ -177,14 +232,16 @@ def main():
     pickle_file2 = "rr_units_shipped.pkl"
     name2 = "Units Shipped"
     df_units = create_rolling_report(pickle_file2, pickle_po_file)
-    sort_col = df_units.columns[17]
+    units_date_formatted, units_week_number, units_full_year = get_report_period_from_df(df_units)
+    date_cols = get_history_columns(df_units)
+    sort_col = date_cols[0] if date_cols else df_units.columns[-1]
     df_units = df_units.sort_values(by=sort_col, ascending=False)
 
-    date_cols = [col for col in df_units.columns if "-" in col and len(col) == 10]
-    summary_cols = ["LTD", "LY_FY", "TYTD", "LYTD", "W52", "OH", "PO_Qty"]
+    summary_cols = ["LTD", "LY_FY", "TYTD", "LYTD", "YTD Var", "W52", "OH", "PO_Qty"]
     decimal_cols = ["Price", "OH_Avg"]
 
     totals_us = build_column_totals(df_units, date_cols + summary_cols)
+    format_cols = date_cols + ["LTD", "LY_FY", "TYTD", "LYTD", "YTD Var", "W52", "OH", "PO_Qty"]
     # Saving to the main folder
     print(rf"Saving {name2} to the main Rolling Reports folder...")
 
@@ -195,7 +252,7 @@ def main():
         df_units,
         os.path.join(
             amazon_rolling_folder,
-            f"Week {week_number}-{full_year} Rolling Amazon ({date_formatted}) - {name2}.xlsx",
+            f"Week {units_week_number}-{units_full_year} Rolling Amazon ({units_date_formatted}) - {name2}.xlsx",
         ),
         summary=totals_us,
         format_cols=format_cols,
@@ -203,18 +260,21 @@ def main():
         rolling_main_layout=True,
     )
     # Saving to the dp folders
-    print("Saving to the dp folders...")
-    save_reports_by_pub(
-        df_units,
-        "Units Shipped",
-        week_number,
-        full_year,
-        date_formatted,
-        dp_folders,
-        summary=totals_us,
-        format_cols=format_cols,
-        decimal_cols=decimal_cols,
-    )
+    if args.main_only:
+        print("Skipping publisher versions for Units Shipped (--main-only).")
+    else:
+        print("Saving to the dp folders...")
+        save_reports_by_pub(
+            df_units,
+            "Units Shipped",
+            units_week_number,
+            units_full_year,
+            units_date_formatted,
+            dp_folders,
+            summary=totals_us,
+            format_cols=format_cols,
+            decimal_cols=decimal_cols,
+        )
 
     #################################################################
 
