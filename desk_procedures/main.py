@@ -1,4 +1,5 @@
 import os
+import webbrowser
 from pathlib import Path
 
 
@@ -65,12 +66,23 @@ def open_html_procedure(procedure: dict):
         print(f"Procedure file not found: {html_path}")
         return
 
+    html_uri = html_path.as_uri()
+
+    try:
+        if webbrowser.open_new_tab(html_uri):
+            print(f"Opened procedure: {html_path}")
+            return
+    except webbrowser.Error:
+        pass
+
     try:
         os.startfile(str(html_path))
         print(f"Opened procedure: {html_path}")
+        return
     except OSError as exc:
-        print(f"Unable to open procedure in browser: {exc}")
-        print(f"Procedure file: {html_path}")
+        print(f"Unable to open procedure automatically: {exc}")
+
+    print(f"Procedure file: {html_path}")
 
 
 def open_procedure(choice: str):

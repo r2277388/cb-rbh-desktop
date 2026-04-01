@@ -65,7 +65,7 @@ def build_ebs_sales_prior_5_days_sql() -> str:
     prior_period = _prior_period_yyyymm()
     return f"""
 SELECT TOP (5)
-    sd.TRX_DATE AS [Date],
+    CAST(sd.TRX_DATE AS date) AS [Date],
     SUM(CASE WHEN i.PUBLISHER_CODE = 'Chronicle' THEN sd.REVENUE_AMOUNT ELSE 0 END) AS cb_val,
     SUM(CASE WHEN i.PUBLISHER_CODE <> 'Chronicle' THEN sd.REVENUE_AMOUNT ELSE 0 END) AS dp_val,
     SUM(CASE WHEN i.PUBLISHER_CODE = 'Chronicle' THEN 1 ELSE 0 END) AS cb_row_cnt,
@@ -79,9 +79,9 @@ WHERE
     AND i.PRODUCT_TYPE in ('bk', 'ft')
     AND sd.INVOICE_LINE_TYPE = 'SALE'
 GROUP BY
-    sd.TRX_DATE
+    CAST(sd.TRX_DATE AS date)
 ORDER BY
-    sd.TRX_DATE DESC;
+    CAST(sd.TRX_DATE AS date) DESC;
 """.strip()
 
 
@@ -160,6 +160,12 @@ def main():
         df["LastUpdated"] = (
             pd.to_datetime(df["LastUpdated"], errors="coerce")
             .dt.strftime("%Y-%m-%d %I:%M:%S %p")
+            .fillna("")
+        )
+    if choice == "3" and "Date" in df.columns:
+        df["Date"] = (
+            pd.to_datetime(df["Date"], errors="coerce")
+            .dt.strftime("%Y-%m-%d")
             .fillna("")
         )
 

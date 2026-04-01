@@ -24,6 +24,7 @@ DESTINATION_FOLDER = process_paths.CONSOLIDATED_INVENTORY_VERTICALIZATION_FOLDER
 DEFAULT_SOURCE_FOLDER = Path(r"F:\2026\Oracle Reports")
 ORG_CODES = {"cbc", "hbg", "cbp"}
 PICKLE_FILE = DESTINATION_FOLDER / "ConsolidatedInventory.pkl"
+SHAREPOINT_EXPORT_FILE_NAME = "Consolidated_Inventory.csv"
 SHAREPOINT_FOLDER_SUFFIX = Path(
     r"OneDrive - chroniclebooks.com\CB Fabric and Power BI Project - Excel Data and Reports Needed for Power BI"
 )
@@ -773,6 +774,139 @@ def check_last_n_months_for_isbn():
         )
 
 
+def check_frozen_cbp_inventory():
+    if not PICKLE_FILE.exists():
+        print()
+        print(f"Pickle file not found: {PICKLE_FILE}")
+        return
+
+    df = load_existing_vertical_pickle()
+    if df.empty:
+        print()
+        print("The pickle file is empty.")
+        return
+
+    period_count = 4
+    min_inventory = 500
+    max_change_pct = 5.0
+
+    df = df.copy()
+    df["period"] = df["period"].astype(str)
+    recent_periods = sorted(df["period"].unique().tolist())[-period_count:]
+    if len(recent_periods) < period_count:
+        print()
+        print(f"At least {period_count} periods are required to run this check.")
+        return
+
+    filtered_df = df[
+        df["Publisher"].fillna("").astype(str).str.strip() == "Chronicle"
+    ].copy()
+    filtered_df["ORG"] = filtered_df["ORG"].astype(str).str.lower().str.strip()
+    filtered_df = filtered_df[
+        (filtered_df["ORG"] == "cbp") & (filtered_df["period"].isin(recent_periods))
+    ].copy()
+    if filtered_df.empty:
+        print()
+        print("No Chronicle CBP rows were found in the last 4 periods.")
+        return
+
+    filtered_df["Inventory"] = pd.to_numeric(filtered_df["Inventory"], errors="coerce").fillna(0)
+    filtered_df["Value"] = pd.to_numeric(filtered_df["Value"], errors="coerce").fillna(0)
+
+    grouped_df = (
+        filtered_df.groupby(["ISBN", "period"], as_index=False)
+        .agg({"Title": "first", "Publisher": "first", "Inventory": "sum", "Value": "sum"})
+    )
+
+    summary_rows = []
+    for isbn, isbn_df in grouped_df.groupby("ISBN"):
+        period_map = {
+            str(row["period"]): int(round(float(row["Inventory"])))
+            for _, row in isbn_df.iterrows()
+        }
+        if any(period not in period_map for period in recent_periods):
+            continue
+
+        inventories = [period_map[period] for period in recent_periods]
+        if any(inventory < min_inventory for inventory in inventories):
+            continue
+
+        pct_changes = []
+        for index in range(1, len(inventories)):
+            prior_inventory = inventories[index - 1]
+            current_inventory = inventories[index]
+            if prior_inventory == 0:
+                pct_change = 0 if current_inventory == 0 else float("inf")
+            else:
+                pct_change = abs(current_inventory - prior_inventory) / abs(prior_inventory) * 100
+            pct_changes.append(pct_change)
+
+        if any(pct_change >= max_change_pct for pct_change in pct_changes):
+            continue
+
+        title = ""
+        title_series = isbn_df["Title"].dropna().astype(str).str.strip()
+        if not title_series.empty:
+            title = title_series.iloc[0]
+
+        summary_row = {
+            "ISBN": str(isbn),
+            "Title": title,
+            "MaxPctChange": max(pct_changes) if pct_changes else 0,
+            "TotalValue": int(round(float(isbn_df["Value"].sum()))),
+        }
+        for period, inventory in zip(recent_periods, inventories):
+            summary_row[f"Inv_{period}"] = inventory
+        summary_rows.append(summary_row)
+
+    if not summary_rows:
+        print()
+        print(
+            "No Chronicle ISBNs were found with CBP inventory >= 500 and "
+            "month-to-month changes under 5% across the last 4 periods."
+        )
+        return
+
+    summary_df = pd.DataFrame(summary_rows)
+    summary_df = summary_df.sort_values(
+        by=["MaxPctChange", f"Inv_{recent_periods[-1]}", "ISBN"],
+        ascending=[True, False, True],
+    ).reset_index(drop=True)
+
+    print()
+    print("Chronicle ISBNs with frozen CBP inventory in the last 4 periods:")
+    print(
+        f"  Criteria: CBP Inv >= {min_inventory:,} and change < {max_change_pct:.1f}% period to period"
+    )
+    print(f"  Periods:  {', '.join(recent_periods)}")
+    print("  " + "-" * 110)
+    print(
+        f"  {'ISBN':<16}"
+        f"{'Title':<44}"
+        f"{recent_periods[0]:>10}"
+        f"{recent_periods[1]:>10}"
+        f"{recent_periods[2]:>10}"
+        f"{recent_periods[3]:>10}"
+        f"{'Max %':>8}"
+        f"{'Value':>12}"
+    )
+    print("  " + "-" * 110)
+    for _, row in summary_df.iterrows():
+        title = ""
+        if pd.notna(row.get("Title")):
+            title = str(row["Title"])[:44]
+        print(
+            f"  {str(row['ISBN']):<16}"
+            f"{title:<44}"
+            f"{int(row[f'Inv_{recent_periods[0]}']):>10,}"
+            f"{int(row[f'Inv_{recent_periods[1]}']):>10,}"
+            f"{int(row[f'Inv_{recent_periods[2]}']):>10,}"
+            f"{int(row[f'Inv_{recent_periods[3]}']):>10,}"
+            f"{row['MaxPctChange']:>7.2f}%"
+            f"{int(row['TotalValue']):>12,}"
+        )
+
+
 def check_inventory_no_value_rows():
     if not PICKLE_FILE.exists():
         print()
@@ -1091,7 +1225,7 @@ def show_last_10_periods_in_sharepoint_file():
     periods = sorted(df["period"].astype(str).unique().tolist(), reverse=True)[:10]
 
     print()
-    print("Last 10 periods in the SharePoint file:")
+    print("Last 10 periods in the SharePoint export source:")
     if not periods:
         print("  No periods were found.")
         return
@@ -1106,14 +1240,24 @@ def refresh_verticalized_coninv_to_sharepoint():
         print(f"Source pickle not found: {PICKLE_FILE}")
         return
 
+    export_df = load_existing_vertical_pickle()
+
+    def format_file_size(path: Path) -> str:
+        size_bytes = path.stat().st_size
+        if size_bytes >= 1024 * 1024:
+            return f"{size_bytes / (1024 * 1024):,.2f} MB"
+        if size_bytes >= 1024:
+            return f"{size_bytes / 1024:,.2f} KB"
+        return f"{size_bytes:,} bytes"
+
     username = getpass.getuser().strip().lower()
     sharepoint_destination_folder = KNOWN_SHAREPOINT_FOLDERS.get(username)
     if sharepoint_destination_folder is None:
         sharepoint_destination_folder = Path(r"C:\Users") / username / SHAREPOINT_FOLDER_SUFFIX
 
     if not sharepoint_destination_folder.exists():
-        desktop_pickle_file = Path.home() / "Desktop" / "Consolidated_Inventory.pkl"
-        shutil.copy2(PICKLE_FILE, desktop_pickle_file)
+        desktop_csv_file = Path.home() / "Desktop" / SHAREPOINT_EXPORT_FILE_NAME
+        export_df.to_csv(desktop_csv_file, index=False)
         root = Tk()
         root.withdraw()
         root.attributes("-topmost", True)
@@ -1121,7 +1265,7 @@ def refresh_verticalized_coninv_to_sharepoint():
             messagebox.showwarning(
                 "CB Fabric Folder Not Found",
                 "I don't see your link to the 'CB Fabric' folder.\n\n"
-                f"I saved a copy here:\n{desktop_pickle_file}\n\n"
+                f"I saved a CSV copy here:\n{desktop_csv_file}\n\n"
                 "You'll have to upload it yourself.",
             )
         finally:
@@ -1129,16 +1273,18 @@ def refresh_verticalized_coninv_to_sharepoint():
 
         print()
         print("SharePoint destination folder was not found.")
-        print(f"Saved a manual-upload copy to: {desktop_pickle_file}")
+        print(f"Saved a manual-upload CSV to: {desktop_csv_file}")
+        print(f"  File size:  {format_file_size(desktop_csv_file)}")
         return
 
-    sharepoint_pickle_file = sharepoint_destination_folder / "Consolidated_Inventory.pkl"
-    shutil.copy2(PICKLE_FILE, sharepoint_pickle_file)
+    sharepoint_csv_file = sharepoint_destination_folder / SHAREPOINT_EXPORT_FILE_NAME
+    export_df.to_csv(sharepoint_csv_file, index=False)
 
     print()
-    print("Refreshed verticalized ConInv to SharePoint:")
+    print("Refreshed verticalized ConInv CSV to SharePoint:")
     print(f"  Source:       {PICKLE_FILE}")
-    print(f"  Destination:  {sharepoint_pickle_file}")
+    print(f"  Destination:  {sharepoint_csv_file}")
+    print(f"  File size:    {format_file_size(sharepoint_csv_file)}")
 
 
 def run_verticalize_menu():
@@ -1204,7 +1350,7 @@ def run_menu():
         print()
         print("    1. Add New ConInv Report to Bash Depot")
         print("    2. Verticalize ConInv from Bash Depot into Pickle")
-        print("    3. Copy ConInv Pickle to SharePoint")
+        print("    3. Export ConInv CSV to SharePoint")
         print("    4. Summarize/View Top N Rows of ConInv (Pickle file)")
         print("    5. Summarize a Specific Verticalized Month (Period) of the ConInv (Pickle file)")
         print("    6. Summarize Last N Months (CB Only) of ConInv (Pickle file)")
@@ -1213,6 +1359,7 @@ def run_menu():
         print("    9. Summarize Chronicle Rows of ConInv with Negative Values or Negative Inventory")
         print("    10. Consolidate Inventory for the INVOBS")
         print("    11. Summarize Last N Months of Total U/C for One ISBN")
+        print("    12. Find Chronicle ISBNs with Frozen CBP Inventory (Last 4 Periods)")
         print("    99. Exit")
         print()
         choice = input("Choose an option: ").strip().lower()
@@ -1259,6 +1406,10 @@ def run_menu():
 
         if choice == "11":
             check_last_n_months_for_isbn()
+            continue
+
+        if choice == "12":
+            check_frozen_cbp_inventory()
             continue
 
         if choice in {"99", "exit", "quit", "q", "back", "b"}:
