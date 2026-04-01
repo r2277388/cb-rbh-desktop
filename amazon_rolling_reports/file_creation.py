@@ -36,6 +36,8 @@ def create_rolling_report(pickle_file,pickle_po):
         lytd_index = cols.index('LYTD')
         cols.insert(lytd_index + 1, 'YTD Var')
     df_combined = df_combined[cols]
+    if 'AvgLast6W' in df_combined.columns:
+        df_combined = df_combined.rename(columns={'AvgLast6W': '6Wk Avg'})
     return df_combined
 
 def main():

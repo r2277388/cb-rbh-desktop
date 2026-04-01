@@ -53,6 +53,25 @@ def get_report_period_from_df(df):
     return date_formatted, week_number, full_year
 
 
+def build_title_block(report_type: str, date_formatted: str) -> dict[str, object]:
+    title_text = (
+        "Rolling Amazon Customer Orders"
+        if report_type == "Customer Orders"
+        else "Rolling Amazon POS"
+    )
+    subtitle_date = datetime.strptime(date_formatted, "%m_%d_%Y").strftime("%B %d, %Y")
+    return {
+        "start_row": 1,
+        "end_row": 2,
+        "start_col": 5,
+        "end_col": 5,
+        "title": title_text,
+        "subtitle": f"Week Ending: {subtitle_date}",
+        "merge_cells": False,
+        "align": "center",
+    }
+
+
 def save_reports_by_pub(
     df,
     report_type,
@@ -87,6 +106,8 @@ def save_reports_by_pub(
                 format_cols=pub_format_cols,
                 decimal_cols=decimal_cols,
                 rolling_main_layout=True,
+                integer_accounting_no_symbol=True,
+                title_block=build_title_block(report_type, date_formatted),
             )
             print(f"Saved {report_type} for {pub} to {filepath}")
             print()
@@ -185,7 +206,7 @@ def main():
     df_customer = df_customer.sort_values(by=sort_col, ascending=False)
 
     summary_cols = ["LTD", "LY_FY", "TYTD", "LYTD", "YTD Var", "W52", "OH", "PO_Qty"]
-    decimal_cols = ["Price", "OH_Avg"]
+    decimal_cols = ["Price", "OH_Avg", "6Wk Avg"]
 
     totals_co = build_column_totals(df_customer, date_cols + summary_cols)
     format_cols = date_cols + ["LTD", "LY_FY", "TYTD", "LYTD", "YTD Var", "W52", "OH", "PO_Qty"]
@@ -206,6 +227,8 @@ def main():
         format_cols=format_cols,
         decimal_cols=decimal_cols,
         rolling_main_layout=True,
+        integer_accounting_no_symbol=True,
+        title_block=build_title_block(name1, date_formatted),
     )
     # Saving to the dp folders
     if args.main_only:
@@ -238,7 +261,7 @@ def main():
     df_units = df_units.sort_values(by=sort_col, ascending=False)
 
     summary_cols = ["LTD", "LY_FY", "TYTD", "LYTD", "YTD Var", "W52", "OH", "PO_Qty"]
-    decimal_cols = ["Price", "OH_Avg"]
+    decimal_cols = ["Price", "OH_Avg", "6Wk Avg"]
 
     totals_us = build_column_totals(df_units, date_cols + summary_cols)
     format_cols = date_cols + ["LTD", "LY_FY", "TYTD", "LYTD", "YTD Var", "W52", "OH", "PO_Qty"]
@@ -258,6 +281,8 @@ def main():
         format_cols=format_cols,
         decimal_cols=decimal_cols,
         rolling_main_layout=True,
+        integer_accounting_no_symbol=True,
+        title_block=build_title_block(name2, units_date_formatted),
     )
     # Saving to the dp folders
     if args.main_only:

@@ -12,6 +12,7 @@ from pos_combiner import (
 )
 from inventory_working import build_inventory_working_file, find_inventory_source_file
 from sales_working import build_sales_working_file, find_sales_source_file
+from rolling_customer_sales import build_customer_sales_report, print_result_summary as print_rolling_result_summary
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -159,7 +160,11 @@ def run_menu(default_raw_folder: str | Path | None = None) -> None:
         print("    2. Build Combined POS File")
         print("    3. Build working Sales file from Sales*.xlsx and pos_combined")
         print("    4. Build working Inventory file from Inventory*.xlsx and pos_combined")
-        print("    5. Exit")
+        print("    5. Refresh caches + build B&N rolling report")
+        print("    6. Build B&N rolling report from current caches")
+        print("    7. Refresh caches + build B&N rolling report + DP versions")
+        print("    8. Build B&N rolling report + DP versions from current caches")
+        print("    9. Exit")
         print()
         choice = input("Choose an option: ").strip().lower()
 
@@ -195,7 +200,40 @@ def run_menu(default_raw_folder: str | Path | None = None) -> None:
             print_inventory_result_summary(result)
             continue
 
-        if choice in {"5", "q", "quit", "exit"}:
+        if choice == "5":
+            print("\nRefreshing caches and building B&N rolling report...")
+            result = build_customer_sales_report(
+                raw_folder=raw_folder,
+                refresh_sales=True,
+                refresh_inventory=True,
+            )
+            print_rolling_result_summary(result)
+            continue
+
+        if choice == "6":
+            print("\nBuilding B&N rolling report from current caches...")
+            result = build_customer_sales_report(raw_folder=raw_folder)
+            print_rolling_result_summary(result)
+            continue
+
+        if choice == "7":
+            print("\nRefreshing caches and building B&N rolling report + DP versions...")
+            result = build_customer_sales_report(
+                raw_folder=raw_folder,
+                refresh_sales=True,
+                refresh_inventory=True,
+                save_dp=True,
+            )
+            print_rolling_result_summary(result)
+            continue
+
+        if choice == "8":
+            print("\nBuilding B&N rolling report + DP versions from current caches...")
+            result = build_customer_sales_report(raw_folder=raw_folder, save_dp=True)
+            print_rolling_result_summary(result)
+            continue
+
+        if choice in {"9", "q", "quit", "exit"}:
             return
 
         print("Invalid choice. Please select a valid option.")
