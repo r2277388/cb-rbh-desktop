@@ -5,8 +5,14 @@ from pathlib import Path
 from tkinter import Tk
 from tkinter.filedialog import askopenfilename
 
-# Add the parent directory to the sys.path so Python can find functions.py
-sys.path.append(str(Path(__file__).resolve().parent.parent))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from paths import process_paths
+
+DEFAULT_PO_FILE = process_paths.AMAZON_PO_DATAWAREHOUSE_ANALYSIS_FILE
+LAST_PO_FILE_PATH: Path | None = None
 
 def upload_po() -> pd.DataFrame:
     """
@@ -16,20 +22,25 @@ def upload_po() -> pd.DataFrame:
     Returns:
     - DataFrame with selected columns and appropriate data types.
     """
-    # Open a file dialog to select the Purchase Order file
-    Tk().withdraw()  # Hide the root Tkinter window
-    file = askopenfilename(
-        title="Select the Purchase Order File (CSV format)",
-        filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")]
-    )
+    if DEFAULT_PO_FILE.exists():
+        file = str(DEFAULT_PO_FILE)
+        print(f"Using saved PO file: {file}")
+    else:
+        Tk().withdraw()  # Hide the root Tkinter window
+        file = askopenfilename(
+            title="Select the Purchase Order File (CSV format)",
+            filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")]
+        )
     
     if not file:
         raise FileNotFoundError("No file selected. Please select a valid CSV file.")
     
     if not file.endswith('.csv'):
         raise ValueError("The selected file is not a CSV file. Please select a valid CSV file.")
-    
-    print(f"Selected file: {file}")
+    if not DEFAULT_PO_FILE.exists() or str(DEFAULT_PO_FILE) != file:
+        print(f"Selected file: {file}")
+    global LAST_PO_FILE_PATH
+    LAST_PO_FILE_PATH = Path(file)
     
     columns = ['ASIN', 'External ID', 'Accepted quantity', 'Requested quantity', 
                'Total accepted cost', 'Cost', 'Total requested cost']
@@ -94,6 +105,10 @@ def get_cleaned_po() -> pd.DataFrame:
     df = rename_columns(df)
     df = po_clean(df)
     return df
+
+
+def get_last_po_file_path() -> Path | None:
+    return LAST_PO_FILE_PATH
 
 def main():
     """
