@@ -84,6 +84,17 @@ def save_to_excel(
         last_data_row = len(df) + header_row
         last_col = len(df.columns) - 1
 
+        integer_num_format = (
+            '_(* #,##0_);_(* (#,##0);_(* "-"_);_(@_)'
+            if integer_accounting_no_symbol
+            else '#,##0'
+        )
+        decimal_num_format = (
+            '_(* #,##0.00_);_(* (#,##0.00);_(* "-"??_);_(@_)'
+            if integer_accounting_no_symbol
+            else '#,##0.00'
+        )
+
         default_header_format = workbook.add_format({
             'bold': True,
             'align': 'center',
@@ -128,7 +139,7 @@ def save_to_excel(
         })
         summary_number_format = workbook.add_format({
             'bold': True,
-            'num_format': '#,##0',
+            'num_format': integer_num_format,
             'align': 'right',
             'valign': 'vcenter',
             'bg_color': '#E4DFEC',
@@ -136,7 +147,7 @@ def save_to_excel(
         })
         summary_decimal_format = workbook.add_format({
             'bold': True,
-            'num_format': '#,##0.00',
+            'num_format': decimal_num_format,
             'align': 'right',
             'valign': 'vcenter',
             'bg_color': '#E4DFEC',
@@ -314,7 +325,6 @@ def save_to_excel(
 
         # Format integer columns
         if format_cols:
-            integer_num_format = '_(* #,##0_);_(* (#,##0);_(* "-"_);_(@_)' if integer_accounting_no_symbol else '#,##0'
             number_format = workbook.add_format({'num_format': integer_num_format})
             for col in format_cols:
                 if col in df.columns:
@@ -328,7 +338,7 @@ def save_to_excel(
 
         # Format decimal columns
         if decimal_cols:
-            decimal_format = workbook.add_format({'num_format': '#,##0.00'})
+            decimal_format = workbook.add_format({'num_format': decimal_num_format})
             for col in decimal_cols:
                 if col in df.columns:
                     col_idx = df.columns.get_loc(col)

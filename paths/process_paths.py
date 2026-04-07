@@ -38,7 +38,7 @@ BN_WEEKLY_REPORT_FOLDER = Path(
     r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Barnes & Noble"
 )
 CONSOLIDATED_INVENTORY_VERTICALIZATION_FOLDER = Path(
-    r"F:\RBH_Finternal\consolidated_inventory"
+    r"F:\ANALYSIS\Finance\DataWarehouse\consolidated_inventory"
 )
 INVENTORY_DAILY_FINANCE_ONLY_FOLDER = Path(r"G:\OPS\Inventory\Daily\Finance_Only")
 CURRENT_AMAZON_PREORDERS_FILE = Path(

@@ -388,11 +388,11 @@ def confirm_amazon_ams_files() -> bool:
         print(f"  Config file:            {config_path}")
         print(f"  ASIN mapping file:      {mapping_file}")
         if latest_month:
-            print(f"  Latest configured month:{latest_month}")
+            print(f"  Latest discovered month:{latest_month}")
             print(f"  Latest month file:      {latest_month_file}")
             print(f"  Latest month tab:       {latest_month_tab}")
         else:
-            print("  Latest configured month: none found in config")
+            print("  Latest discovered month: none found")
         print("  SQL source:             sql-2-db / CBQ2 (item metadata)")
         print(f"  Output pickle:          {output_pickle}")
         print(f"  Output workbook:        {output_excel}")

@@ -32,6 +32,7 @@ class InventoryBuildResult:
     raw_folder: Path
     source_file: Path
     output_file: Path
+    snapshot_file: Path
     removed_isbns_file: Path
     matched_updates: int
     appended_rows: int
@@ -45,6 +46,10 @@ def format_inventory_output_filename(week_ending: datetime) -> str:
 
 def format_previous_inventory_output_filename(week_ending: datetime) -> str:
     return f"{INVENTORY_PREFIX}_{week_ending:%Y_%m_%d}.xlsx"
+
+
+def format_inventory_snapshot_filename(week_ending: datetime) -> str:
+    return f"Rolling_Inventory_Snapshot_{week_ending:%Y_%m_%d}.xlsx"
 
 
 def find_inventory_source_file(raw_folder: Path) -> Path:
@@ -92,6 +97,33 @@ def load_pos_dataframe(raw_folder: Path) -> pd.DataFrame:
     df["ISBN"] = normalize_isbn_series(df["ISBN"])
     df = df.loc[df["ISBN"].notna()].drop_duplicates(subset=["ISBN"], keep="first")
     return df
+
+
+def build_inventory_snapshot_dataframe(working_inventory_file: Path, week_ending: datetime) -> pd.DataFrame:
+    snapshot = pd.read_excel(
+        working_inventory_file,
+        header=INVENTORY_HEADER_ROW - 1,
+        usecols="A,G,I,K,M",
+        dtype={"ISBN": "string"},
+    )
+    snapshot.columns = ["ISBN", "OH_DC", "OH_Stores", "OO_DC", "OO_Stores"]
+    snapshot["ISBN"] = normalize_isbn_series(snapshot["ISBN"])
+    snapshot = snapshot[snapshot["ISBN"].notna()].copy()
+    for column in ["OH_DC", "OH_Stores", "OO_DC", "OO_Stores"]:
+        snapshot[column] = pd.to_numeric(snapshot[column], errors="coerce").fillna(0).astype(int)
+    snapshot = (
+        snapshot.groupby("ISBN", as_index=False)[["OH_DC", "OH_Stores", "OO_DC", "OO_Stores"]]
+        .sum()
+        .sort_values("ISBN")
+        .reset_index(drop=True)
+    )
+    snapshot["Week"] = pd.Timestamp(week_ending.date())
+    return snapshot[["ISBN", "OH_Stores", "OO_Stores", "OH_DC", "OO_DC", "Week"]]
+
+
+def save_inventory_snapshot(snapshot_df: pd.DataFrame, output_file: Path) -> None:
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    snapshot_df.to_excel(output_file, index=False)
 
 
 def normalize_existing_headers(ws) -> None:
@@ -290,6 +322,7 @@ def build_inventory_working_file(
         if output_file
         else resolved_raw_folder / format_inventory_output_filename(week_ending)
     )
+    snapshot_path = resolved_raw_folder / format_inventory_snapshot_filename(week_ending)
     removed_isbns_path = (
         resolved_raw_folder
         / format_legacy_bn_removed_isbns_filename(INVENTORY_PREFIX, week_ending)
@@ -349,6 +382,8 @@ def build_inventory_working_file(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     workbook.save(output_path)
+    snapshot_df = build_inventory_snapshot_dataframe(output_path, week_ending)
+    save_inventory_snapshot(snapshot_df, snapshot_path)
     save_removed_isbns_report(removed_rows, removed_isbns_path)
 
     final_shape = (max(last_data_row - INVENTORY_DATA_START_ROW + 1, 0), 33)
@@ -356,6 +391,7 @@ def build_inventory_working_file(
         raw_folder=resolved_raw_folder,
         source_file=inventory_source,
         output_file=output_path,
+        snapshot_file=snapshot_path,
         removed_isbns_file=removed_isbns_path,
         matched_updates=matched_updates,
         appended_rows=appended_rows,
@@ -388,6 +424,7 @@ def print_result_summary(result: InventoryBuildResult) -> None:
     print(f"Rows removed by ISBN whitelist: {result.excluded_rows:,}")
     print(f"Final data shape: {result.final_shape}")
     print(f"Saved file: {result.output_file}")
+    print(f"Snapshot file: {result.snapshot_file}")
     print(f"Removed ISBNs file: {result.removed_isbns_file}")
 
 

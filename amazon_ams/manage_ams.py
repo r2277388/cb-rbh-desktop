@@ -8,9 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 import UPDATE_ams_config as ams_config
-from loader_asin_mapping import load_asin_mapping
-from loader_item import upload_item
-from loader_monthly_reports import load_monthly_data
+from processor import run_full_rebuild, run_incremental_update
 
 
 CONFIG_PATH = Path(__file__).with_name("UPDATE_ams_config.py")
@@ -20,31 +18,120 @@ BASELINE_YEAR = "2025"
 def reload_config():
     global ams_config
     ams_config = importlib.reload(ams_config)
-    return ams_config.tab_dict, ams_config.month_list
+    return ams_config
 
 
-def write_config(tab_dict):
+def write_config(month_overrides, ignored_months):
     lines = [
-        "# Auto-generated AMS config; keep keys in YYYY-MM format.",
-        "tab_dict = {",
+        "from __future__ import annotations",
+        "",
+        "import re",
+        "from pathlib import Path",
+        "",
+        "",
+        "REPORTS_ROOT = Path(",
+        '    r"G:\\SALES\\Amazon\\AMAZON ADVERTISING\\MONTHLY REPORTS\\MONTHLY REPORTS - PERFORMANCE BY ASIN"',
+        ")",
+        'DEFAULT_TAB = "USE_main"',
+        "DEFAULT_SKIPROWS = 1",
+        "",
+        "# Only add entries here when auto-discovery needs help for a specific month.",
+        "MONTH_OVERRIDES = {",
     ]
 
-    for month in sorted(tab_dict.keys()):
-        entry = tab_dict[month]
+    for month in sorted(month_overrides):
+        entry = month_overrides[month]
         tab = entry.get("tab", "USE_main")
         skiprows = int(entry.get("skiprows", 1))
         file_path = str(entry.get("file", ""))
         lines.extend(
             [
                 f'    "{month}": {{',
+                f'        "file": r"{file_path}",',
                 f'        "tab": "{tab}",',
                 f'        "skiprows": {skiprows},',
-                f'        "file": r"{file_path}",',
                 "    },",
             ]
         )
 
-    lines.extend(["}", "", "month_list = sorted(tab_dict.keys())", ""])
+    lines.extend(
+        [
+            "}",
+            "",
+            "# Add YYYY-MM values here if a month should be skipped from processing.",
+            f"IGNORED_MONTHS = {repr(set(sorted(ignored_months)))}",
+            "",
+            'MONTH_PATTERN = re.compile(r"(?P<year>20\\d{2})\\s*-\\s*(?P<month>\\d{2})")',
+            "",
+            "",
+            "def _candidate_files() -> list[Path]:",
+            "    if not REPORTS_ROOT.exists():",
+            "        return []",
+            "",
+            "    candidates: list[Path] = []",
+            '    for path in REPORTS_ROOT.rglob("*.xlsx"):',
+            "        name = path.name.lower()",
+            '        if path.name.startswith("~$"):',
+            "            continue",
+            '        if "performance by asin" not in name:',
+            "            continue",
+            "        candidates.append(path)",
+            "    return candidates",
+            "",
+            "",
+            "def _extract_month(path: Path) -> str | None:",
+            "    match = MONTH_PATTERN.search(path.stem)",
+            "    if not match:",
+            "        return None",
+            '    return f"{match.group(\'year\')}-{match.group(\'month\')}"',
+            "",
+            "",
+            "def _path_mtime(path: Path) -> float:",
+            "    try:",
+            "        return path.stat().st_mtime",
+            "    except OSError:",
+            "        return -1",
+            "",
+            "",
+            "def discover_monthly_files() -> dict[str, dict[str, object]]:",
+            "    discovered: dict[str, dict[str, object]] = {}",
+            "",
+            "    for path in sorted(_candidate_files()):",
+            "        month = _extract_month(path)",
+            "        if month is None or month in IGNORED_MONTHS:",
+            "            continue",
+            "",
+            "        existing = discovered.get(month)",
+            "        if existing is not None:",
+            '            existing_path = Path(str(existing["file"]))',
+            "            if _path_mtime(existing_path) >= _path_mtime(path):",
+            "                continue",
+            "",
+            '        discovered[month] = {"tab": DEFAULT_TAB, "skiprows": DEFAULT_SKIPROWS, "file": str(path)}',
+            "",
+            "    return discovered",
+            "",
+            "",
+            "def build_tab_dict() -> dict[str, dict[str, object]]:",
+            "    tab_dict = discover_monthly_files()",
+            "",
+            "    for month in IGNORED_MONTHS:",
+            "        tab_dict.pop(month, None)",
+            "",
+            "    for month, override in MONTH_OVERRIDES.items():",
+            "        if month in IGNORED_MONTHS:",
+            "            continue",
+            '        tab_dict[month] = {"tab": override.get("tab", DEFAULT_TAB), "skiprows": int(override.get("skiprows", DEFAULT_SKIPROWS)), "file": str(override["file"])}',
+            "",
+            "    return dict(sorted(tab_dict.items()))",
+            "",
+            "",
+            "tab_dict = build_tab_dict()",
+            "month_list = sorted(tab_dict.keys())",
+            "",
+        ]
+    )
+
     CONFIG_PATH.write_text("\n".join(lines), encoding="utf-8")
 
 
@@ -66,10 +153,9 @@ def baseline_columns(tab_dict):
         raise RuntimeError(f"No baseline months found for {BASELINE_YEAR}.")
 
     month_to_cols = {}
-    for m in baseline_months:
-        month_to_cols[m] = read_columns_from_entry(tab_dict[m])
+    for month in baseline_months:
+        month_to_cols[month] = read_columns_from_entry(tab_dict[month])
 
-    # Pick the most common baseline schema to avoid single-month anomalies.
     signatures = Counter(tuple(sorted(cols)) for cols in month_to_cols.values())
     expected_tuple, _ = signatures.most_common(1)[0]
     expected = set(expected_tuple)
@@ -81,17 +167,16 @@ def baseline_columns(tab_dict):
     return expected
 
 
-def validate_new_month_columns(month, tab, skiprows, file_path, tab_dict):
+def validate_month_columns(month, entry, tab_dict):
     expected = baseline_columns(tab_dict)
-    candidate = {"tab": tab, "skiprows": skiprows, "file": file_path}
-    actual = read_columns_from_entry(candidate)
+    actual = read_columns_from_entry(entry)
 
     missing = sorted(expected - actual)
     extra = sorted(actual - expected)
 
     print("\nExpected columns (baseline):")
     print(sorted(expected))
-    print("\nActual columns (new file):")
+    print("\nActual columns (candidate file):")
     print(sorted(actual))
 
     if not missing and not extra:
@@ -105,41 +190,43 @@ def validate_new_month_columns(month, tab, skiprows, file_path, tab_dict):
 
 
 def print_last_10_months():
-    _, month_list = reload_config()
-    last_10 = sorted(month_list, reverse=True)[:10]
-    print("\nLast 10 configured months:")
-    for m in last_10:
-        print(m)
+    config = reload_config()
+    last_10 = sorted(config.month_list, reverse=True)[:10]
+    print("\nLast 10 discovered/active months:")
+    for month in last_10:
+        entry = config.tab_dict[month]
+        override_label = " override" if month in config.MONTH_OVERRIDES else ""
+        print(f"{month}{override_label}: {entry['file']}")
 
 
-def remove_month():
-    tab_dict, month_list = reload_config()
+def ignore_month():
+    config = reload_config()
     print("\nConfigured months:")
-    print(", ".join(sorted(month_list)))
-    month = input("Enter month to remove (YYYY-MM): ").strip()
-    if month not in tab_dict:
+    print(", ".join(sorted(config.month_list)))
+    month = input("Enter month to ignore (YYYY-MM): ").strip()
+    if month not in config.tab_dict and month not in config.MONTH_OVERRIDES:
         print(f"Month not found: {month}")
         return
 
-    confirm = input(f"Remove {month} from tab_dict? (y/n): ").strip().lower()
+    confirm = input(f"Ignore {month} for future processing? (y/n): ").strip().lower()
     if confirm not in {"y", "yes"}:
         print("Cancelled.")
         return
 
-    del tab_dict[month]
-    write_config(tab_dict)
-    print(f"Removed {month} from UPDATE_ams_config.py")
+    overrides = dict(config.MONTH_OVERRIDES)
+    overrides.pop(month, None)
+    ignored = set(config.IGNORED_MONTHS)
+    ignored.add(month)
+    write_config(overrides, ignored)
+    print(f"{month} will be skipped in future processing.")
 
 
-def add_new_month():
-    tab_dict, _ = reload_config()
+def add_or_update_month_override():
+    config = reload_config()
 
     month = input("Month (YYYY-MM): ").strip()
     if not re.fullmatch(r"\d{4}-\d{2}", month):
         print("Invalid month format. Use YYYY-MM.")
-        return
-    if month in tab_dict:
-        print(f"{month} already exists in tab_dict.")
         return
 
     tab = input('Tab name [default USE_main]: ').strip() or "USE_main"
@@ -150,7 +237,15 @@ def add_new_month():
         print("Rows to skip must be an integer.")
         return
 
-    file_path = input("Full file path: ").strip()
+    default_path = ""
+    if month in config.tab_dict:
+        default_path = str(config.tab_dict[month]["file"])
+
+    prompt = "Full file path"
+    if default_path:
+        prompt += f" [default {default_path}]"
+    prompt += ": "
+    file_path = input(prompt).strip() or default_path
     if not file_path:
         print("File path is required.")
         return
@@ -158,15 +253,33 @@ def add_new_month():
         print(f"File not found: {file_path}")
         return
 
-    print("\nRunning column validation before adding...")
-    ok = validate_new_month_columns(month, tab, skiprows, file_path, tab_dict)
+    candidate_entry = {"tab": tab, "skiprows": skiprows, "file": file_path}
+    validation_tab_dict = dict(config.tab_dict)
+    validation_tab_dict[month] = candidate_entry
+
+    print("\nRunning column validation before saving override...")
+    ok = validate_month_columns(month, candidate_entry, validation_tab_dict)
     if not ok:
-        print("Not added due to column mismatch.")
+        print("Override not saved due to column mismatch.")
         return
 
-    tab_dict[month] = {"tab": tab, "skiprows": skiprows, "file": file_path}
-    write_config(tab_dict)
-    print(f"Added {month} to UPDATE_ams_config.py")
+    overrides = dict(config.MONTH_OVERRIDES)
+    overrides[month] = candidate_entry
+    ignored = set(config.IGNORED_MONTHS)
+    ignored.discard(month)
+    write_config(overrides, ignored)
+    print(f"Saved override for {month} in UPDATE_ams_config.py")
+
+
+def validate_latest_month():
+    config = reload_config()
+    if not config.month_list:
+        print("No months available.")
+        return
+
+    month = sorted(config.month_list)[-1]
+    print(f"Validating latest month: {month}")
+    validate_month_columns(month, config.tab_dict[month], config.tab_dict)
 
 
 def run_ams_full():
@@ -175,48 +288,30 @@ def run_ams_full():
 
 
 def run_ams_incremental():
-    tab_dict, month_list = reload_config()
-    if not month_list:
-        print("No months in config.")
+    config = reload_config()
+    if not config.month_list:
+        print("No months available.")
         return
 
-    default_month = sorted(month_list)[-1]
+    default_month = sorted(config.month_list)[-1]
     month = input(f"Month to process [default {default_month}]: ").strip() or default_month
-    if month not in tab_dict:
-        print(f"Month not found in tab_dict: {month}")
+    if month not in config.tab_dict:
+        print(f"Month not found: {month}")
         return
 
     print(f"Processing incremental month: {month}")
-    asin_mapping = load_asin_mapping()
-    item_df = upload_item()
-
-    df_month = load_monthly_data(tab_dict[month], asin_mapping, month)
-    if not item_df.empty:
-        df_month = pd.merge(df_month, item_df, on="ISBN", how="left")
-
-    output_pickle = Path(__file__).with_name("combined_amazon_ads_by_asin.pkl")
-    output_excel = Path(__file__).with_name("combined_amazon_ads_by_asin.xlsx")
-
-    if output_pickle.exists():
-        existing = pd.read_pickle(output_pickle)
-        if "period" in existing.columns:
-            existing = existing[existing["period"] != month]
-        combined = pd.concat([existing, df_month], ignore_index=True)
-    else:
-        combined = df_month
-
-    combined.to_pickle(output_pickle)
-    combined.to_excel(output_excel, index=False)
-    print(f"Updated outputs with {month}:")
-    print(f"- {output_pickle}")
-    print(f"- {output_excel}")
+    _, archived = run_incremental_update(month)
+    if archived:
+        print("Archived previous outputs:")
+        for path in archived:
+            print(f"- {path}")
 
 
 def run_ams():
     print("\nRun AMS")
     print()
-    print("    1. Incremental (new/additional month only)")
-    print("    2. Full rerun (all configured months)")
+    print("    1. Incremental (append/replace one month only)")
+    print("    2. Full rerun (all discovered months)")
     print("    3. Back")
     print()
     choice = input("Choose an option: ").strip().lower()
@@ -234,11 +329,12 @@ def main():
     while True:
         print("\nAmazon AMS Manager")
         print()
-        print("    1. Show last 10 configured months")
-        print("    2. Remove month from tab_dict")
-        print("    3. Add/process new month (validate before add)")
-        print("    4. Run AMS processing")
-        print("    5. Back to launcher")
+        print("    1. Show last 10 discovered months")
+        print("    2. Ignore a month from processing")
+        print("    3. Add/update month override")
+        print("    4. Validate latest month against baseline")
+        print("    5. Run AMS processing")
+        print("    6. Back to launcher")
         print()
         choice = input("Choose an option: ").strip().lower()
 
@@ -246,17 +342,19 @@ def main():
             if choice == "1":
                 print_last_10_months()
             elif choice == "2":
-                remove_month()
+                ignore_month()
             elif choice == "3":
-                add_new_month()
+                add_or_update_month_override()
             elif choice == "4":
+                validate_latest_month()
+            elif choice == "5":
                 run_ams()
-            elif choice in {"5", "back", "b", "exit", "quit", "q"}:
+            elif choice in {"6", "back", "b", "exit", "quit", "q"}:
                 return
             else:
                 print("Invalid choice.")
-        except Exception as e:
-            print(f"Operation failed: {e}")
+        except Exception as exc:
+            print(f"Operation failed: {exc}")
 
 
 if __name__ == "__main__":

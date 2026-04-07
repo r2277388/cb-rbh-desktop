@@ -117,6 +117,13 @@ def clean_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _first_non_blank(series: pd.Series):
+    for value in series:
+        if pd.notna(value) and str(value).strip():
+            return value
+    return series.iloc[0] if not series.empty else pd.NA
+
+
 def build_combined_pos(raw_folder: str | Path | None = None, output_file: str | Path | None = None) -> PosBuildResult:
     resolved_raw_folder = resolve_raw_folder(raw_folder)
     week_ending = parse_week_ending(resolved_raw_folder.name)
@@ -135,10 +142,23 @@ def build_combined_pos(raw_folder: str | Path | None = None, output_file: str | 
     combined = clean_numeric_columns(combined)
 
     rows_before_dedup = len(combined)
-    combined = combined.drop_duplicates(subset=["EAN"], keep="first").reset_index(drop=True)
+    combined = (
+        combined.groupby("EAN", as_index=False)
+        .agg(
+            {
+                "Imprint": _first_non_blank,
+                "OH": "sum",
+                "DC_To_Stores(OO)": "sum",
+                "LW": "sum",
+                "YTD": "sum",
+                "DC_OH_Tot": "sum",
+                "DC_OO_Tot": "sum",
+            }
+        )
+        .reset_index(drop=True)
+    )
     rows_after_dedup = len(combined)
     duplicate_rows_removed = rows_before_dedup - rows_after_dedup
-    combined.drop(columns=["_source_file"], inplace=True)
     combined.rename(columns=OUTPUT_COLUMN_RENAMES, inplace=True)
 
     output_path = Path(output_file) if output_file else resolved_raw_folder / format_output_filename(week_ending)

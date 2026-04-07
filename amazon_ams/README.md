@@ -1,7 +1,12 @@
-How to updated:
+Amazon AMS process
 
-Make sure the new files saved to this folder: G:\SALES\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\
+Monthly files are now auto-discovered from:
+`G:\SALES\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN`
 
-are saved in the same format, with the same columns.
+Normal monthly workflow:
+1. Save the new report into the correct year folder under the monthly reports directory.
+2. Run `amazon_ams/manage_ams.py`.
+3. Use `Validate latest month against baseline`.
+4. Use `Incremental (append/replace one month only)` to archive the current outputs and update just that month.
 
-You'll need to updated to things.
+You only need to edit `amazon_ams/UPDATE_ams_config.py` when a month needs an override or should be ignored.
