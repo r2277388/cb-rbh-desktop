@@ -172,7 +172,9 @@ AMAZON_AMS_MANAGER_SCRIPT = repo_path("amazon_ams", "manage_ams.py")
 AMAZON_AMS_PROCESS_SCRIPT = repo_path("amazon_ams", "main.py")
 AMAZON_AMS_CONFIG_FILE = repo_path("amazon_ams", "UPDATE_ams_config.py")
 AMAZON_AMS_OUTPUT_PICKLE = repo_path("amazon_ams", "combined_amazon_ads_by_asin.pkl")
-AMAZON_AMS_OUTPUT_EXCEL = repo_path("amazon_ams", "combined_amazon_ads_by_asin.xlsx")
+AMAZON_AMS_OUTPUT_EXCEL = Path(
+    r"F:\ANALYSIS\Finance\DataWarehouse\Atelier Amazon\ams_summaries\combined_amazon_ads_by_asin.xlsx"
+)
 AMAZON_AMS_ERROR_LOG = repo_path("amazon_ams", "processing_errors.log")
 FRONTLIST_SUPERCHARGED_SCRIPT = repo_path("FLTracking_Supercharged", "main.py")
 FRONTLIST_SUPERCHARGED_OUTPUT_DIR = repo_path("FLTracking_Supercharged", "output")

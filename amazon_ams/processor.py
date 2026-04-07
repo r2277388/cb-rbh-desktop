@@ -11,10 +11,11 @@ from loader_asin_mapping import load_asin_mapping
 from loader_item import upload_item
 from loader_monthly_reports import load_monthly_data
 import UPDATE_ams_config as ams_config
+from paths import process_paths
 
 
 OUTPUT_PICKLE = Path(__file__).with_name("combined_amazon_ads_by_asin.pkl")
-OUTPUT_EXCEL = Path(__file__).with_name("combined_amazon_ads_by_asin.xlsx")
+OUTPUT_EXCEL = process_paths.AMAZON_AMS_OUTPUT_EXCEL
 ERROR_LOG = Path(__file__).with_name("processing_errors.log")
 ARCHIVE_DIR = Path(__file__).with_name("archive")
 
@@ -97,6 +98,7 @@ def build_full_dataset(months: list[str] | None = None) -> tuple[pd.DataFrame, l
 
 def save_outputs(df: pd.DataFrame, errors: list[str]) -> None:
     if not df.empty:
+        OUTPUT_EXCEL.parent.mkdir(parents=True, exist_ok=True)
         df.to_pickle(OUTPUT_PICKLE)
         df.to_excel(OUTPUT_EXCEL, index=False)
         print(f"Saved pickle: {OUTPUT_PICKLE}")
