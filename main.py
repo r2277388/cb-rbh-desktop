@@ -60,7 +60,7 @@ def display_options():
         "04. Amazon (4) Customer Orders",
         "05. Amazon (5) Sellthru SQL Upload",
         "06. Amazon (6) Rolling Reports",
-        "07. Amazon (7) AMS Manager",
+        "07. Amazon AMS Manager (monthly)",
         "08. Barnes & Noble Rolling Reports",
         "09. Consolidate Inventory Manager",
         "10. Frontlist Supercharged Data",
@@ -94,7 +94,7 @@ def display_info(choice):
         "4": "Amazon (4) Customer Orders: Generates a report for Amazon Customer Orders. Save the relevant data file to the appropriate location before running.",
         "5": "Amazon (5) Sellthru SQL Upload: Runs the amazon_sql_upload workflow (ASIN/ISBN conversion, uploads, etc.).",
         "6": "Amazon (6) Rolling Reports: Runs a 10-week SQL freshness check first, then asks whether to continue with the full process.",
-        "7": "Amazon (7) AMS Manager: Manage/update AMS month configuration and run incremental or full AMS processing.",
+        "7": "Amazon AMS Manager (monthly): Manage/update AMS month configuration and run incremental or full AMS processing.",
         "8": "Barnes & Noble Rolling Reports: Builds weekly Barnes & Noble rolling-report source files, starting with the combined POS non-book extract.",
         "9": "Consolidate Inventory Manager: Opens the consolidated inventory workflow menu, including depot file intake, verticalization, summaries, and related inventory tools.",
         "10": "Frontlist Supercharged Data: Builds the frontlist ISBN master file by merging Frontlist Tracking with cached Excel extracts and SQL source data.",
@@ -623,7 +623,7 @@ def run_program(choice):
         "3": ("Amazon (3) PreOrders", "amazon_preorders/main.py"),
         "4": ("Amazon (4) Customer Orders", "amazon_customer_orders/main.py"),
         "5": ("Amazon (5) Sellthru SQL Upload", "amazon_sql_upload/main.py"),
-        "7": ("Amazon (7) AMS Manager", "amazon_ams/manage_ams.py"),
+        "7": ("Amazon AMS Manager (monthly)", "amazon_ams/manage_ams.py"),
         "8": ("Barnes & Noble Rolling Reports", "bn_rolling_reports/main.py"),
         "9": (
             "Consolidate Inventory Manager",
@@ -685,7 +685,7 @@ def run_program(choice):
                 if not confirm_amazon_ams_files():
                     return
             except (FileNotFoundError, ImportError, AttributeError) as e:
-                print(f"Unable to locate the Amazon (7) AMS Manager source files: {e}")
+                print(f"Unable to locate the Amazon AMS Manager (monthly) source files: {e}")
                 return
         if choice == "8":
             try:
