@@ -58,6 +58,15 @@ class RollingBuildResult:
     dp_files_saved: int = 0
 
 
+@dataclass
+class CacheRefreshResult:
+    latest_sql_week: pd.Timestamp | None
+    sales_cache_week: pd.Timestamp | None
+    inventory_cache_week: pd.Timestamp | None
+    sales_rows: int
+    inventory_rows: int
+
+
 def _ensure_cache_dir() -> None:
     sales_cache_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -226,6 +235,21 @@ def refresh_sales_cache(full_refresh: bool = False) -> pd.DataFrame:
     ).sort_values(["Week", "ISBN"]).reset_index(drop=True)
     _save_parquet(combined, sales_cache_file)
     return combined
+
+
+def get_latest_sql_week() -> pd.Timestamp | None:
+    engine = get_connection()
+    query = """
+    SELECT MAX(CAST([WEEK] AS date)) AS latest_week
+    FROM [CBQ2].[cb].[Sellthrough_Barnes_and_Noble];
+    """
+    result = fetch_data_from_db(engine, query)
+    if result.empty or "latest_week" not in result.columns:
+        return None
+    latest_value = result.iloc[0]["latest_week"]
+    if pd.isna(latest_value):
+        return None
+    return pd.Timestamp(latest_value)
 
 
 def _read_inventory_snapshot(raw_folder: Path) -> pd.DataFrame:
@@ -629,6 +653,24 @@ def build_customer_sales_report(
     )
 
 
+def refresh_caches_only(
+    raw_folder: str | Path | None = None,
+    full_refresh: bool = False,
+) -> CacheRefreshResult:
+    latest_sql_week = get_latest_sql_week()
+    sales_df = refresh_sales_cache(full_refresh=full_refresh)
+    inventory_df = refresh_inventory_cache(raw_folder=raw_folder, full_refresh=full_refresh)
+    sales_cache_week = pd.to_datetime(sales_df["Week"]).max() if not sales_df.empty else None
+    inventory_cache_week = pd.to_datetime(inventory_df["Week"]).max() if not inventory_df.empty else None
+    return CacheRefreshResult(
+        latest_sql_week=latest_sql_week,
+        sales_cache_week=sales_cache_week,
+        inventory_cache_week=inventory_cache_week,
+        sales_rows=len(sales_df),
+        inventory_rows=len(inventory_df),
+    )
+
+
 def print_result_summary(result: RollingBuildResult) -> None:
     print()
     print(f"Latest week: {result.latest_week:%Y-%m-%d}")
@@ -638,6 +680,24 @@ def print_result_summary(result: RollingBuildResult) -> None:
     print(f"Saved file: {result.output_file}")
     if result.dp_files_saved:
         print(f"DP files saved: {result.dp_files_saved}")
+
+
+def print_cache_refresh_summary(result: CacheRefreshResult) -> None:
+    print()
+    print(
+        "Latest SQL week: "
+        f"{result.latest_sql_week.strftime('%Y-%m-%d') if result.latest_sql_week is not None else 'None'}"
+    )
+    print(
+        "Sales cache latest week: "
+        f"{result.sales_cache_week.strftime('%Y-%m-%d') if result.sales_cache_week is not None else 'None'}"
+    )
+    print(
+        "Inventory cache latest week: "
+        f"{result.inventory_cache_week.strftime('%Y-%m-%d') if result.inventory_cache_week is not None else 'None'}"
+    )
+    print(f"Sales cache rows: {result.sales_rows:,}")
+    print(f"Inventory cache rows: {result.inventory_rows:,}")
 
 
 def build_parser() -> argparse.ArgumentParser:

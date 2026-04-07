@@ -1,14 +1,13 @@
 import pandas as pd
 from pathlib import Path
-import os
-from paths import DOWNLOADS_FOLDER
+from paths import ATELIER_AMAZON_CATALOG_FOLDER
 
 def get_latest_file(folder_path: Path, pattern: str) -> Path:
     """Return the latest file in the folder matching the given pattern."""
     files = list(folder_path.glob(pattern))
     if not files:
         raise FileNotFoundError(f"No files found in {folder_path} with pattern {pattern}")
-    latest_file = max(files, key=os.path.getctime)
+    latest_file = max(files, key=lambda path: path.stat().st_mtime)
     return latest_file
 
 def read_catalog_file(file_path: Path, columns: list, date_column: str) -> pd.DataFrame:
@@ -34,7 +33,7 @@ def process_latest_catalog(folder_path: str, pattern: str, columns: list, date_c
     return df
     
 def data_catalog():
-    folder_path = DOWNLOADS_FOLDER
+    folder_path = ATELIER_AMAZON_CATALOG_FOLDER
     pattern = '*Catalog*csv'
     columns = ['ASIN', 'EAN', 'ISBN', 'Model Number', 'Release Date']
     date_column = 'Release Date'

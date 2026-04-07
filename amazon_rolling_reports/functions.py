@@ -74,89 +74,96 @@ def save_to_excel(
     column_format_overrides=None,
     integer_accounting_no_symbol=False,
 ):
-    with pd.ExcelWriter(filename, engine='xlsxwriter') as writer:
-        worksheet_name = 'Sheet1'
-        header_row = header_row_override if header_row_override is not None else (4 if rolling_main_layout else 3)
-        data_start_row = header_row + 1
-        df.to_excel(writer, sheet_name=worksheet_name, startrow=header_row, index=False)
-        worksheet = writer.sheets[worksheet_name]
-        workbook = writer.book
-        last_data_row = len(df) + header_row
-        last_col = len(df.columns) - 1
+    filename = pd.io.common.stringify_path(filename)
+    from pathlib import Path
 
-        integer_num_format = (
-            '_(* #,##0_);_(* (#,##0);_(* "-"_);_(@_)'
-            if integer_accounting_no_symbol
-            else '#,##0'
-        )
-        decimal_num_format = (
-            '_(* #,##0.00_);_(* (#,##0.00);_(* "-"??_);_(@_)'
-            if integer_accounting_no_symbol
-            else '#,##0.00'
-        )
+    output_path = Path(filename)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        default_header_format = workbook.add_format({
-            'bold': True,
-            'align': 'center',
-            'valign': 'vcenter',
-            'bg_color': '#D8E4BC',
-            'border': 1,
-        })
-        pre_date_header_format = workbook.add_format({
-            'bold': True,
-            'align': 'center',
-            'valign': 'vcenter',
-            'bg_color': '#B8CCE4',
-            'border': 1,
-        })
-        weeknum_label_format = workbook.add_format({
-            'bold': True,
-            'align': 'center',
-            'valign': 'vcenter',
-            'bg_color': weeknum_label_fill,
-            'border': 1,
-        })
-        odd_month_header_format = workbook.add_format({
-            'bold': True,
-            'align': 'center',
-            'valign': 'vcenter',
-            'bg_color': '#D8E4BC',
-            'border': 1,
-        })
-        even_month_header_format = workbook.add_format({
-            'bold': True,
-            'align': 'center',
-            'valign': 'vcenter',
-            'bg_color': '#F2DCDB',
-            'border': 1,
-        })
-        summary_label_format = workbook.add_format({
-            'bold': True,
-            'align': 'left',
-            'valign': 'vcenter',
-            'bg_color': '#CCC0DA',
-            'border': 1,
-        })
-        summary_number_format = workbook.add_format({
-            'bold': True,
-            'num_format': integer_num_format,
-            'align': 'right',
-            'valign': 'vcenter',
-            'bg_color': '#E4DFEC',
-            'border': 1,
-        })
-        summary_decimal_format = workbook.add_format({
-            'bold': True,
-            'num_format': decimal_num_format,
-            'align': 'right',
-            'valign': 'vcenter',
-            'bg_color': '#E4DFEC',
-            'border': 1,
-        })
-        blank_summary_format = workbook.add_format({
-            'bg_color': '#E4DFEC',
-            'border': 1,
-        })
+    try:
+        with pd.ExcelWriter(output_path, engine='xlsxwriter') as writer:
+            worksheet_name = 'Sheet1'
+            header_row = header_row_override if header_row_override is not None else (4 if rolling_main_layout else 3)
+            data_start_row = header_row + 1
+            df.to_excel(writer, sheet_name=worksheet_name, startrow=header_row, index=False)
+            worksheet = writer.sheets[worksheet_name]
+            workbook = writer.book
+            last_data_row = len(df) + header_row
+            last_col = len(df.columns) - 1
+
+            integer_num_format = (
+                '_(* #,##0_);_(* (#,##0);_(* "-"_);_(@_)'
+                if integer_accounting_no_symbol
+                else '#,##0'
+            )
+            decimal_num_format = (
+                '_(* #,##0.00_);_(* (#,##0.00);_(* "-"??_);_(@_)'
+                if integer_accounting_no_symbol
+                else '#,##0.00'
+            )
+
+            default_header_format = workbook.add_format({
+                'bold': True,
+                'align': 'center',
+                'valign': 'vcenter',
+                'bg_color': '#D8E4BC',
+                'border': 1,
+            })
+            pre_date_header_format = workbook.add_format({
+                'bold': True,
+                'align': 'center',
+                'valign': 'vcenter',
+                'bg_color': '#B8CCE4',
+                'border': 1,
+            })
+            weeknum_label_format = workbook.add_format({
+                'bold': True,
+                'align': 'center',
+                'valign': 'vcenter',
+                'bg_color': weeknum_label_fill,
+                'border': 1,
+            })
+            odd_month_header_format = workbook.add_format({
+                'bold': True,
+                'align': 'center',
+                'valign': 'vcenter',
+                'bg_color': '#D8E4BC',
+                'border': 1,
+            })
+            even_month_header_format = workbook.add_format({
+                'bold': True,
+                'align': 'center',
+                'valign': 'vcenter',
+                'bg_color': '#F2DCDB',
+                'border': 1,
+            })
+            summary_label_format = workbook.add_format({
+                'bold': True,
+                'align': 'left',
+                'valign': 'vcenter',
+                'bg_color': '#CCC0DA',
+                'border': 1,
+            })
+            summary_number_format = workbook.add_format({
+                'bold': True,
+                'num_format': integer_num_format,
+                'align': 'right',
+                'valign': 'vcenter',
+                'bg_color': '#E4DFEC',
+                'border': 1,
+            })
+            summary_decimal_format = workbook.add_format({
+                'bold': True,
+                'num_format': decimal_num_format,
+                'align': 'right',
+                'valign': 'vcenter',
+                'bg_color': '#E4DFEC',
+                'border': 1,
+            })
+            blank_summary_format = workbook.add_format({
+                'bg_color': '#E4DFEC',
+                'border': 1,
+            })
 
         header_fill_formats = {
             '#D8E4BC': default_header_format,
@@ -368,4 +375,9 @@ def save_to_excel(
                 width = override.get("width")
                 worksheet.set_column(int(col_idx), int(col_idx), width, fmt)
 
-        print(f"Excel saved to: {filename}")
+            print(f"Excel saved to: {output_path}")
+    except PermissionError as exc:
+        raise PermissionError(
+            f"Could not write Excel file because it is locked or not writable: {output_path}. "
+            "If the workbook is open in Excel, close it and run the process again."
+        ) from exc

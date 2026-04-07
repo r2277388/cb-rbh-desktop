@@ -1,7 +1,6 @@
 import pandas as pd
 from pathlib import Path
-import os
-from paths import DOWNLOADS_FOLDER
+from paths import ATELIER_AMAZON_INVENTORY_FOLDER
 
 def get_latest_inventory_file(folder_path: Path, pattern: str) -> Path:
     """Return the latest inventory file in the folder matching the given pattern."""
@@ -12,7 +11,7 @@ def get_latest_inventory_file(folder_path: Path, pattern: str) -> Path:
         raise FileNotFoundError(f"No files found in {folder_path} with pattern {pattern}")
     
     # Get the latest file based on creation time
-    latest_file = max(files, key=os.path.getctime)
+    latest_file = max(files, key=lambda path: path.stat().st_mtime)
     return latest_file
 
 def read_inventory_file(file_path: Path, columns: list) -> pd.DataFrame:
@@ -56,7 +55,7 @@ def process_inventory_data(folder_path: str, pattern: str, columns: list) -> pd.
 
 def data_inventory():
     # Define the folder path and pattern for inventory filesW
-    folder_path = DOWNLOADS_FOLDER
+    folder_path = ATELIER_AMAZON_INVENTORY_FOLDER
     pattern = '*Inventory*csv'
     columns = ['ASIN', 'Unfilled Customer Ordered Units']
 

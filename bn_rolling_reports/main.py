@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from tkinter import Tk, filedialog
+from tkinter import Tk, filedialog, messagebox
 
 from config import BASE_FOLDER
 from pos_combiner import (
@@ -12,7 +12,13 @@ from pos_combiner import (
 )
 from inventory_working import build_inventory_working_file, find_inventory_source_file
 from sales_working import build_sales_working_file, find_sales_source_file
-from rolling_customer_sales import build_customer_sales_report, print_result_summary as print_rolling_result_summary
+from rolling_customer_sales import (
+    build_customer_sales_report,
+    get_latest_sql_week,
+    print_cache_refresh_summary,
+    print_result_summary as print_rolling_result_summary,
+    refresh_caches_only,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -150,23 +156,42 @@ def print_inventory_result_summary(result) -> None:
     print(f"Removed ISBNs file: {result.removed_isbns_file}")
 
 
+def confirm_refresh_cache(latest_sql_week) -> bool:
+    latest_sql_week_text = (
+        latest_sql_week.strftime("%Y-%m-%d") if latest_sql_week is not None else "None found"
+    )
+    root = Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    try:
+        return messagebox.askyesno(
+            "Refresh Cache",
+            (
+                "Have you uploaded the Sales and Inventory file to CBQ yet?\n\n"
+                f"Latest week currently in CBQ: {latest_sql_week_text}\n\n"
+                "Choose Yes to refresh the cache now."
+            ),
+            parent=root,
+        )
+    finally:
+        root.destroy()
+
+
 def run_menu(default_raw_folder: str | Path | None = None) -> None:
     raw_folder = resolve_raw_folder(default_raw_folder) if default_raw_folder else prompt_for_raw_folder()
 
     while True:
         print("\nBarnes & Noble Rolling Reports")
         print()
-        print("    1. Build All Three")
+        print("    1. Build All Three (Steps 2, 3, & 4 together) (Main Step 1)")
         print("    2. Build Combined POS File")
         print("    3. Build working Sales file from Sales*.xlsx and pos_combined")
         print("    4. Build working Inventory file from Inventory*.xlsx and pos_combined")
-        print("    5. Refresh caches + build B&N rolling report")
-        print("    6. Build B&N rolling report from current caches")
-        print("    7. Refresh caches + build B&N rolling report + DP versions")
-        print("    8. Build B&N rolling report + DP versions from current caches")
-        print("    9. Refresh caches + build local review B&N rolling report")
-        print("    10. Build local review B&N rolling report from current caches")
-        print("    11. Exit")
+        print("    5. Refresh Cache (After Uploading Sales & Inventory to CBQ) (Main Step 2)")
+        print("    6. Build B&N rolling report (CB + DP Version)")
+        print("    7. Build B&N rolling report (CB + DP Version) + DP versions (Main Step 3)")
+        print("    8. Build local review B&N rolling report")
+        print("    9. Exit")
         print()
         choice = input("Choose an option: ").strip().lower()
 
@@ -203,56 +228,39 @@ def run_menu(default_raw_folder: str | Path | None = None) -> None:
             continue
 
         if choice == "5":
-            print("\nRefreshing caches and building B&N rolling report...")
-            result = build_customer_sales_report(
-                raw_folder=raw_folder,
-                refresh_sales=True,
-                refresh_inventory=True,
+            latest_sql_week = get_latest_sql_week()
+            print()
+            print(
+                "Latest week currently in CBQ: "
+                f"{latest_sql_week.strftime('%Y-%m-%d') if latest_sql_week is not None else 'None found'}"
             )
-            print_rolling_result_summary(result)
+            if not confirm_refresh_cache(latest_sql_week):
+                print("Cache refresh cancelled.")
+                continue
+            print("\nRefreshing caches...")
+            result = refresh_caches_only(raw_folder=raw_folder)
+            print_cache_refresh_summary(result)
             continue
 
         if choice == "6":
-            print("\nBuilding B&N rolling report from current caches...")
+            print("\nBuilding B&N rolling report (CB + DP Version)...")
             result = build_customer_sales_report(raw_folder=raw_folder)
             print_rolling_result_summary(result)
             continue
 
         if choice == "7":
-            print("\nRefreshing caches and building B&N rolling report + DP versions...")
-            result = build_customer_sales_report(
-                raw_folder=raw_folder,
-                refresh_sales=True,
-                refresh_inventory=True,
-                save_dp=True,
-            )
-            print_rolling_result_summary(result)
-            continue
-
-        if choice == "8":
-            print("\nBuilding B&N rolling report + DP versions from current caches...")
+            print("\nBuilding B&N rolling report (CB + DP Version) + DP versions...")
             result = build_customer_sales_report(raw_folder=raw_folder, save_dp=True)
             print_rolling_result_summary(result)
             continue
 
-        if choice == "9":
-            print("\nRefreshing caches and building local review B&N rolling report...")
-            result = build_customer_sales_report(
-                raw_folder=raw_folder,
-                refresh_sales=True,
-                refresh_inventory=True,
-                local_only=True,
-            )
-            print_rolling_result_summary(result)
-            continue
-
-        if choice == "10":
-            print("\nBuilding local review B&N rolling report from current caches...")
+        if choice == "8":
+            print("\nBuilding local review B&N rolling report...")
             result = build_customer_sales_report(raw_folder=raw_folder, local_only=True)
             print_rolling_result_summary(result)
             continue
 
-        if choice in {"11", "q", "quit", "exit"}:
+        if choice in {"9", "q", "quit", "exit"}:
             return
 
         print("Invalid choice. Please select a valid option.")
