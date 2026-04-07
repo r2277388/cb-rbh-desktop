@@ -69,6 +69,7 @@ def display_options():
         "13. SSR Daily Summary",
         "14. UK Rolling File Combining",
         "15. XGBoost Model",
+        "16. Monthend Reports",
         "94. Check Table Updates",
         "95. Install Main Venv Requirements",
         "96. Open Main Venv Shell",
@@ -102,6 +103,7 @@ def display_info(choice):
         "13": "SSR Daily Summary: Opens the SSR Daily Summary menu, including Ebs.Sales Prior 5 Days and the summary process.",
         "14": "UK Rolling File Combining: This combines the sales, reserve and midas files together.",
         "15": "XGBoost Model: Launches the xgboost_model workflow menu.",
+        "16": "Monthend Reports: Opens the monthend reports menu, including Barnes & Noble Monthly Coop (Ailing).",
         "94": "Check Table Updates: Runs SQL checks for table freshness and recent weeks for SSR/Amazon/Bookscan tables.",
         "95": "Install Main Venv Requirements: Runs `pip install -r requirements.txt` using the repo's main virtual environment.",
         "96": "Open Main Venv Shell: Opens a PowerShell window with the repo's main virtual environment activated.",
@@ -635,6 +637,7 @@ def run_program(choice):
         ),
         "14": ("UK Rolling File Combining", "UK_Rolling_File_Combining/main.py"),
         "15": ("XGBoost Model", "xgboost_model/main.py"),
+        "16": ("Monthend Reports", "monthend/main.py"),
         "97": ("Desk Procedures", "desk_procedures/main.py"),
     }
 
