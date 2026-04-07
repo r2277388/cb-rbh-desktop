@@ -115,7 +115,7 @@ BN_ROLLING_DP_FOLDERS = {
     "Galison": Path(
         r"G:\Sales\Distribution_Partners\Galison\GA REPORTS\Barnes & Noble\2026"
     ),
-    "Hardie Grant": Path(
+    "Hardie Grant Publishing": Path(
         r"G:\SALES\Distribution_Partners\Hardie Grant\HG REPORTS\Sell Through Reporting\Barnes & Noble\2026"
     ),
     "Laurence King": Path(
