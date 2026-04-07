@@ -120,15 +120,28 @@ def get_latest_matching_file(folder_path: str | Path, pattern: str) -> Path:
     return max(matches, key=os.path.getctime)
 
 
+def get_latest_matching_file_by_mtime(folder_path: str | Path, pattern: str) -> Path:
+    folder = Path(folder_path)
+    matches = list(folder.glob(pattern))
+    if not matches:
+        raise FileNotFoundError(f"No files found in {folder} with pattern {pattern}")
+    return max(matches, key=lambda path: path.stat().st_mtime)
+
+
 def confirm_amazon_preorders_files() -> bool:
-    catalog_file = get_latest_matching_file(process_paths.DOWNLOADS_FOLDER, "*Catalog*csv")
-    inventory_file = get_latest_matching_file(process_paths.DOWNLOADS_FOLDER, "*Inventory*csv")
+    catalog_file = get_latest_matching_file_by_mtime(
+        process_paths.ATELIER_AMAZON_CATALOG_FOLDER, "*Catalog*csv"
+    )
+    inventory_file = get_latest_matching_file_by_mtime(
+        process_paths.ATELIER_AMAZON_INVENTORY_FOLDER, "*Inventory*csv"
+    )
 
     while True:
         print()
         print("Amazon PreOrders will use these files:")
         print(f"  Catalog:   {catalog_file}")
         print(f"  Inventory: {inventory_file}")
+        print("  Note:      Extra inventory columns are ignored; only the required fields are read.")
         print()
         print("    1. Continue")
         print("    2. Return to main menu")
@@ -146,9 +159,18 @@ def confirm_amazon_preorders_files() -> bool:
 
 def confirm_amazon_customer_orders_files() -> bool:
     script_path = process_paths.AMAZON_CUSTOMER_ORDERS_SCRIPT
-    weekly_sales_file = get_latest_matching_file(process_paths.DOWNLOADS_FOLDER, "*Sales*Weekly*csv")
-    catalog_file = get_latest_matching_file(process_paths.DOWNLOADS_FOLDER, "*Catalog*csv")
-    traffic_file = get_latest_matching_file(process_paths.DOWNLOADS_FOLDER, "*Traffic*csv")
+    weekly_sales_file = get_latest_matching_file_by_mtime(
+        process_paths.ATELIER_AMAZON_BASE_FOLDER / "Sales", "*Sales*Weekly*csv"
+    )
+    catalog_file = get_latest_matching_file_by_mtime(
+        process_paths.ATELIER_AMAZON_CATALOG_FOLDER, "*Catalog*csv"
+    )
+    inventory_file = get_latest_matching_file_by_mtime(
+        process_paths.ATELIER_AMAZON_INVENTORY_FOLDER, "*inventory*csv"
+    )
+    traffic_file = get_latest_matching_file_by_mtime(
+        process_paths.ATELIER_AMAZON_BASE_FOLDER / "Traffic", "*Traffic*csv"
+    )
     ypticod_file = process_paths.ORACLE_YPTICOD_FILE
     output_file = process_paths.AMAZON_CUSTOMER_ORDERS_OUTPUT_FILE
 
@@ -161,9 +183,11 @@ def confirm_amazon_customer_orders_files() -> bool:
         print(f"  Script:            {script_path}")
         print(f"  Weekly Sales:      {weekly_sales_file}")
         print(f"  Catalog:           {catalog_file}")
+        print(f"  Inventory:         {inventory_file}")
         print(f"  Traffic:           {traffic_file}")
         print(f"  Oracle YPTICOD:    {ypticod_file}")
         print(f"  Output workbook:   {output_file}")
+        print("  Note:              Extra file columns are ignored when required fields are present.")
         print()
         print("    1. Continue")
         print("    2. Return to main menu")

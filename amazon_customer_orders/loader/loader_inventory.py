@@ -1,13 +1,8 @@
-import glob
-import os
-
 import pandas as pd
 
-from paths import DOWNLOADS_FOLDER
+from paths import ATELIER_AMAZON_INVENTORY_FOLDER
 
 
-folder_path = DOWNLOADS_FOLDER
-file_glob_inventory = r"*inventory*csv"
 cols_invt = [
     "ASIN",
     "Unfilled Customer Ordered Units",
@@ -18,15 +13,17 @@ cols_invt = [
 
 
 def upload_inventory():
-    files = glob.glob(str(folder_path / file_glob_inventory))
+    files = list(ATELIER_AMAZON_INVENTORY_FOLDER.glob("*inventory*csv"))
     if not files:
-        raise FileNotFoundError(f"No files found in {folder_path} matching {file_glob_inventory}")
+        raise FileNotFoundError(
+            f"No files found in {ATELIER_AMAZON_INVENTORY_FOLDER} matching *inventory*csv"
+        )
 
-    file_inventory = max(files, key=os.path.getctime)
+    file_inventory = max(files, key=lambda path: path.stat().st_mtime)
     df = pd.read_csv(
         file_inventory,
         skiprows=1,
-        na_values="â€”",
+        na_values="Ã¢â‚¬â€",
         usecols=cols_invt,
     )
 

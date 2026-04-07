@@ -1,13 +1,7 @@
-import glob
-import os
-
 import pandas as pd
 
-from paths import DOWNLOADS_FOLDER
+from paths import ATELIER_AMAZON_TRAFFIC_FOLDER
 
-
-folder_path = DOWNLOADS_FOLDER
-file_glob_traffic = r"*Traffic*csv"
 
 column_mapping = {
     "ASIN": "ASIN",
@@ -25,15 +19,17 @@ cols_traffic = [
 
 
 def upload_traffic():
-    files = glob.glob(str(folder_path / file_glob_traffic))
+    files = list(ATELIER_AMAZON_TRAFFIC_FOLDER.glob("*Traffic*csv"))
     if not files:
-        raise FileNotFoundError(f"No files found in {folder_path} matching {file_glob_traffic}")
+        raise FileNotFoundError(
+            f"No files found in {ATELIER_AMAZON_TRAFFIC_FOLDER} matching *Traffic*csv"
+        )
 
-    file_traffic = max(files, key=os.path.getctime)
+    file_traffic = max(files, key=lambda path: path.stat().st_mtime)
     df = pd.read_csv(
         file_traffic,
         skiprows=1,
-        na_values="â€”",
+        na_values="Ã¢â‚¬â€",
         usecols=cols_traffic,
     )
 

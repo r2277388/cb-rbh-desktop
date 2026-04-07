@@ -11,6 +11,11 @@ def repo_path(*parts: str) -> Path:
 # Shared external locations
 DOWNLOADS_FOLDER = Path(r"G:\SALES\Amazon\RBH\DOWNLOADED_FILES")
 ORACLE_YPTICOD_FILE = Path(r"J:\Metadata Reports\Oracle YPTICOD.xlsx")
+ATELIER_AMAZON_BASE_FOLDER = Path(
+    r"F:\ANALYSIS\Finance\DataWarehouse\Atelier Amazon"
+)
+ATELIER_AMAZON_CATALOG_FOLDER = ATELIER_AMAZON_BASE_FOLDER / "Catalog"
+ATELIER_AMAZON_INVENTORY_FOLDER = ATELIER_AMAZON_BASE_FOLDER / "Inventory"
 AMAZON_WEEKLY_BASE_FOLDER = Path(
     r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Amazon"
 )
@@ -26,6 +31,18 @@ AMAZON_PO_FOLDER = Path(r"G:\SALES\Amazon\PURCHASE ORDERS\2026")
 AMAZON_PO_ROOT_FOLDER = AMAZON_PO_FOLDER.parent
 AMAZON_PO_ANALYSIS_INPUT_FILE = (
     AMAZON_PO_ROOT_FOLDER / "atelier" / "po_analysis" / "PurchaseOrderItems.csv"
+)
+AMAZON_PO_CURRENT_PREORDERS_FILE = (
+    AMAZON_PO_ROOT_FOLDER / "atelier" / "po_analysis" / "current_amaz_preorders.csv"
+)
+AMAZON_PO_DATAWAREHOUSE_ANALYSIS_FILE = Path(
+    r"F:\ANALYSIS\Finance\DataWarehouse\Atelier Amazon\po_analysis\current_amaz_preorders.csv"
+)
+AMAZON_PO_DATAWAREHOUSE_DUMP_FILE = Path(
+    r"F:\ANALYSIS\Finance\DataWarehouse\Atelier Amazon\po_analysis\amazon_order_py_dump.xlsx"
+)
+AMAZON_PO_DATAWAREHOUSE_ARCHIVE_DIR = Path(
+    r"F:\ANALYSIS\Finance\DataWarehouse\Atelier Amazon\po_analysis\po_archive"
 )
 AMAZON_ROLLING_OUTPUT_FOLDER = Path(
     r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Amazon"
@@ -50,9 +67,11 @@ BN_RAW_BASE_FOLDER = Path(
 )
 CHRONICLE_ASIN_MAPPING_FILE = DOWNLOADS_FOLDER / "Chronicle-AsinMapping.xlsx"
 AMAZON_CUSTOMER_ORDERS_OUTPUT_FILE = Path(
-    r"G:\SALES\Amazon\RBH\weekly_customer_order\atelier\amazon_weekly_customer_order_py.xlsx"
+    r"F:\ANALYSIS\Finance\DataWarehouse\Atelier Amazon\weekly_customer_order\amazon_weekly_customer_order_py.xlsx"
 )
-AMAZON_SQL_UPLOAD_OUTPUT_DIR = Path(r"G:\SALES\Amazon\RBH\WeeklyVC")
+AMAZON_SQL_UPLOAD_OUTPUT_DIR = Path(
+    r"F:\ANALYSIS\Finance\DataWarehouse\Atelier Amazon\vc_weekly_summary"
+)
 UK_ROLLING_SOURCE_FOLDER = Path(
     r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Abrams & Chronicle\Script Files"
 )

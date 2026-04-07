@@ -224,21 +224,10 @@ def main():
 
     print(f"Default output workbook: {default_output}")
 
-    file_path = filedialog.asksaveasfilename(
-        defaultextension=".xlsx",
-        filetypes=[("Excel files", "*.xlsx")],
-        title="Save Amazon SQL Upload Excel File",
-        initialdir=str(output_dir),
-        initialfile=default_output.name,
-    )
-    if file_path:
-        file_path = str(Path(file_path))
-        with pd.ExcelWriter(file_path) as writer:
-            df.to_excel(writer, index=False, startrow=3)
-        print(f"Saved Excel file: {file_path}")
-        print_totals("Main Output Numeric Totals", main_output_totals, total_isbn_rows)
-    else:
-        print("Save cancelled.")
+    with pd.ExcelWriter(default_output) as writer:
+        df.to_excel(writer, index=False, startrow=3)
+    print(f"Saved Excel file: {default_output}")
+    print_totals("Main Output Numeric Totals", main_output_totals, total_isbn_rows)
 
     print_totals("Weekly 6-Column Totals", weekly_output_totals, total_isbn_rows)
     print()
