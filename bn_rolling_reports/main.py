@@ -164,7 +164,9 @@ def run_menu(default_raw_folder: str | Path | None = None) -> None:
         print("    6. Build B&N rolling report from current caches")
         print("    7. Refresh caches + build B&N rolling report + DP versions")
         print("    8. Build B&N rolling report + DP versions from current caches")
-        print("    9. Exit")
+        print("    9. Refresh caches + build local review B&N rolling report")
+        print("    10. Build local review B&N rolling report from current caches")
+        print("    11. Exit")
         print()
         choice = input("Choose an option: ").strip().lower()
 
@@ -233,7 +235,24 @@ def run_menu(default_raw_folder: str | Path | None = None) -> None:
             print_rolling_result_summary(result)
             continue
 
-        if choice in {"9", "q", "quit", "exit"}:
+        if choice == "9":
+            print("\nRefreshing caches and building local review B&N rolling report...")
+            result = build_customer_sales_report(
+                raw_folder=raw_folder,
+                refresh_sales=True,
+                refresh_inventory=True,
+                local_only=True,
+            )
+            print_rolling_result_summary(result)
+            continue
+
+        if choice == "10":
+            print("\nBuilding local review B&N rolling report from current caches...")
+            result = build_customer_sales_report(raw_folder=raw_folder, local_only=True)
+            print_rolling_result_summary(result)
+            continue
+
+        if choice in {"11", "q", "quit", "exit"}:
             return
 
         print("Invalid choice. Please select a valid option.")

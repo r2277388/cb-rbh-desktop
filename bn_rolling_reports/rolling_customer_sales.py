@@ -11,6 +11,7 @@ import pandas as pd
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from amazon_rolling_reports.functions import build_column_totals, save_to_excel
+from inventory_working import build_inventory_working_file
 from isbn_utils import normalize_isbn_series
 from pos_combiner import (
     build_combined_pos,
@@ -19,7 +20,14 @@ from pos_combiner import (
     parse_week_ending,
     resolve_raw_folder,
 )
-from rolling_paths import bn_dp_folders, bn_rolling_folder, inventory_cache_file, sales_cache_file
+from rolling_paths import (
+    bn_dp_folders,
+    bn_rolling_folder,
+    inventory_cache_file,
+    local_review_dir,
+    manual_missing_weeks_file,
+    sales_cache_file,
+)
 from rolling_queries import build_customer_sales_query
 from shared.db.connection import get_connection
 from shared.db.query_runner import fetch_data_from_db
@@ -28,6 +36,16 @@ from shared.db.query_runner import fetch_data_from_db
 WEEKLY_HISTORY_START = pd.Timestamp("2023-01-01")
 YEARLY_HISTORY_START = 2007
 YEARLY_HISTORY_END = 2022
+MANUAL_MISSING_WEEKS = (
+    pd.Timestamp("2017-12-09"),
+    pd.Timestamp("2018-03-17"),
+    pd.Timestamp("2018-03-31"),
+    pd.Timestamp("2023-01-21"),
+    pd.Timestamp("2023-01-28"),
+    pd.Timestamp("2024-03-30"),
+    pd.Timestamp("2025-07-05"),
+    pd.Timestamp("2026-01-03"),
+)
 
 
 @dataclass
@@ -62,6 +80,122 @@ def _format_bn_output_filename(week_ending: pd.Timestamp) -> str:
     )
 
 
+def _manual_week_column_map(columns) -> dict[pd.Timestamp, object]:
+    week_map: dict[pd.Timestamp, object] = {}
+    target_weeks = set(MANUAL_MISSING_WEEKS)
+    for column in columns:
+        timestamp = None
+        if hasattr(column, "strftime"):
+            timestamp = pd.Timestamp(column)
+        elif isinstance(column, str) and len(column) == 10 and column.count("-") == 2:
+            try:
+                timestamp = pd.to_datetime(column, format="%m-%d-%Y")
+            except ValueError:
+                timestamp = None
+        if timestamp is not None and timestamp in target_weeks:
+            week_map[timestamp] = column
+    return week_map
+
+
+def refresh_manual_missing_weeks_cache(workbook_path: str | Path) -> pd.DataFrame:
+    manual_df = pd.read_excel(workbook_path, sheet_name=0, header=5)
+    week_column_map = _manual_week_column_map(manual_df.columns)
+    if not week_column_map:
+        raise ValueError("The manual workbook did not contain any of the configured missing week columns.")
+
+    required_columns = ["PUB", "PT", "CAT", "PGR", "ISBN 13", "TITLE", "PRICE", "SHIP", "Dept", "Cat"]
+    missing = [column for column in required_columns if column not in manual_df.columns]
+    if missing:
+        raise ValueError(f"The manual workbook is missing required columns: {missing}")
+
+    supplemental = manual_df.loc[:, required_columns + list(week_column_map.values())].copy()
+    supplemental = supplemental.rename(
+        columns={
+            "PUB": "Publisher",
+            "PT": "PT",
+            "CAT": "CAT",
+            "PGR": "pgrp",
+            "ISBN 13": "ISBN",
+            "TITLE": "Title",
+            "PRICE": "Price",
+            "SHIP": "PubDate",
+            "Dept": "DeptCode",
+            "Cat": "SubjectCode",
+        }
+    )
+    supplemental["ISBN"] = normalize_isbn_series(supplemental["ISBN"].astype("string"))
+    supplemental = supplemental[supplemental["ISBN"].notna()].copy()
+    supplemental["Price"] = pd.to_numeric(supplemental["Price"], errors="coerce")
+    supplemental["PubDate"] = pd.to_datetime(supplemental["PubDate"], errors="coerce")
+    supplemental["DeptCode"] = (
+        pd.to_numeric(supplemental["DeptCode"], errors="coerce")
+        .fillna(0)
+        .astype(int)
+        .astype(str)
+        .str.zfill(5)
+    )
+    supplemental["SubjectCode"] = (
+        pd.to_numeric(supplemental["SubjectCode"], errors="coerce")
+        .fillna(0)
+        .astype(int)
+        .astype(str)
+        .str.zfill(5)
+    )
+
+    rename_weeks = {column: week.strftime("%m-%d-%Y") for week, column in week_column_map.items()}
+    supplemental = supplemental.rename(columns=rename_weeks)
+    long_df = supplemental.melt(
+        id_vars=["ISBN", "Title", "Publisher", "PT", "CAT", "pgrp", "SubjectCode", "DeptCode", "Price", "PubDate"],
+        value_vars=list(rename_weeks.values()),
+        var_name="Week",
+        value_name="qty",
+    )
+    long_df["Week"] = pd.to_datetime(long_df["Week"], format="%m-%d-%Y")
+    long_df["qty"] = pd.to_numeric(long_df["qty"], errors="coerce").fillna(0)
+    long_df = long_df[long_df["qty"] != 0].copy()
+    long_df = (
+        long_df.groupby(
+            ["Week", "ISBN", "Title", "Publisher", "PT", "CAT", "pgrp", "SubjectCode", "DeptCode", "Price", "PubDate"],
+            as_index=False,
+        )["qty"]
+        .sum()
+        .sort_values(["Week", "ISBN"])
+        .reset_index(drop=True)
+    )
+    _save_parquet(long_df, manual_missing_weeks_file)
+    return long_df
+
+
+def _load_manual_missing_weeks() -> pd.DataFrame:
+    if not manual_missing_weeks_file.exists():
+        return pd.DataFrame()
+    supplemental = pd.read_parquet(manual_missing_weeks_file)
+    if supplemental.empty:
+        return supplemental
+    supplemental["Week"] = pd.to_datetime(supplemental["Week"])
+    supplemental["PubDate"] = pd.to_datetime(supplemental["PubDate"], errors="coerce")
+    supplemental["ISBN"] = normalize_isbn_series(supplemental["ISBN"].astype("string"))
+    supplemental["qty"] = pd.to_numeric(supplemental["qty"], errors="coerce").fillna(0).astype(int)
+    return supplemental[supplemental["ISBN"].notna()].copy()
+
+
+def _apply_manual_missing_weeks(sales_df: pd.DataFrame) -> pd.DataFrame:
+    supplemental = _load_manual_missing_weeks()
+    if supplemental.empty:
+        return sales_df
+
+    combined = pd.concat([sales_df.copy(), supplemental], ignore_index=True, sort=False)
+    combined["Week"] = pd.to_datetime(combined["Week"])
+    combined["PubDate"] = pd.to_datetime(combined["PubDate"], errors="coerce")
+    combined["ISBN"] = normalize_isbn_series(combined["ISBN"].astype("string"))
+    combined["qty"] = pd.to_numeric(combined["qty"], errors="coerce").fillna(0).astype(int)
+    combined = combined.drop_duplicates(
+        subset=["Week", "ISBN", "Title", "Publisher", "pgrp", "SubjectCode", "DeptCode"],
+        keep="last",
+    ).sort_values(["Week", "ISBN"]).reset_index(drop=True)
+    return combined
+
+
 def refresh_sales_cache(full_refresh: bool = False) -> pd.DataFrame:
     cached = _load_parquet_or_empty(sales_cache_file)
     start_date = "2007-01-01"
@@ -94,20 +228,17 @@ def refresh_sales_cache(full_refresh: bool = False) -> pd.DataFrame:
     return combined
 
 
-def _read_pos_snapshot(raw_folder: Path) -> pd.DataFrame:
+def _read_inventory_snapshot(raw_folder: Path) -> pd.DataFrame:
     week_ending = parse_week_ending(raw_folder.name)
-    pos_output = raw_folder / format_pos_output_filename(week_ending)
-    if not pos_output.exists():
-        build_combined_pos(raw_folder=raw_folder)
-
+    inventory_result = build_inventory_working_file(raw_folder=raw_folder)
     pos_df = pd.read_excel(
-        pos_output,
-        dtype={"ISBN": "string", "Imprint": "string"},
+        inventory_result.snapshot_file,
+        dtype={"ISBN": "string"},
     )
     required_columns = ["ISBN", "OH_Stores", "OO_Stores", "OH_DC", "OO_DC"]
     missing = [col for col in required_columns if col not in pos_df.columns]
     if missing:
-        raise ValueError(f"Combined POS file is missing required columns: {missing}")
+        raise ValueError(f"Combined inventory snapshot is missing required columns: {missing}")
 
     snapshot = pos_df.loc[:, required_columns].copy()
     snapshot["ISBN"] = normalize_isbn_series(snapshot["ISBN"])
@@ -121,6 +252,7 @@ def _read_pos_snapshot(raw_folder: Path) -> pd.DataFrame:
 def refresh_inventory_cache(raw_folder: str | Path | None = None, full_refresh: bool = False) -> pd.DataFrame:
     cached = _load_parquet_or_empty(inventory_cache_file)
     folders: list[Path]
+    explicit_raw_folder = raw_folder is not None
     if full_refresh:
         folders = get_candidate_raw_folders()
     elif raw_folder:
@@ -136,16 +268,20 @@ def refresh_inventory_cache(raw_folder: str | Path | None = None, full_refresh: 
     snapshots: list[pd.DataFrame] = []
     for folder in folders:
         week_ending = pd.Timestamp(parse_week_ending(folder.name).date())
-        if not full_refresh and week_ending in existing_weeks:
+        if not full_refresh and not explicit_raw_folder and week_ending in existing_weeks:
             continue
-        snapshots.append(_read_pos_snapshot(folder))
+        snapshots.append(_read_inventory_snapshot(folder))
 
     if not snapshots:
         if cached.empty:
             raise ValueError("No B&N inventory snapshots were available to cache.")
         return cached
 
-    combined = pd.concat([cached, *snapshots], ignore_index=True) if not cached.empty and not full_refresh else pd.concat(snapshots, ignore_index=True)
+    combined = (
+        pd.concat([cached, *snapshots], ignore_index=True)
+        if not cached.empty and not full_refresh
+        else pd.concat(snapshots, ignore_index=True)
+    )
     combined["Week"] = pd.to_datetime(combined["Week"])
     combined = combined.drop_duplicates(subset=["Week", "ISBN"], keep="last").sort_values(["Week", "ISBN"]).reset_index(drop=True)
     _save_parquet(combined, inventory_cache_file)
@@ -411,6 +547,7 @@ def _build_save_options(report_df: pd.DataFrame, latest_week: pd.Timestamp) -> d
         "summary": totals,
         "format_cols": format_cols,
         "decimal_cols": decimal_cols,
+        "integer_accounting_no_symbol": True,
         "rolling_main_layout": True,
         "pre_date_column_count": 24,
         "summary_label_col_idx": 10,
@@ -456,12 +593,18 @@ def build_customer_sales_report(
     refresh_inventory: bool = False,
     full_refresh: bool = False,
     save_dp: bool = False,
+    local_only: bool = False,
+    manual_missing_weeks_workbook: str | Path | None = None,
 ) -> RollingBuildResult:
+    if manual_missing_weeks_workbook:
+        refresh_manual_missing_weeks_cache(manual_missing_weeks_workbook)
+
     sales_df = (
         refresh_sales_cache(full_refresh=full_refresh)
         if refresh_sales or full_refresh or not sales_cache_file.exists()
         else _load_parquet_or_empty(sales_cache_file)
     )
+    sales_df = _apply_manual_missing_weeks(sales_df)
     inventory_df = (
         refresh_inventory_cache(raw_folder=raw_folder, full_refresh=full_refresh)
         if refresh_inventory or full_refresh or not inventory_cache_file.exists()
@@ -469,11 +612,12 @@ def build_customer_sales_report(
     )
 
     report_df, latest_week = build_report_dataframe(sales_df, inventory_df)
-    output_file = bn_rolling_folder / _format_bn_output_filename(latest_week)
-    bn_rolling_folder.mkdir(parents=True, exist_ok=True)
+    output_dir = local_review_dir if local_only else bn_rolling_folder
+    output_file = output_dir / _format_bn_output_filename(latest_week)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     save_to_excel(report_df, output_file, **_build_save_options(report_df, latest_week))
-    dp_files_saved = save_reports_by_pub(report_df, latest_week) if save_dp else 0
+    dp_files_saved = save_reports_by_pub(report_df, latest_week) if save_dp and not local_only else 0
 
     return RollingBuildResult(
         output_file=output_file,
@@ -503,6 +647,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--refresh-inventory-cache", action="store_true", help="Refresh the inventory snapshot cache before building.")
     parser.add_argument("--full-refresh", action="store_true", help="Rebuild both caches from scratch before building.")
     parser.add_argument("--save-dp", action="store_true", help="Also save publisher-filtered versions to the B&N DP folders.")
+    parser.add_argument("--local-only", action="store_true", help="Save the rolling report to the local bn_rolling_reports/review_output folder instead of the network target.")
+    parser.add_argument("--manual-missing-weeks-workbook", help="Optional manual workbook used to refresh the supplemental parquet for SQL-missing weekly history.")
     return parser
 
 
@@ -515,6 +661,8 @@ def main() -> None:
         refresh_inventory=args.refresh_inventory_cache,
         full_refresh=args.full_refresh,
         save_dp=args.save_dp,
+        local_only=args.local_only,
+        manual_missing_weeks_workbook=args.manual_missing_weeks_workbook,
     )
     print_result_summary(result)
 
