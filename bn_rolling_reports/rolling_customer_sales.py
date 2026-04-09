@@ -48,6 +48,11 @@ MANUAL_MISSING_WEEKS = (
 )
 
 
+PUBLISHER_NORMALIZATION = {
+    "Quadrille Publishing Limited": "Quadrille",
+}
+
+
 @dataclass
 class RollingBuildResult:
     output_file: Path
@@ -69,6 +74,12 @@ class CacheRefreshResult:
 
 def _ensure_cache_dir() -> None:
     sales_cache_file.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _normalize_publisher_value(value):
+    if pd.isna(value):
+        return value
+    return PUBLISHER_NORMALIZATION.get(str(value), value)
 
 
 def _load_parquet_or_empty(cache_file: Path) -> pd.DataFrame:
@@ -132,6 +143,7 @@ def refresh_manual_missing_weeks_cache(workbook_path: str | Path) -> pd.DataFram
             "Cat": "SubjectCode",
         }
     )
+    supplemental["Publisher"] = supplemental["Publisher"].map(_normalize_publisher_value)
     supplemental["ISBN"] = normalize_isbn_series(supplemental["ISBN"].astype("string"))
     supplemental = supplemental[supplemental["ISBN"].notna()].copy()
     supplemental["Price"] = pd.to_numeric(supplemental["Price"], errors="coerce")
@@ -181,6 +193,8 @@ def _load_manual_missing_weeks() -> pd.DataFrame:
     supplemental = pd.read_parquet(manual_missing_weeks_file)
     if supplemental.empty:
         return supplemental
+    if "Publisher" in supplemental.columns:
+        supplemental["Publisher"] = supplemental["Publisher"].map(_normalize_publisher_value)
     supplemental["Week"] = pd.to_datetime(supplemental["Week"])
     supplemental["PubDate"] = pd.to_datetime(supplemental["PubDate"], errors="coerce")
     supplemental["ISBN"] = normalize_isbn_series(supplemental["ISBN"].astype("string"))
@@ -336,6 +350,41 @@ def _build_base_metadata(sales_df: pd.DataFrame) -> pd.DataFrame:
     return metadata
 
 
+def _fetch_item_metadata_for_isbns(isbns: list[str]) -> pd.DataFrame:
+    if not isbns:
+        return pd.DataFrame(columns=["ISBN", "Pub", "PT", "CAT", "pgrp", "Title", "Price", "PubDate"])
+
+    quoted_isbns = ",".join(f"'{isbn}'" for isbn in sorted(set(isbns)))
+    query = f"""
+    SELECT
+        i.ITEM_TITLE AS ISBN,
+        CASE
+            WHEN i.PUBLISHER_CODE = 'Quadrille Publishing Limited' THEN 'Quadrille'
+            ELSE i.PUBLISHER_CODE
+        END AS Pub,
+        i.PRODUCT_TYPE AS PT,
+        i.FORMAT AS CAT,
+        CASE
+            WHEN LEFT(i.PUBLISHING_GROUP, 3) = 'BAR' THEN 'BAR'
+            ELSE i.PUBLISHING_GROUP
+        END AS pgrp,
+        i.SHORT_TITLE AS Title,
+        i.PRICE_AMOUNT AS Price,
+        CAST(i.AMORTIZATION_DATE AS date) AS PubDate
+    FROM ebs.item i
+    WHERE i.ITEM_TITLE IN ({quoted_isbns});
+    """
+    engine = get_connection()
+    metadata = fetch_data_from_db(engine, query)
+    if metadata.empty:
+        return metadata
+
+    metadata["ISBN"] = normalize_isbn_series(metadata["ISBN"].astype("string"))
+    metadata["PubDate"] = pd.to_datetime(metadata["PubDate"], errors="coerce").dt.strftime("%m-%d-%Y")
+    metadata["PubDate"] = metadata["PubDate"].fillna("")
+    return metadata
+
+
 def _series_by_isbn(sales_df: pd.DataFrame, mask: pd.Series) -> pd.Series:
     if not mask.any():
         return pd.Series(dtype="float64")
@@ -372,6 +421,8 @@ def build_report_dataframe(sales_df: pd.DataFrame, inventory_df: pd.DataFrame) -
         raise ValueError("Sales cache is empty.")
 
     sales_df = sales_df.copy()
+    if "Publisher" in sales_df.columns:
+        sales_df["Publisher"] = sales_df["Publisher"].map(_normalize_publisher_value)
     sales_df["Week"] = pd.to_datetime(sales_df["Week"])
     latest_week = sales_df["Week"].max()
 
@@ -436,7 +487,14 @@ def build_report_dataframe(sales_df: pd.DataFrame, inventory_df: pd.DataFrame) -
         ).round(2)
 
     metadata = _build_base_metadata(sales_df).set_index("ISBN")
-    report = pd.concat([metadata, latest_inventory, metrics, weekly_df, yearly_df], axis=1).fillna(0)
+    inventory_isbns = latest_inventory.index.astype(str).tolist() if not latest_inventory.empty else []
+    missing_metadata_isbns = [isbn for isbn in inventory_isbns if isbn not in metadata.index.astype(str)]
+    if missing_metadata_isbns:
+        item_metadata = _fetch_item_metadata_for_isbns(missing_metadata_isbns)
+        if not item_metadata.empty:
+            item_metadata = item_metadata.set_index("ISBN")
+            metadata = pd.concat([metadata, item_metadata[~item_metadata.index.isin(metadata.index)]], axis=0)
+    report = pd.concat([metadata, latest_inventory, metrics, weekly_df, yearly_df], axis=1)
     report = report.reset_index()
     report.rename(columns={"index": "ISBN"}, inplace=True)
 
@@ -468,6 +526,16 @@ def build_report_dataframe(sales_df: pd.DataFrame, inventory_df: pd.DataFrame) -
     ]
     dynamic_columns = [column for column in report.columns if column not in ordered_columns]
     report = report[ordered_columns + dynamic_columns]
+
+    text_columns = ["Pub", "PT", "CAT", "pgrp", "Title", "PubDate"]
+    for column in text_columns:
+        if column in report.columns:
+            report[column] = report[column].fillna("")
+
+    code_columns = ["SubjectCode", "DeptCode"]
+    for column in code_columns:
+        if column in report.columns:
+            report[column] = report[column].fillna("").astype(str)
 
     int_columns = [
         "OH_Stores",

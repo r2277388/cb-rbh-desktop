@@ -115,7 +115,7 @@ BN_ROLLING_DP_FOLDERS = {
     "Galison": Path(
         r"G:\Sales\Distribution_Partners\Galison\GA REPORTS\Barnes & Noble\2026"
     ),
-    "Hardie Grant Publishing": Path(
+    "Hardie Grant": Path(
         r"G:\SALES\Distribution_Partners\Hardie Grant\HG REPORTS\Sell Through Reporting\Barnes & Noble\2026"
     ),
     "Laurence King": Path(
@@ -187,6 +187,17 @@ FRONTLIST_FAIRE_ORDERS_SQL = repo_path(
 )
 BN_ROLLING_REPORTS_SCRIPT = repo_path("bn_rolling_reports", "main.py")
 REPRINT_INDICATOR_AUTOMATION_SCRIPT = repo_path("reprint_indicator_automation", "main.py")
+EXCEL_REFRESH_SCRIPT = repo_path("tools", "excel_refresh.py")
+TITLE_LOOKUP_WORKBOOK = Path(
+    r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Z-Archive\1 - title lookup.xlsx"
+)
+TITLE_LOOKUP_CONNECTION_NAME = "Query - title_query"
+TITLE_LOOKUP_TABLE_NAME = "title_query"
+TITLE_LOOKUP_TASK_NAME = "Chronicle Weekly Title Lookup Refresh"
+TITLE_LOOKUP_TASK_LOCATION = "Task Scheduler Library"
+TITLE_LOOKUP_SCHEDULE_DAY = "SUN"
+TITLE_LOOKUP_SCHEDULE_TIME = "07:00"
+TITLE_LOOKUP_SCHEDULE_DESCRIPTION = "Every Sunday at 7:00 AM"
 
 
 def amazon_sql_upload_output_file(for_date: datetime | None = None) -> Path:

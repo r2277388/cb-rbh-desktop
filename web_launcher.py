@@ -12,6 +12,7 @@ from typing import Dict
 
 from flask import Flask, abort, redirect, render_template_string, request, url_for
 
+from paths import process_paths
 
 ROOT_DIR = Path(__file__).resolve().parent
 VENV_PYTHON = ROOT_DIR / "venv" / "Scripts" / "python.exe"
@@ -34,42 +35,42 @@ ACTIONS: dict[str, Action] = {
         "Amazon PO Archive Manager",
         [str(VENV_PYTHON), "-m", "tools.po_archive_manager"],
         "Launch the PO archive helper.",
-        "Main Processes",
+        "Amazon",
     ),
     "amazon_po_report": Action(
         "amazon_po_report",
         "Amazon PO Report",
         [str(VENV_PYTHON), "amazon_po/main.py"],
         "Run the Amazon PO report.",
-        "Main Processes",
+        "Amazon",
     ),
     "amazon_preorders": Action(
         "amazon_preorders",
         "Amazon PreOrders",
         [str(VENV_PYTHON), "amazon_preorders/main.py"],
         "Run the Amazon PreOrders process.",
-        "Main Processes",
+        "Amazon",
     ),
     "amazon_customer_orders": Action(
         "amazon_customer_orders",
         "Amazon Customer Orders",
         [str(VENV_PYTHON), "amazon_customer_orders/main.py"],
         "Run the Amazon Customer Orders process.",
-        "Main Processes",
+        "Amazon",
     ),
     "amazon_sql_upload": Action(
         "amazon_sql_upload",
         "Amazon Sellthru SQL Upload",
         [str(VENV_PYTHON), "amazon_sql_upload/main.py"],
         "Run the Amazon sellthru upload workflow.",
-        "Main Processes",
+        "Amazon",
     ),
     "amazon_rolling_reports": Action(
         "amazon_rolling_reports",
         "Amazon Rolling Reports",
         [str(VENV_PYTHON), "amazon_rolling_reports/main.py"],
         "Run the normal Amazon rolling reports process.",
-        "Main Processes",
+        "Amazon",
     ),
     "amazon_rolling_check": Action(
         "amazon_rolling_check",
@@ -83,7 +84,43 @@ ACTIONS: dict[str, Action] = {
         "Amazon AMS Manager",
         [str(VENV_PYTHON), "amazon_ams/manage_ams.py"],
         "Run the Amazon AMS manager.",
-        "Main Processes",
+        "Amazon",
+    ),
+    "title_lookup_refresh_weekly": Action(
+        "title_lookup_refresh_weekly",
+        "Title Lookup Force Refresh",
+        [
+            str(VENV_PYTHON),
+            str(process_paths.EXCEL_REFRESH_SCRIPT),
+            str(process_paths.TITLE_LOOKUP_WORKBOOK),
+            "--connection",
+            process_paths.TITLE_LOOKUP_CONNECTION_NAME,
+            "--table",
+            process_paths.TITLE_LOOKUP_TABLE_NAME,
+        ],
+        "Force-refresh the weekly title lookup workbook right now.",
+        "Automation Processes",
+    ),
+    "title_lookup_automation_status": Action(
+        "title_lookup_automation_status",
+        "Title Lookup Automation Status",
+        [str(VENV_PYTHON), "tools/title_lookup_automation.py", "status"],
+        "Show the weekly Task Scheduler setup, next run, and last run details.",
+        "Automation Processes",
+    ),
+    "title_lookup_automation_register": Action(
+        "title_lookup_automation_register",
+        "Enable Weekly Title Lookup Automation",
+        [str(VENV_PYTHON), "tools/title_lookup_automation.py", "register"],
+        "Create or update the weekly scheduled task for the title lookup workbook.",
+        "Automation Processes",
+    ),
+    "title_lookup_automation_disable": Action(
+        "title_lookup_automation_disable",
+        "Disable Weekly Title Lookup Automation",
+        [str(VENV_PYTHON), "tools/title_lookup_automation.py", "disable"],
+        "Disable the weekly scheduled task without removing the workbook refresh tool.",
+        "Automation Processes",
     ),
     "bn_rolling_reports": Action(
         "bn_rolling_reports",
@@ -209,6 +246,8 @@ ACTIONS: dict[str, Action] = {
 
 SECTION_ORDER = [
     "Main Processes",
+    "Amazon",
+    "Automation Processes",
     "SSR Daily Summary",
     "Check Table Updates",
     "Amazon Rolling Reports",

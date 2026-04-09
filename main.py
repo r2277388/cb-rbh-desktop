@@ -1,16 +1,21 @@
 import getpass
 import importlib.util
 import os
+import re
 import shutil
 import subprocess
 import sys
+import textwrap
 from datetime import datetime
 from pathlib import Path
 from tkinter import Tk, filedialog
 
+import pandas as pd
+
 # call the PO archive manager directly
 from paths import process_paths
 import tools.po_archive_manager as po_archive_manager
+from shared.db import fetch_data_from_db, get_connection
 
 
 def get_full_name():
@@ -54,22 +59,17 @@ def get_farewell_message():
 
 def display_options():
     options = [
-        "01. Amazon (1) PO Archive Manager",
-        "02. Amazon (2) PO Report",
-        "03. Amazon (3) PreOrders",
-        "04. Amazon (4) Customer Orders",
-        "05. Amazon (5) Sellthru SQL Upload",
-        "06. Amazon (6) Rolling Reports",
-        "07. Amazon AMS Manager (monthly)",
-        "08. Barnes & Noble Rolling Reports",
-        "09. Consolidate Inventory Manager",
-        "10. Frontlist Supercharged Data",
-        "11. Hachette Orders - Shipping Estimates",
-        "12. Reprint Indicator Report Updater",
-        "13. SSR Daily Summary",
-        "14. UK Rolling File Combining",
-        "15. XGBoost Model",
-        "16. Monthend Reports",
+        "01. Amazon",
+        "02. Barnes & Noble Rolling Reports",
+        "03. Consolidate Inventory Manager",
+        "04. Frontlist Supercharged Data",
+        "05. Hachette Orders - Shipping Estimates",
+        "06. Reprint Indicator Report Updater",
+        "07. Automation Processes",
+        "08. SSR Daily Summary",
+        "09. UK Rolling File Combining",
+        "10. XGBoost Model",
+        "11. Monthend Reports",
         "94. Check Table Updates",
         "95. Install Main Venv Requirements",
         "96. Open Main Venv Shell",
@@ -85,25 +85,30 @@ def display_options():
 
 def display_info(choice):
     info = {
-        "1": "Amazon (1) PO Archive Manager: Launches the PO archive helper to archive prior current_amaz_preorders and copy the new file into po_analysis.",
-        "2": f"""Amazon (2) PO Report: Generates a detailed report based on Amazon Purchase Orders.
+        "1": "Amazon: Opens a submenu containing the PO archive manager, PO report, PreOrders, Customer Orders, Sellthru SQL Upload, Rolling Reports, and AMS Manager.",
+        "2": f"""Barnes & Noble Rolling Reports: Builds weekly Barnes & Noble rolling-report source files, starting with the combined POS non-book extract.""",
+        "3": "Consolidate Inventory Manager: Opens the consolidated inventory workflow menu, including depot file intake, verticalization, summaries, and related inventory tools.",
+        "4": "Frontlist Supercharged Data: Builds the frontlist ISBN master file by merging Frontlist Tracking with cached Excel extracts and SQL source data.",
+        "5": "Hachette Orders - Shipping Estimates: Generates a report for Hachette Orders.",
+        "6": "Reprint Indicator Report Updater: Refreshes the template workbook when requested, rebuilds the BL_Detail and FL_Detail tabs from MetaData, then exports a detached workbook with links removed.",
+        "7": f"""Automation Processes: Opens a submenu for scheduled or semi-automated jobs.
+        First item: Title Lookup Refresh (weekly)
+        Default schedule: {process_paths.TITLE_LOOKUP_SCHEDULE_DESCRIPTION}
+        Task name: {process_paths.TITLE_LOOKUP_TASK_NAME}""",
+        "8": "SSR Daily Summary: Opens the SSR Daily Summary menu, including Ebs.Sales Prior 5 Days and the summary process.",
+        "9": "UK Rolling File Combining: This combines the sales, reserve and midas files together.",
+        "10": "XGBoost Model: Launches the xgboost_model workflow menu.",
+        "11": "Monthend Reports: Opens the monthend reports menu, including Barnes & Noble Monthly Coop (Ailing).",
+        "101": "Amazon (1) PO Archive Manager: Launches the PO archive helper to archive prior current_amaz_preorders and copy the new file into po_analysis.",
+        "102": f"""Amazon (2) PO Report: Generates a detailed report based on Amazon Purchase Orders.
         Before running, save the Vendor Central PO File to:
         {process_paths.AMAZON_PO_ANALYSIS_INPUT_FILE}
         A PO Report is saved off to: {process_paths.AMAZON_PO_ROOT_FOLDER} folder""",
-        "3": "Amazon (3) PreOrders: Generates a report for Amazon NYP PreOrders. Save the relevant data file to the appropriate location before running.",
-        "4": "Amazon (4) Customer Orders: Generates a report for Amazon Customer Orders. Save the relevant data file to the appropriate location before running.",
-        "5": "Amazon (5) Sellthru SQL Upload: Runs the amazon_sql_upload workflow (ASIN/ISBN conversion, uploads, etc.).",
-        "6": "Amazon (6) Rolling Reports: Runs a 10-week SQL freshness check first, then asks whether to continue with the full process.",
-        "7": "Amazon AMS Manager (monthly): Manage/update AMS month configuration and run incremental or full AMS processing.",
-        "8": "Barnes & Noble Rolling Reports: Builds weekly Barnes & Noble rolling-report source files, starting with the combined POS non-book extract.",
-        "9": "Consolidate Inventory Manager: Opens the consolidated inventory workflow menu, including depot file intake, verticalization, summaries, and related inventory tools.",
-        "10": "Frontlist Supercharged Data: Builds the frontlist ISBN master file by merging Frontlist Tracking with cached Excel extracts and SQL source data.",
-        "11": "Hachette Orders - Shipping Estimates: Generates a report for Hachette Orders.",
-        "12": "Reprint Indicator Report Updater: Refreshes the template workbook when requested, rebuilds the BL_Detail and FL_Detail tabs from MetaData, then exports a detached workbook with links removed.",
-        "13": "SSR Daily Summary: Opens the SSR Daily Summary menu, including Ebs.Sales Prior 5 Days and the summary process.",
-        "14": "UK Rolling File Combining: This combines the sales, reserve and midas files together.",
-        "15": "XGBoost Model: Launches the xgboost_model workflow menu.",
-        "16": "Monthend Reports: Opens the monthend reports menu, including Barnes & Noble Monthly Coop (Ailing).",
+        "103": "Amazon (3) PreOrders: Generates a report for Amazon NYP PreOrders. Save the relevant data file to the appropriate location before running.",
+        "104": "Amazon (4) Customer Orders: Generates a report for Amazon Customer Orders. Save the relevant data file to the appropriate location before running.",
+        "105": "Amazon (5) Sellthru SQL Upload: Runs the amazon_sql_upload workflow (ASIN/ISBN conversion, uploads, etc.).",
+        "106": "Amazon (6) Rolling Reports: Runs a 10-week SQL freshness check first, then asks whether to continue with the full process.",
+        "107": "Amazon AMS Manager (monthly): Manage/update AMS month configuration and run incremental or full AMS processing.",
         "94": "Check Table Updates: Runs SQL checks for table freshness and recent weeks for SSR/Amazon/Bookscan tables.",
         "95": "Install Main Venv Requirements: Runs `pip install -r requirements.txt` using the repo's main virtual environment.",
         "96": "Open Main Venv Shell: Opens a PowerShell window with the repo's main virtual environment activated.",
@@ -128,6 +133,31 @@ def get_latest_matching_file_by_mtime(folder_path: str | Path, pattern: str) -> 
     if not matches:
         raise FileNotFoundError(f"No files found in {folder} with pattern {pattern}")
     return max(matches, key=lambda path: path.stat().st_mtime)
+
+
+def parse_week_end_from_filename(file_path: str | Path) -> datetime | None:
+    filename = Path(file_path).name
+    match = re.search(r"_(\d{1,2}-\d{1,2}-\d{4})\.csv$", filename)
+    if not match:
+        return None
+    return datetime.strptime(match.group(1), "%m-%d-%Y")
+
+
+def query_amazon_sellthrough_latest_week() -> datetime | None:
+    query = """
+    SELECT MAX(CAST([Week] AS date)) AS LatestWeek
+    FROM [CBQ2].[cb].[Sellthrough_Amazon];
+    """
+    try:
+        engine = get_connection()
+        df = fetch_data_from_db(engine, query)
+    except Exception:
+        return None
+
+    if df.empty or df.iloc[0, 0] is None:
+        return None
+
+    return pd.to_datetime(df.iloc[0, 0]).to_pydatetime()
 
 
 def confirm_amazon_preorders_files() -> bool:
@@ -223,6 +253,8 @@ def confirm_amazon_sql_upload_files() -> bool:
         process_paths.AMAZON_SQL_UPLOAD_SOURCE_FOLDERS["catalog"], "*.csv"
     )
     ypticod_file = process_paths.ORACLE_YPTICOD_FILE
+    sales_week_end = parse_week_end_from_filename(sales_file)
+    sql_latest_week = query_amazon_sellthrough_latest_week()
 
     if not ypticod_file.exists():
         raise FileNotFoundError(f"Required file not found: {ypticod_file}")
@@ -240,6 +272,14 @@ def confirm_amazon_sql_upload_files() -> bool:
         print(f"  Removal list file: {removal_list_path}")
         print("  SQL source:        sql-2-db / CBQ2 (EBS item ISBN key)")
         print(
+            "  Sales file week:   "
+            + (sales_week_end.strftime("%A, %Y-%m-%d") if sales_week_end else "Could not parse from filename")
+        )
+        print(
+            "  Current SQL max:   "
+            + (sql_latest_week.strftime("%A, %Y-%m-%d") if sql_latest_week else "Unavailable from this session")
+        )
+        print(
             f"  Default output:    {process_paths.amazon_sql_upload_output_file()}"
         )
         print(
@@ -250,6 +290,40 @@ def confirm_amazon_sql_upload_files() -> bool:
         )
         print("  Weekly cbq upload workbook:   Auto-created from the cleaned six-column dataset")
         print("  Save dialog:       Opens with this default file prefilled")
+        print()
+        expected_text = input(
+            "Expected week-ending Saturday (MM/DD/YYYY or blank to use the sales file date): "
+        ).strip()
+        print()
+
+        if expected_text:
+            try:
+                expected_week_end = datetime.strptime(expected_text, "%m/%d/%Y")
+            except ValueError:
+                print("Invalid date. Use MM/DD/YYYY, for example 04/04/2026.")
+                continue
+        else:
+            expected_week_end = sales_week_end
+
+        if expected_week_end is None:
+            print("Could not determine the expected week-ending date from the sales file. Please enter it explicitly.")
+            continue
+
+        print(f"  Expected week:     {expected_week_end.strftime('%A, %Y-%m-%d')}")
+        if expected_week_end.weekday() != 5:
+            print("  Warning:           The expected week-ending date is not a Saturday.")
+        if sales_week_end and sales_week_end.date() != expected_week_end.date():
+            print(
+                "  Warning:           The sales filename does not match the expected week-ending date."
+            )
+        if sql_latest_week and sql_latest_week.date() != expected_week_end.date():
+            print(
+                "  Warning:           The current max [Week] in [CBQ2].[cb].[Sellthrough_Amazon] does not match the expected week-ending date."
+            )
+        if sql_latest_week and sql_latest_week.weekday() != 5:
+            print(
+                "  Warning:           The current max [Week] in [CBQ2].[cb].[Sellthrough_Amazon] is not a Saturday."
+            )
         print()
         print("    1. Continue")
         print("    2. Return to main menu")
@@ -384,6 +458,183 @@ def get_excel_automation_python() -> str:
     raise RuntimeError(
         "Could not find a Python interpreter with pywin32/pythoncom for Excel automation."
     )
+
+
+def parse_schtasks_list_output(output: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if not line or ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        values[key.strip()] = value.strip()
+    return values
+
+
+def get_title_lookup_task_details() -> dict[str, str] | None:
+    result = subprocess.run(
+        [
+            "schtasks",
+            "/Query",
+            "/TN",
+            process_paths.TITLE_LOOKUP_TASK_NAME,
+            "/FO",
+            "LIST",
+            "/V",
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    return parse_schtasks_list_output(result.stdout)
+
+
+def run_title_lookup_refresh_now() -> None:
+    print("Running the weekly Title Lookup force refresh... Please wait.")
+    subprocess.run(
+        [
+            get_excel_automation_python(),
+            str(process_paths.EXCEL_REFRESH_SCRIPT),
+            str(process_paths.TITLE_LOOKUP_WORKBOOK),
+            "--connection",
+            process_paths.TITLE_LOOKUP_CONNECTION_NAME,
+            "--table",
+            process_paths.TITLE_LOOKUP_TABLE_NAME,
+        ],
+        check=True,
+    )
+    print("The weekly Title Lookup workbook is now refreshed.")
+
+
+def enable_title_lookup_weekly_automation() -> None:
+    print("Creating or updating the weekly Title Lookup scheduled task... Please wait.")
+    subprocess.run(
+        ["venv/Scripts/python", str(process_paths.repo_path("tools", "title_lookup_automation.py")), "register"],
+        check=True,
+    )
+    print("Weekly Title Lookup automation is configured.")
+
+
+def show_title_lookup_automation_details() -> None:
+    subprocess.run(
+        ["venv/Scripts/python", str(process_paths.repo_path("tools", "title_lookup_automation.py")), "status"],
+        check=True,
+    )
+
+
+def disable_title_lookup_weekly_automation() -> None:
+    print("Disabling the weekly Title Lookup scheduled task... Please wait.")
+    subprocess.run(
+        ["venv/Scripts/python", str(process_paths.repo_path("tools", "title_lookup_automation.py")), "disable"],
+        check=True,
+    )
+    print("Weekly Title Lookup automation is now disabled.")
+
+
+def run_title_lookup_refresh_menu() -> None:
+    workbook_path = process_paths.TITLE_LOOKUP_WORKBOOK
+
+    if not workbook_path.exists():
+        raise FileNotFoundError(f"Required workbook not found: {workbook_path}")
+
+    while True:
+        task_details = get_title_lookup_task_details()
+        print()
+        print("Weekly Title Lookup Refresh")
+        print(f"  Workbook:          {workbook_path}")
+        print(f"  Connection:        {process_paths.TITLE_LOOKUP_CONNECTION_NAME}")
+        print(f"  Output table:      {process_paths.TITLE_LOOKUP_TABLE_NAME}")
+        print("  Manual action:     Force refresh the workbook right now.")
+        print("  Automation type:   Windows Task Scheduler")
+        print(f"  Task name:         {process_paths.TITLE_LOOKUP_TASK_NAME}")
+        print(f"  Task location:     {process_paths.TITLE_LOOKUP_TASK_LOCATION}")
+        print(f"  Default schedule:  {process_paths.TITLE_LOOKUP_SCHEDULE_DESCRIPTION}")
+        if task_details is None:
+            print("  Current status:    Not currently scheduled")
+            print("  Next run:          Not available")
+        else:
+            print("  Current status:    Scheduled")
+            print(f"  Next run:          {task_details.get('Next Run Time', 'Unknown')}")
+            print(f"  Last run:          {task_details.get('Last Run Time', 'Unknown')}")
+            print(f"  Last result:       {task_details.get('Last Result', 'Unknown')}")
+        print("  Notes:             This automation refreshes the workbook in place.")
+        print(
+            textwrap.fill(
+                "                     Excel automation is most reliable when you are logged into Windows, because the scheduled task opens Excel to run the refresh.",
+                width=100,
+                subsequent_indent="                     ",
+            )
+        )
+        print()
+        print("    1. Force Refresh Now")
+        print("    2. Enable or Update Weekly Automation")
+        print("    3. Disable Weekly Automation")
+        print("    4. Show Automation Details")
+        print("    5. Return to main menu")
+        print()
+        choice = input("Choose an option: ").strip().lower()
+
+        if choice in {"1", "force", "refresh", "run"}:
+            try:
+                run_title_lookup_refresh_now()
+            except (subprocess.CalledProcessError, RuntimeError) as e:
+                print(f"An error occurred while refreshing the weekly Title Lookup workbook: {e}")
+            continue
+
+        if choice in {"2", "enable", "schedule", "automation"}:
+            try:
+                enable_title_lookup_weekly_automation()
+            except subprocess.CalledProcessError as e:
+                print(f"An error occurred while configuring weekly automation: {e}")
+            continue
+
+        if choice in {"3", "disable", "off"}:
+            try:
+                disable_title_lookup_weekly_automation()
+            except subprocess.CalledProcessError as e:
+                print(f"An error occurred while disabling weekly automation: {e}")
+            continue
+
+        if choice in {"4", "details", "status", "info"}:
+            try:
+                show_title_lookup_automation_details()
+            except subprocess.CalledProcessError as e:
+                print(f"Unable to show automation details: {e}")
+            input("\nPress Enter to return to the Title Lookup menu...")
+            continue
+
+        if choice in {"5", "b", "back", "return", "menu"}:
+            return
+
+        print("Invalid choice. Please select a valid option.")
+
+
+def run_automation_processes_menu() -> None:
+    while True:
+        print("\nAutomation Processes")
+        print()
+        print("    1. Title Lookup Refresh (weekly)")
+        print("    2. Back to main menu")
+        print()
+        try:
+            subchoice = input("Choose an option: ").strip().lower()
+        except KeyboardInterrupt:
+            print("\nReturning to main menu.")
+            return
+
+        if subchoice == "1":
+            try:
+                run_title_lookup_refresh_menu()
+            except FileNotFoundError as e:
+                print(f"Unable to locate the Title Lookup workbook: {e}")
+            continue
+
+        if subchoice in {"2", "b", "back", "return", "menu"}:
+            return
+
+        print("Invalid choice. Please select a valid option.")
 
 
 def confirm_amazon_ams_files() -> bool:
@@ -619,75 +870,38 @@ def confirm_bn_rolling_reports_files() -> Path | None:
 
 def run_program(choice):
     reports = {
-        "2": ("Amazon (2) PO Report", "amazon_po/main.py"),
-        "3": ("Amazon (3) PreOrders", "amazon_preorders/main.py"),
-        "4": ("Amazon (4) Customer Orders", "amazon_customer_orders/main.py"),
-        "5": ("Amazon (5) Sellthru SQL Upload", "amazon_sql_upload/main.py"),
-        "7": ("Amazon AMS Manager (monthly)", "amazon_ams/manage_ams.py"),
-        "8": ("Barnes & Noble Rolling Reports", "bn_rolling_reports/main.py"),
-        "9": (
+        "2": ("Barnes & Noble Rolling Reports", "bn_rolling_reports/main.py"),
+        "3": (
             "Consolidate Inventory Manager",
             "consolidate_inventory_verticalization/main.py",
         ),
-        "10": ("Frontlist Supercharged Data", "FLTracking_Supercharged/main.py"),
-        "11": ("Hachette Orders - Shipping Estimates", "hachette_orders/main.py"),
-        "12": (
+        "4": ("Frontlist Supercharged Data", "FLTracking_Supercharged/main.py"),
+        "5": ("Hachette Orders - Shipping Estimates", "hachette_orders/main.py"),
+        "6": (
             "Reprint Indicator Report Updater",
             str(process_paths.REPRINT_INDICATOR_AUTOMATION_SCRIPT),
         ),
-        "14": ("UK Rolling File Combining", "UK_Rolling_File_Combining/main.py"),
-        "15": ("XGBoost Model", "xgboost_model/main.py"),
-        "16": ("Monthend Reports", "monthend/main.py"),
+        "9": ("UK Rolling File Combining", "UK_Rolling_File_Combining/main.py"),
+        "10": ("XGBoost Model", "xgboost_model/main.py"),
+        "11": ("Monthend Reports", "monthend/main.py"),
         "97": ("Desk Procedures", "desk_procedures/main.py"),
     }
 
     if choice == "1":
-        # run PO archive manager in-process (Tk GUI)
-        try:
-            po_archive_manager.main()
-        except Exception as e:
-            print(f"An error occurred while running PO Archive Manager: {e}")
+        run_amazon_menu()
         return
 
-    if choice == "6":
-        run_amazon_rolling_reports_menu()
+    if choice == "7":
+        run_automation_processes_menu()
         return
 
-    if choice == "13":
+    if choice == "8":
         run_ssr_daily_summary_menu()
         return
 
     if choice in reports:
         report_name, script_path = reports[choice]
-        if choice == "3":
-            try:
-                if not confirm_amazon_preorders_files():
-                    return
-            except FileNotFoundError as e:
-                print(f"Unable to locate the Amazon (3) PreOrders source files: {e}")
-                return
-        if choice == "4":
-            try:
-                if not confirm_amazon_customer_orders_files():
-                    return
-            except FileNotFoundError as e:
-                print(f"Unable to locate the Amazon (4) Customer Orders source files: {e}")
-                return
-        if choice == "5":
-            try:
-                if not confirm_amazon_sql_upload_files():
-                    return
-            except FileNotFoundError as e:
-                print(f"Unable to locate the Amazon (5) Sellthru SQL Upload source files: {e}")
-                return
-        if choice == "7":
-            try:
-                if not confirm_amazon_ams_files():
-                    return
-            except (FileNotFoundError, ImportError, AttributeError) as e:
-                print(f"Unable to locate the Amazon AMS Manager (monthly) source files: {e}")
-                return
-        if choice == "8":
+        if choice == "2":
             try:
                 selected_bn_raw_folder = confirm_bn_rolling_reports_files()
                 if selected_bn_raw_folder is None:
@@ -695,22 +909,22 @@ def run_program(choice):
             except FileNotFoundError as e:
                 print(f"Unable to locate the Barnes & Noble Rolling Reports files: {e}")
                 return
-        if choice == "10":
+        if choice == "4":
             try:
                 if not confirm_frontlist_supercharged_files():
                     return
             except FileNotFoundError as e:
                 print(f"Unable to locate the Frontlist Supercharged source files: {e}")
                 return
-        if choice != "8":
+        if choice != "2":
             print(f"Running the {report_name}... Please wait.")
         try:
             python_executable = "venv/Scripts/python"
-            if choice == "12":
+            if choice == "6":
                 python_executable = get_excel_automation_python()
 
             command = [python_executable, script_path]
-            if choice == "8":
+            if choice == "2":
                 command.extend(["--default-raw-folder", str(selected_bn_raw_folder)])
             subprocess.run(command, check=True)
             print(f"The {report_name} is now ready.")
@@ -781,6 +995,89 @@ def run_program(choice):
         return
 
     print("Invalid choice. Please select a valid option.")
+
+
+def run_amazon_menu():
+    while True:
+        print("\nAmazon")
+        print()
+        print("    1. PO Archive Manager")
+        print("    2. PO Report")
+        print("    3. PreOrders")
+        print("    4. Customer Orders")
+        print("    5. Sellthru SQL Upload")
+        print("    6. Rolling Reports")
+        print("    7. AMS Manager (monthly)")
+        print("    8. Back to main menu")
+        print()
+        try:
+            subchoice = input("Choose an option: ").strip().lower()
+        except KeyboardInterrupt:
+            print("\nReturning to main menu.")
+            return
+
+        if subchoice == "1":
+            try:
+                po_archive_manager.main()
+            except Exception as e:
+                print(f"An error occurred while running PO Archive Manager: {e}")
+            continue
+
+        amazon_reports = {
+            "2": ("Amazon (2) PO Report", "amazon_po/main.py"),
+            "3": ("Amazon (3) PreOrders", "amazon_preorders/main.py"),
+            "4": ("Amazon (4) Customer Orders", "amazon_customer_orders/main.py"),
+            "5": ("Amazon (5) Sellthru SQL Upload", "amazon_sql_upload/main.py"),
+            "7": ("Amazon AMS Manager (monthly)", "amazon_ams/manage_ams.py"),
+        }
+
+        if subchoice == "6":
+            run_amazon_rolling_reports_menu()
+            continue
+
+        if subchoice in amazon_reports:
+            report_name, script_path = amazon_reports[subchoice]
+            if subchoice == "3":
+                try:
+                    if not confirm_amazon_preorders_files():
+                        continue
+                except FileNotFoundError as e:
+                    print(f"Unable to locate the Amazon (3) PreOrders source files: {e}")
+                    continue
+            if subchoice == "4":
+                try:
+                    if not confirm_amazon_customer_orders_files():
+                        continue
+                except FileNotFoundError as e:
+                    print(f"Unable to locate the Amazon (4) Customer Orders source files: {e}")
+                    continue
+            if subchoice == "5":
+                try:
+                    if not confirm_amazon_sql_upload_files():
+                        continue
+                except FileNotFoundError as e:
+                    print(f"Unable to locate the Amazon (5) Sellthru SQL Upload source files: {e}")
+                    continue
+            if subchoice == "7":
+                try:
+                    if not confirm_amazon_ams_files():
+                        continue
+                except (FileNotFoundError, ImportError, AttributeError) as e:
+                    print(f"Unable to locate the Amazon AMS Manager (monthly) source files: {e}")
+                    continue
+
+            print(f"Running the {report_name}... Please wait.")
+            try:
+                subprocess.run(["venv/Scripts/python", script_path], check=True)
+                print(f"The {report_name} is now ready.")
+            except subprocess.CalledProcessError:
+                print(f"An error occurred while running {script_path}.")
+            continue
+
+        if subchoice in {"8", "back", "b", "return", "menu"}:
+            return
+
+        print("Invalid choice. Please select a valid option.")
 
 
 def run_amazon_rolling_reports_menu():

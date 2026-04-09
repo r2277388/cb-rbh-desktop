@@ -14,7 +14,14 @@ def sql_us():
     DECLARE @sum       nvarchar(max);
     DECLARE @sql       nvarchar(max);
 
-    SELECT @last_date = MAX([Week]) FROM [CBQ2].[cb].[Sellthrough_Amazon];
+    SELECT @last_date = MAX(
+        DATEADD(
+            day,
+            6 - ((DATEPART(WEEKDAY, CAST([Week] AS date)) + @@DATEFIRST - 2) % 7 + 1),
+            CAST([Week] AS date)
+        )
+    )
+    FROM [CBQ2].[cb].[Sellthrough_Amazon];
     SET @ty_year = YEAR(@last_date);
     SET @ly_year = @ty_year - 1;
     SET @iso_wk  = DATEPART(ISO_WEEK, @last_date);
@@ -54,11 +61,19 @@ def sql_us():
     WITH src AS (
         SELECT
             UPPER(RIGHT(REPLICATE('0',13) + REPLACE(REPLACE(CONVERT(varchar(32), sta.ISBN),'-',''),' ',''), 13)) AS ISBN13,
-            CAST(sta.[Week] AS date) AS [Week],
+            DATEADD(
+                day,
+                6 - ((DATEPART(WEEKDAY, CAST(sta.[Week] AS date)) + @@DATEFIRST - 2) % 7 + 1),
+                CAST(sta.[Week] AS date)
+            ) AS [Week],
             ISNULL(sta.UnitShipped, 0) AS UnitShipped,
             ISNULL(sta.OnHand, 0)         AS OnHand
         FROM [CBQ2].[cb].[Sellthrough_Amazon] sta
-        WHERE sta.[Week] BETWEEN @start_date_ltd AND @last_date
+        WHERE DATEADD(
+            day,
+            6 - ((DATEPART(WEEKDAY, CAST(sta.[Week] AS date)) + @@DATEFIRST - 2) % 7 + 1),
+            CAST(sta.[Week] AS date)
+        ) BETWEEN @start_date_ltd AND @last_date
     )
     SELECT
         s.ISBN13,
@@ -135,10 +150,22 @@ def sql_us():
     ;WITH base AS (
         SELECT
             UPPER(RIGHT(REPLICATE(''0'',13) + REPLACE(REPLACE(CONVERT(varchar(32), sta.ISBN),''-'',''''),'' '',''''), 13)) AS ISBN13,
-            CONVERT(varchar(10), sta.[Week], 110) AS wk_label,
+            CONVERT(
+                varchar(10),
+                DATEADD(
+                    day,
+                    6 - ((DATEPART(WEEKDAY, CAST(sta.[Week] AS date)) + @@DATEFIRST - 2) % 7 + 1),
+                    CAST(sta.[Week] AS date)
+                ),
+                110
+            ) AS wk_label,
             ISNULL(sta.UnitShipped, 0) AS UnitShipped
         FROM [CBQ2].[cb].[Sellthrough_Amazon] sta
-        WHERE sta.[Week] BETWEEN @start_date_weekly AND @last_date
+        WHERE DATEADD(
+            day,
+            6 - ((DATEPART(WEEKDAY, CAST(sta.[Week] AS date)) + @@DATEFIRST - 2) % 7 + 1),
+            CAST(sta.[Week] AS date)
+        ) BETWEEN @start_date_weekly AND @last_date
     ),
     p AS (
         SELECT *
