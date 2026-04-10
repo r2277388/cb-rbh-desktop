@@ -129,6 +129,13 @@ ACTIONS: dict[str, Action] = {
         "Run the Barnes & Noble rolling reports process.",
         "Main Processes",
     ),
+    "bookscan_rolling_reports": Action(
+        "bookscan_rolling_reports",
+        "Bookscan Rolling Reports",
+        [str(VENV_PYTHON), "bookscan_rolling_reports/main.py"],
+        "Run the Bookscan rolling reports process.",
+        "Main Processes",
+    ),
     "frontlist_supercharged": Action(
         "frontlist_supercharged",
         "Frontlist Supercharged Data",

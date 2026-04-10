@@ -266,6 +266,17 @@ def get_latest_sql_week() -> pd.Timestamp | None:
     return pd.Timestamp(latest_value)
 
 
+def get_latest_cache_week() -> pd.Timestamp | None:
+    cached = _load_parquet_or_empty(sales_cache_file)
+    if cached.empty or "Week" not in cached.columns:
+        return None
+    cached["Week"] = pd.to_datetime(cached["Week"], errors="coerce")
+    latest = cached["Week"].dropna().max()
+    if pd.isna(latest):
+        return None
+    return pd.Timestamp(latest)
+
+
 def _read_inventory_snapshot(raw_folder: Path) -> pd.DataFrame:
     week_ending = parse_week_ending(raw_folder.name)
     inventory_result = build_inventory_working_file(raw_folder=raw_folder)
@@ -372,7 +383,26 @@ def _fetch_item_metadata_for_isbns(isbns: list[str]) -> pd.DataFrame:
         i.PRICE_AMOUNT AS Price,
         CAST(i.AMORTIZATION_DATE AS date) AS PubDate
     FROM ebs.item i
-    WHERE i.ITEM_TITLE IN ({quoted_isbns});
+    WHERE
+        i.ITEM_TITLE IN ({quoted_isbns})
+        AND i.PUBLISHER_CODE IS NOT NULL
+        AND i.PUBLISHER_CODE NOT IN (
+            'Benefit',
+            'AFO LLC',
+            'Glam Media',
+            'PQ Blackwell',
+            'PRINCETON',
+            'AMMO Books',
+            'San Francisco Art Institute',
+            'FareArts',
+            'Sager',
+            'In Active',
+            'Driscolls',
+            'Impossible Foods',
+            'Moleskine'
+        )
+        AND i.PRODUCT_TYPE IN ('BK', 'FT', 'RP', 'CP', 'DI')
+        AND i.PUBLISHING_GROUP NOT IN ('MKT', 'ZZZ');
     """
     engine = get_connection()
     metadata = fetch_data_from_db(engine, query)

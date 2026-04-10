@@ -1,5 +1,5 @@
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -11,9 +11,7 @@ def repo_path(*parts: str) -> Path:
 # Shared external locations
 DOWNLOADS_FOLDER = Path(r"G:\SALES\Amazon\RBH\DOWNLOADED_FILES")
 ORACLE_YPTICOD_FILE = Path(r"J:\Metadata Reports\Oracle YPTICOD.xlsx")
-ATELIER_AMAZON_BASE_FOLDER = Path(
-    r"F:\ANALYSIS\Finance\DataWarehouse\Atelier Amazon"
-)
+ATELIER_AMAZON_BASE_FOLDER = Path(r"F:\ANALYSIS\Finance\DataWarehouse\Atelier Amazon")
 ATELIER_AMAZON_CATALOG_FOLDER = ATELIER_AMAZON_BASE_FOLDER / "Catalog"
 ATELIER_AMAZON_INVENTORY_FOLDER = ATELIER_AMAZON_BASE_FOLDER / "Inventory"
 AMAZON_WEEKLY_BASE_FOLDER = Path(
@@ -53,6 +51,9 @@ INGRAM_DAILY_REPORT_FOLDER = Path(
 )
 BN_WEEKLY_REPORT_FOLDER = Path(
     r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Barnes & Noble"
+)
+BOOKSCAN_WEEKLY_REPORT_FOLDER = Path(
+    r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Bookscan"
 )
 CONSOLIDATED_INVENTORY_VERTICALIZATION_FOLDER = Path(
     r"F:\ANALYSIS\Finance\DataWarehouse\consolidated_inventory"
@@ -140,6 +141,33 @@ BN_ROLLING_DP_FOLDERS = {
         r"G:\Sales\Distribution_Partners\Creative Company\CC REPORTS\Barnes & Noble\2026"
     ),
 }
+BOOKSCAN_ROLLING_DP_FOLDERS = {
+    "Galison": Path(r"G:\Sales\Distribution_Partners\Galison\GA REPORTS\Bookscan\2026"),
+    "Hardie Grant": Path(
+        r"G:\SALES\Distribution_Partners\Hardie Grant\HG REPORTS\Sell Through Reporting\Bookscan\2026"
+    ),
+    "Laurence King": Path(
+        r"G:\SALES\Distribution_Partners\Laurence King\LK REPORTS\Bookscan\2026"
+    ),
+    "Levine Querido": Path(
+        r"G:\Sales\Distribution_Partners\Levine Querido\LQ REPORTS\Sell Through Reporting\Bookscan\2026"
+    ),
+    "Paperblanks": Path(
+        r"G:\Sales\Distribution_Partners\Paperblanks\PB REPORTS\Sell-Through Reporting\Bookscan\2026"
+    ),
+    "Quadrille": Path(
+        r"G:\Sales\Distribution_Partners\Quadrille\QD REPORTS\Sell Through Reporting\Bookscan\2026"
+    ),
+    "Sierra Club": Path(
+        r"G:\Sales\Distribution_Partners\Sierra Club\SC REPORTS\Bookscan\2026"
+    ),
+    "Tourbillon": Path(
+        r"G:\Sales\Distribution_Partners\Twirl\TW-REPORTS\Sell Through Reporting\Bookscan\2026"
+    ),
+    "Creative Company": Path(
+        r"G:\Sales\Distribution_Partners\Creative Company\CC REPORTS\Bookscan\2026"
+    ),
+}
 
 # Launcher-owned local files
 AMAZON_CUSTOMER_ORDERS_SCRIPT = repo_path("amazon_customer_orders", "main.py")
@@ -186,7 +214,10 @@ FRONTLIST_FAIRE_ORDERS_SQL = repo_path(
     "FLTracking_Supercharged", "sql", "faire_orders.sql"
 )
 BN_ROLLING_REPORTS_SCRIPT = repo_path("bn_rolling_reports", "main.py")
-REPRINT_INDICATOR_AUTOMATION_SCRIPT = repo_path("reprint_indicator_automation", "main.py")
+BOOKSCAN_ROLLING_REPORTS_SCRIPT = repo_path("bookscan_rolling_reports", "main.py")
+REPRINT_INDICATOR_AUTOMATION_SCRIPT = repo_path(
+    "reprint_indicator_automation", "main.py"
+)
 EXCEL_REFRESH_SCRIPT = repo_path("tools", "excel_refresh.py")
 TITLE_LOOKUP_WORKBOOK = Path(
     r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Z-Archive\1 - title lookup.xlsx"
@@ -202,9 +233,15 @@ TITLE_LOOKUP_SCHEDULE_DESCRIPTION = "Every Sunday at 7:00 AM"
 
 def amazon_sql_upload_output_file(for_date: datetime | None = None) -> Path:
     date_value = for_date or datetime.now()
-    return AMAZON_SQL_UPLOAD_OUTPUT_DIR / f"amazon_update_{date_value.strftime('%Y%m%d')}.xlsx"
+    return (
+        AMAZON_SQL_UPLOAD_OUTPUT_DIR
+        / f"amazon_update_{date_value.strftime('%Y%m%d')}.xlsx"
+    )
 
 
 def amazon_weekly_report_file(for_date: datetime) -> Path:
     iso_week = for_date.isocalendar().week
-    return AMAZON_WEEKLY_REPORTS_DIR / f"w{iso_week:02d}__{for_date.strftime('%Y_%m_%d')}.xlsx"
+    return (
+        AMAZON_WEEKLY_REPORTS_DIR
+        / f"w{iso_week:02d}__{for_date.strftime('%Y_%m_%d')}.xlsx"
+    )

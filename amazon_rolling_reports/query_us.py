@@ -49,7 +49,8 @@ def sql_us():
         UPPER(RIGHT(REPLICATE('0',13) + REPLACE(REPLACE(CONVERT(varchar(32), i.ITEM_TITLE),'-',''),' ',''), 13)) AS ISBN13
     INTO #items
     FROM ebs.item i
-    WHERE i.PRODUCT_TYPE IN ('BK','FT','CP','RP','DI','')
+    WHERE i.PRODUCT_TYPE IN ('BK','FT','CP','RP','DI')
+      AND i.PUBLISHING_GROUP NOT IN ('MKT', 'ZZZ')
       AND i.PUBLISHER_CODE NOT IN (
             'Benefit','AFO LLC','Glam Media','PQ Blackwell','PRINCETON','AMMO Books',
             'San Francisco Art Institute','FareArts','Sager','In Active','Driscolls',

@@ -44,6 +44,8 @@ def build_customer_sales_query(start_date: str) -> str:
             'Impossible Foods',
             'Moleskine'
         )
+        AND i.PRODUCT_TYPE IN ('BK', 'FT', 'RP', 'CP', 'DI')
+        AND i.PUBLISHING_GROUP NOT IN ('MKT', 'ZZZ')
     GROUP BY
         CAST(sbn.[WEEK] AS date),
         sbn.[ISBN13],

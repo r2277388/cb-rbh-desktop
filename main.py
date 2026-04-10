@@ -70,6 +70,7 @@ def display_options():
         "09. UK Rolling File Combining",
         "10. XGBoost Model",
         "11. Monthend Reports",
+        "12. Bookscan Rolling Reports",
         "94. Check Table Updates",
         "95. Install Main Venv Requirements",
         "96. Open Main Venv Shell",
@@ -99,6 +100,7 @@ def display_info(choice):
         "9": "UK Rolling File Combining: This combines the sales, reserve and midas files together.",
         "10": "XGBoost Model: Launches the xgboost_model workflow menu.",
         "11": "Monthend Reports: Opens the monthend reports menu, including Barnes & Noble Monthly Coop (Ailing).",
+        "12": "Bookscan Rolling Reports: Opens the Bookscan rolling report helper for SQL week checks, cache refreshes, and rolling workbook builds.",
         "101": "Amazon (1) PO Archive Manager: Launches the PO archive helper to archive prior current_amaz_preorders and copy the new file into po_analysis.",
         "102": f"""Amazon (2) PO Report: Generates a detailed report based on Amazon Purchase Orders.
         Before running, save the Vendor Central PO File to:
@@ -884,6 +886,7 @@ def run_program(choice):
         "9": ("UK Rolling File Combining", "UK_Rolling_File_Combining/main.py"),
         "10": ("XGBoost Model", "xgboost_model/main.py"),
         "11": ("Monthend Reports", "monthend/main.py"),
+        "12": ("Bookscan Rolling Reports", str(process_paths.BOOKSCAN_ROLLING_REPORTS_SCRIPT)),
         "97": ("Desk Procedures", "desk_procedures/main.py"),
     }
 
