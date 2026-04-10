@@ -51,6 +51,23 @@ MANUAL_MISSING_WEEKS = (
 PUBLISHER_NORMALIZATION = {
     "Quadrille Publishing Limited": "Quadrille",
 }
+PUBLISHER_EXCLUSIONS = (
+    "Benefit",
+    "AFO LLC",
+    "Glam Media",
+    "PQ Blackwell",
+    "PRINCETON",
+    "AMMO Books",
+    "San Francisco Art Institute",
+    "FareArts",
+    "Sager",
+    "In Active",
+    "Driscolls",
+    "Impossible Foods",
+    "Moleskine",
+)
+ALLOWED_PRODUCT_TYPES = {"BK", "FT", "RP", "CP", "DI"}
+EXCLUDED_PUBLISHING_GROUPS = {"MKT", "ZZZ"}
 
 
 @dataclass
@@ -80,6 +97,19 @@ def _normalize_publisher_value(value):
     if pd.isna(value):
         return value
     return PUBLISHER_NORMALIZATION.get(str(value), value)
+
+
+def _filter_allowed_sales_rows(df: pd.DataFrame) -> pd.DataFrame:
+    filtered = df.copy()
+    if "Publisher" in filtered.columns:
+        filtered["Publisher"] = filtered["Publisher"].map(_normalize_publisher_value)
+        filtered = filtered[filtered["Publisher"].notna()].copy()
+        filtered = filtered[~filtered["Publisher"].astype(str).isin(PUBLISHER_EXCLUSIONS)].copy()
+    if "PT" in filtered.columns:
+        filtered = filtered[filtered["PT"].astype(str).isin(ALLOWED_PRODUCT_TYPES)].copy()
+    if "pgrp" in filtered.columns:
+        filtered = filtered[~filtered["pgrp"].astype(str).isin(EXCLUDED_PUBLISHING_GROUPS)].copy()
+    return filtered
 
 
 def _load_parquet_or_empty(cache_file: Path) -> pd.DataFrame:
@@ -451,8 +481,9 @@ def build_report_dataframe(sales_df: pd.DataFrame, inventory_df: pd.DataFrame) -
         raise ValueError("Sales cache is empty.")
 
     sales_df = sales_df.copy()
-    if "Publisher" in sales_df.columns:
-        sales_df["Publisher"] = sales_df["Publisher"].map(_normalize_publisher_value)
+    sales_df = _filter_allowed_sales_rows(sales_df)
+    if sales_df.empty:
+        raise ValueError("No Barnes & Noble sales rows remain after applying final item filters.")
     sales_df["Week"] = pd.to_datetime(sales_df["Week"])
     latest_week = sales_df["Week"].max()
 
@@ -524,6 +555,9 @@ def build_report_dataframe(sales_df: pd.DataFrame, inventory_df: pd.DataFrame) -
         if not item_metadata.empty:
             item_metadata = item_metadata.set_index("ISBN")
             metadata = pd.concat([metadata, item_metadata[~item_metadata.index.isin(metadata.index)]], axis=0)
+    if not latest_inventory.empty:
+        allowed_isbns = set(metadata.index.astype(str))
+        latest_inventory = latest_inventory[latest_inventory.index.astype(str).isin(allowed_isbns)].copy()
     report = pd.concat([metadata, latest_inventory, metrics, weekly_df, yearly_df], axis=1)
     report = report.reset_index()
     report.rename(columns={"index": "ISBN"}, inplace=True)

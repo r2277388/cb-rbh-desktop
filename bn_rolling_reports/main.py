@@ -14,6 +14,7 @@ from inventory_working import build_inventory_working_file, find_inventory_sourc
 from sales_working import build_sales_working_file, find_sales_source_file
 from rolling_customer_sales import (
     build_customer_sales_report,
+    get_latest_cache_week,
     get_latest_sql_week,
     print_cache_refresh_summary,
     print_result_summary as print_rolling_result_summary,
@@ -156,20 +157,43 @@ def print_inventory_result_summary(result) -> None:
     print(f"Removed ISBNs file: {result.removed_isbns_file}")
 
 
-def confirm_refresh_cache(latest_sql_week) -> bool:
-    latest_sql_week_text = (
-        latest_sql_week.strftime("%Y-%m-%d") if latest_sql_week is not None else "None found"
-    )
+def _format_week_status(week) -> str:
+    if week is None:
+        return "None found"
+    saturday_note = "" if week.weekday() == 5 else " (not a Saturday)"
+    return f"Week {week.isocalendar().week}, {week.strftime('%A, %B')} {week.day}, {week.year}{saturday_note}"
+
+
+def confirm_refresh_cache(latest_sql_week, latest_cache_week) -> bool:
     root = Tk()
     root.withdraw()
     root.attributes("-topmost", True)
     try:
         return messagebox.askyesno(
-            "Refresh Cache",
+            "Barnes & Noble Cache Refresh",
             (
-                "Have you uploaded the Sales and Inventory file to CBQ yet?\n\n"
-                f"Latest week currently in CBQ: {latest_sql_week_text}\n\n"
+                "Have you uploaded the Sales and Inventory files to CBQ yet?\n\n"
+                f"Latest SQL week: {_format_week_status(latest_sql_week)}\n"
+                f"Current cache week: {_format_week_status(latest_cache_week)}\n\n"
                 "Choose Yes to refresh the cache now."
+            ),
+            parent=root,
+        )
+    finally:
+        root.destroy()
+
+
+def confirm_build_report(latest_sql_week, latest_cache_week) -> bool:
+    root = Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    try:
+        return messagebox.askyesno(
+            "Run Barnes & Noble Rolling Report",
+            (
+                f"SQL is updated through: {_format_week_status(latest_sql_week)}\n"
+                f"Current B&N cache through: {_format_week_status(latest_cache_week)}\n\n"
+                "Would you like to proceed with the Barnes & Noble rolling report for this week?"
             ),
             parent=root,
         )
@@ -229,12 +253,17 @@ def run_menu(default_raw_folder: str | Path | None = None) -> None:
 
         if choice == "5":
             latest_sql_week = get_latest_sql_week()
+            latest_cache_week = get_latest_cache_week()
             print()
             print(
                 "Latest week currently in CBQ: "
                 f"{latest_sql_week.strftime('%Y-%m-%d') if latest_sql_week is not None else 'None found'}"
             )
-            if not confirm_refresh_cache(latest_sql_week):
+            print(
+                "Latest week currently in cache: "
+                f"{latest_cache_week.strftime('%Y-%m-%d') if latest_cache_week is not None else 'None found'}"
+            )
+            if not confirm_refresh_cache(latest_sql_week, latest_cache_week):
                 print("Cache refresh cancelled.")
                 continue
             print("\nRefreshing caches...")
@@ -243,18 +272,33 @@ def run_menu(default_raw_folder: str | Path | None = None) -> None:
             continue
 
         if choice == "6":
+            latest_sql_week = get_latest_sql_week()
+            latest_cache_week = get_latest_cache_week()
+            if not confirm_build_report(latest_sql_week, latest_cache_week):
+                print("B&N rolling report cancelled.")
+                continue
             print("\nBuilding B&N rolling report (CB + DP Version)...")
             result = build_customer_sales_report(raw_folder=raw_folder)
             print_rolling_result_summary(result)
             continue
 
         if choice == "7":
+            latest_sql_week = get_latest_sql_week()
+            latest_cache_week = get_latest_cache_week()
+            if not confirm_build_report(latest_sql_week, latest_cache_week):
+                print("B&N rolling report cancelled.")
+                continue
             print("\nBuilding B&N rolling report (CB + DP Version) + DP versions...")
             result = build_customer_sales_report(raw_folder=raw_folder, save_dp=True)
             print_rolling_result_summary(result)
             continue
 
         if choice == "8":
+            latest_sql_week = get_latest_sql_week()
+            latest_cache_week = get_latest_cache_week()
+            if not confirm_build_report(latest_sql_week, latest_cache_week):
+                print("B&N rolling report cancelled.")
+                continue
             print("\nBuilding local review B&N rolling report...")
             result = build_customer_sales_report(raw_folder=raw_folder, local_only=True)
             print_rolling_result_summary(result)
