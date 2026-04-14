@@ -29,6 +29,11 @@ from processes.faire_orders import SQL_FILE as FAIRE_ORDERS_SQL_FILE
 from processes.faire_orders import load_faire_orders
 from processes.faire_qty import SQL_FILE as FAIRE_QTY_SQL_FILE
 from processes.faire_qty import load_faire_qty
+from processes.bookshop_preorders import (
+    load_bookshop_preorders_cached,
+    parse_bookshop_report_date,
+    resolve_bookshop_preorders_path,
+)
 from processes.ingram_daily_report import (
     build_modified_date_header,
     load_ingram_daily_report,
@@ -121,6 +126,8 @@ def build_metadata_sheet(frontlist_path: Path, combined: pd.DataFrame) -> pd.Dat
     barnes_noble_path = resolve_barnes_noble_weekly_path()
     inventory_detail_path = resolve_inventory_detail_path()
     amazon_preorders_path = AMAZON_PREORDERS_PATH
+    bookshop_preorders_path = resolve_bookshop_preorders_path()
+    bookshop_report_date = parse_bookshop_report_date(bookshop_preorders_path)
 
     _, ingram_report_date = build_modified_date_header(ingram_path)
     _, bn_report_date = build_bn_date_header(barnes_noble_path)
@@ -163,6 +170,12 @@ def build_metadata_sheet(frontlist_path: Path, combined: pd.DataFrame) -> pd.Dat
             "ModifiedDate": datetime.fromtimestamp(amazon_preorders_path.stat().st_mtime).strftime("%m/%d/%Y"),
         },
         {
+            "Source": "Bookshop Preorders",
+            "FileName": bookshop_preorders_path.name,
+            "ReportDate": bookshop_report_date,
+            "ModifiedDate": datetime.fromtimestamp(bookshop_preorders_path.stat().st_mtime).strftime("%m/%d/%Y"),
+        },
+        {
             "Source": "Amazon Sellthrough SQL",
             "FileName": AMAZON_SELLTHROUGH_SQL_FILE.name,
             "ReportDate": amz_last_week_value,
@@ -192,6 +205,7 @@ def build_frontlist_main() -> tuple[pd.DataFrame, pd.DataFrame, Path]:
     source_frames = [
         load_inventory_detail_cached()[0],
         load_amazon_preorders_cached()[0],
+        load_bookshop_preorders_cached()[0],
         load_amazon_sellthrough(),
         load_faire_qty(),
         load_faire_orders(),

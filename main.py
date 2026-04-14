@@ -86,7 +86,7 @@ def display_options():
 
 def display_info(choice):
     info = {
-        "1": "Amazon: Opens a submenu containing the PO archive manager, PO report, PreOrders, Customer Orders, Sellthru SQL Upload, Rolling Reports, and AMS Manager.",
+        "1": "Amazon: Opens a submenu containing the PO archive manager, PO report, PreOrders, Customer Orders, Create SQL Sellthrough Upload (XLSX), Rolling Reports, and AMS Manager.",
         "2": f"""Barnes & Noble Rolling Reports: Builds weekly Barnes & Noble rolling-report source files, starting with the combined POS non-book extract.""",
         "3": "Bookscan Rolling Reports: Opens the Bookscan rolling report helper for SQL week checks, cache refreshes, and rolling workbook builds.",
         "4": "Consolidate Inventory Manager: Opens the consolidated inventory workflow menu, including depot file intake, verticalization, summaries, and related inventory tools.",
@@ -108,7 +108,7 @@ def display_info(choice):
         A PO Report is saved off to: {process_paths.AMAZON_PO_ROOT_FOLDER} folder""",
         "103": "Amazon (3) PreOrders: Generates a report for Amazon NYP PreOrders. Save the relevant data file to the appropriate location before running.",
         "104": "Amazon (4) Customer Orders: Generates a report for Amazon Customer Orders. Save the relevant data file to the appropriate location before running.",
-        "105": "Amazon (5) Sellthru SQL Upload: Runs the amazon_sql_upload workflow (ASIN/ISBN conversion, uploads, etc.).",
+        "105": "Amazon (5) Create SQL Sellthrough Upload (XLSX): Runs the amazon_sql_upload workflow to build the SQL upload workbook (ASIN/ISBN conversion, uploads, etc.).",
         "106": "Amazon (6) Rolling Reports: Runs a 10-week SQL freshness check first, then asks whether to continue with the full process.",
         "107": "Amazon AMS Manager (monthly): Manage/update AMS month configuration and run incremental or full AMS processing.",
         "94": "Check Table Updates: Runs SQL checks for table freshness and recent weeks for SSR/Amazon/Bookscan tables.",
@@ -293,6 +293,19 @@ def confirm_amazon_sql_upload_files() -> bool:
         print("  Weekly cbq upload workbook:   Auto-created from the cleaned six-column dataset")
         print("  Save dialog:       Opens with this default file prefilled")
         print()
+        print("    1. Continue to week-ending date")
+        print("    2. Return to main menu")
+        print()
+        preview_choice = input("Choose an option: ").strip().lower()
+        print()
+
+        if preview_choice in {"2", "b", "back", "return", "menu"}:
+            return False
+
+        if preview_choice not in {"1", "c", "continue"}:
+            print("Invalid choice. Please select a valid option.")
+            continue
+
         expected_text = input(
             "Expected week-ending Saturday (MM/DD/YYYY or blank to use the sales file date): "
         ).strip()
@@ -1008,7 +1021,7 @@ def run_amazon_menu():
         print("    2. PO Report")
         print("    3. PreOrders")
         print("    4. Customer Orders")
-        print("    5. Sellthru SQL Upload")
+        print("    5. Create SQL Sellthrough Upload (XLSX)")
         print("    6. Rolling Reports")
         print("    7. AMS Manager (monthly)")
         print("    8. Back to main menu")
@@ -1030,7 +1043,7 @@ def run_amazon_menu():
             "2": ("Amazon (2) PO Report", "amazon_po/main.py"),
             "3": ("Amazon (3) PreOrders", "amazon_preorders/main.py"),
             "4": ("Amazon (4) Customer Orders", "amazon_customer_orders/main.py"),
-            "5": ("Amazon (5) Sellthru SQL Upload", "amazon_sql_upload/main.py"),
+            "5": ("Amazon (5) Create SQL Sellthrough Upload (XLSX)", "amazon_sql_upload/main.py"),
             "7": ("Amazon AMS Manager (monthly)", "amazon_ams/manage_ams.py"),
         }
 
@@ -1059,7 +1072,7 @@ def run_amazon_menu():
                     if not confirm_amazon_sql_upload_files():
                         continue
                 except FileNotFoundError as e:
-                    print(f"Unable to locate the Amazon (5) Sellthru SQL Upload source files: {e}")
+                    print(f"Unable to locate the Amazon (5) Create SQL Sellthrough Upload (XLSX) source files: {e}")
                     continue
             if subchoice == "7":
                 try:

@@ -6,6 +6,7 @@ This project builds an ISBN-level tracking file by extracting data from separate
 
 - `inventory_detail`: pulls selected fields from `Inventory Detail.xlsx`
 - `amazon_preorders`: pulls `ISBN` and `Orders` from the `nyp` tab of `current_amaz_preorders.xlsx`
+- `bookshop_preorders`: pulls `ISBN` from column A and preorder quantity from column D of the latest Bookshop preorder CSV
 - `amazon_sellthrough`: runs the latest-week Amazon sellthrough SQL and returns ISBN-level shipped/on-hand metrics
 - `faire_qty`: runs the Faire sales SQL and returns ISBN-level quantity sold
 - `faire_orders`: runs the Faire open orders SQL and returns ISBN-level order quantity
@@ -18,6 +19,7 @@ This project builds an ISBN-level tracking file by extracting data from separate
 ```powershell
 python -m processes.inventory_detail
 python -m processes.amazon_preorders
+python -m processes.bookshop_preorders
 python -m processes.amazon_sellthrough
 python -m processes.faire_qty
 python -m processes.faire_orders
@@ -36,6 +38,7 @@ python main.py
 
 - The default source path for Inventory Detail is set in `config.py`.
 - The Amazon preorders source reads only the `nyp` worksheet.
+- The Bookshop preorders source automatically picks the most recently modified CSV from the configured Bookshop folder.
 - The Ingram source automatically picks the most recently modified `Daily Report*.xlsx` file from the configured folder.
 - The Barnes & Noble source automatically picks the most recently modified `Week *.xlsx` file from the configured folder.
 - The Frontlist main build automatically picks the most recently modified real Frontlist Tracking workbook and merges all source outputs onto that ISBN list only.

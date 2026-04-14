@@ -3,6 +3,8 @@ import sys
 import re
 import argparse
 import getpass
+import html
+import subprocess
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
@@ -16,6 +18,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from paths import process_paths
 from bn_rolling_reports.isbn_utils import normalize_isbn, normalize_isbn_series
+from shared import send_outlook_mail
 from shared.db.connection import get_connection
 from shared.db.query_runner import fetch_data_from_db
 
@@ -41,7 +44,12 @@ PUBLISHER_LOOKUP_SQL = """
 SELECT
     i.ITEM_TITLE AS ISBN,
     i.SHORT_TITLE AS Title,
-    i.PUBLISHER_CODE AS Publisher
+    i.PUBLISHER_CODE AS Publisher,
+    CASE
+        WHEN LEFT(i.PUBLISHING_GROUP, 3) = 'BAR' THEN 'BAR'
+        ELSE i.PUBLISHING_GROUP
+    END AS PGRP,
+    i.PRICE_AMOUNT AS Price
 FROM
     ebs.item i
 WHERE
@@ -576,10 +584,101 @@ def preview_verticalized_coninv():
 
     period_df = period_df.sort_values(["ISBN", "ORG"]).reset_index(drop=True)
     preview_df = period_df.head(row_count).copy()
+    preview_columns = [
+        "ISBN",
+        "Title",
+        "PGRP",
+        "Price",
+        "Publisher",
+        "period",
+        "ORG",
+        "Value",
+        "Inventory",
+    ]
+    preview_df = preview_df[[column for column in preview_columns if column in preview_df.columns]]
 
     print()
     print(f"Top {len(preview_df):,} rows of verticalized ConInv for SharePoint ({period}):")
     print(preview_df.to_string(index=False))
+
+
+def copy_text_to_clipboard(text: str) -> bool:
+    try:
+        creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        subprocess.run(
+            ["cmd", "/c", "clip"],
+            input=text,
+            text=True,
+            check=True,
+            creationflags=creation_flags,
+        )
+        return True
+    except Exception:
+        pass
+
+    root = Tk()
+    root.withdraw()
+    try:
+        root.clipboard_clear()
+        root.clipboard_append(text)
+        root.update()
+        return True
+    except Exception:
+        return False
+    finally:
+        root.destroy()
+
+
+def build_html_table(dataframe: pd.DataFrame) -> str:
+    headers = [html.escape(str(column)) for column in dataframe.columns]
+    header_html = "".join(
+        f"<th style='border:1px solid #cfcfcf;padding:6px 8px;background:#f3f3f3;text-align:left;'>{header}</th>"
+        for header in headers
+    )
+
+    body_rows = []
+    for _, row in dataframe.fillna("").iterrows():
+        cell_html = "".join(
+            f"<td style='border:1px solid #cfcfcf;padding:6px 8px;vertical-align:top;'>{html.escape(str(value))}</td>"
+            for value in row.tolist()
+        )
+        body_rows.append(f"<tr>{cell_html}</tr>")
+
+    return (
+        "<table style='border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:11pt;'>"
+        f"<thead><tr>{header_html}</tr></thead>"
+        f"<tbody>{''.join(body_rows)}</tbody>"
+        "</table>"
+    )
+
+
+def open_frozen_cbp_inventory_draft(
+    *,
+    periods: list[str],
+    min_inventory: int,
+    max_change_pct: float,
+    email_df: pd.DataFrame,
+) -> None:
+    subject = f"Chronicle Frozen CBP Inventory Check - {' to '.join([periods[0], periods[-1]])}"
+    html_body = "".join(
+        [
+            "<html><body style='font-family:Calibri,Arial,sans-serif;font-size:11pt;'>",
+            "<p>Chronicle ISBNs with frozen CBP inventory in the last 4 periods.</p>",
+            (
+                f"<p><strong>Criteria:</strong> CBP Inv &gt;= {min_inventory:,} "
+                f"and change &lt; {max_change_pct:.1f}% period to period<br>"
+                f"<strong>Periods:</strong> {html.escape(', '.join(periods))}</p>"
+            ),
+            build_html_table(email_df),
+            "</body></html>",
+        ]
+    )
+    send_outlook_mail(
+        to="",
+        subject=subject,
+        html_body=html_body,
+        display_before_send=True,
+    )
 
 
 def check_last_n_months():
@@ -815,7 +914,16 @@ def check_frozen_cbp_inventory():
 
     grouped_df = (
         filtered_df.groupby(["ISBN", "period"], as_index=False)
-        .agg({"Title": "first", "Publisher": "first", "Inventory": "sum", "Value": "sum"})
+        .agg(
+            {
+                "Title": "first",
+                "Publisher": "first",
+                "PGRP": "first",
+                "Price": "first",
+                "Inventory": "sum",
+                "Value": "sum",
+            }
+        )
     )
 
     summary_rows = []
@@ -852,6 +960,16 @@ def check_frozen_cbp_inventory():
         summary_row = {
             "ISBN": str(isbn),
             "Title": title,
+            "PGRP": (
+                isbn_df["PGRP"].dropna().astype(str).str.strip().iloc[0]
+                if not isbn_df["PGRP"].dropna().empty
+                else ""
+            ),
+            "Price": (
+                float(isbn_df["Price"].dropna().iloc[0])
+                if not isbn_df["Price"].dropna().empty
+                else None
+            ),
             "MaxPctChange": max(pct_changes) if pct_changes else 0,
             "TotalValue": int(round(float(isbn_df["Value"].sum()))),
         }
@@ -879,10 +997,12 @@ def check_frozen_cbp_inventory():
         f"  Criteria: CBP Inv >= {min_inventory:,} and change < {max_change_pct:.1f}% period to period"
     )
     print(f"  Periods:  {', '.join(recent_periods)}")
-    print("  " + "-" * 110)
+    print("  " + "-" * 134)
     print(
         f"  {'ISBN':<16}"
-        f"{'Title':<44}"
+        f"{'Title':<34}"
+        f"{'PGRP':<8}"
+        f"{'Price':>10}"
         f"{recent_periods[0]:>10}"
         f"{recent_periods[1]:>10}"
         f"{recent_periods[2]:>10}"
@@ -890,14 +1010,22 @@ def check_frozen_cbp_inventory():
         f"{'Max %':>8}"
         f"{'Value':>12}"
     )
-    print("  " + "-" * 110)
+    print("  " + "-" * 134)
     for _, row in summary_df.iterrows():
         title = ""
         if pd.notna(row.get("Title")):
-            title = str(row["Title"])[:44]
+            title = str(row["Title"])[:34]
+        pgrp = ""
+        if pd.notna(row.get("PGRP")):
+            pgrp = str(row["PGRP"])[:8]
+        price_text = ""
+        if pd.notna(row.get("Price")):
+            price_text = f"{float(row['Price']):,.2f}"
         print(
             f"  {str(row['ISBN']):<16}"
-            f"{title:<44}"
+            f"{title:<34}"
+            f"{pgrp:<8}"
+            f"{price_text:>10}"
             f"{int(row[f'Inv_{recent_periods[0]}']):>10,}"
             f"{int(row[f'Inv_{recent_periods[1]}']):>10,}"
             f"{int(row[f'Inv_{recent_periods[2]}']):>10,}"
@@ -905,6 +1033,47 @@ def check_frozen_cbp_inventory():
             f"{row['MaxPctChange']:>7.2f}%"
             f"{int(row['TotalValue']):>12,}"
         )
+
+    email_df = summary_df.copy()
+    email_df["Price"] = email_df["Price"].map(
+        lambda value: f"{float(value):,.2f}" if pd.notna(value) else ""
+    )
+    email_df["MaxPctChange"] = email_df["MaxPctChange"].map(lambda value: f"{float(value):.2f}%")
+    email_df["TotalValue"] = email_df["TotalValue"].map(lambda value: f"{int(value):,}")
+    for period in recent_periods:
+        column_name = f"Inv_{period}"
+        email_df[column_name] = email_df[column_name].map(lambda value: f"{int(value):,}")
+
+    export_columns = ["ISBN", "Title", "PGRP", "Price"]
+    export_columns.extend(f"Inv_{period}" for period in recent_periods)
+    export_columns.extend(["MaxPctChange", "TotalValue"])
+    rename_map = {
+        "MaxPctChange": "Max %",
+        "TotalValue": "Value",
+    }
+    rename_map.update({f"Inv_{period}": period for period in recent_periods})
+    email_text = email_df[export_columns].rename(columns=rename_map).to_csv(
+        sep="\t", index=False
+    )
+    email_table_df = email_df[export_columns].rename(columns=rename_map)
+
+    print()
+    try:
+        open_frozen_cbp_inventory_draft(
+            periods=recent_periods,
+            min_inventory=min_inventory,
+            max_change_pct=max_change_pct,
+            email_df=email_table_df,
+        )
+        print("Opened an Outlook draft with the results as a formatted table.")
+    except Exception as exc:
+        print(f"Could not open the Outlook draft: {exc}")
+
+    if copy_text_to_clipboard(email_text):
+        print("Email-friendly tab-delimited version copied to clipboard.")
+        print("Paste into Outlook as text, or into Excel first if you want a cleaner table.")
+    else:
+        print("Could not copy the email-friendly tab-delimited version to the clipboard.")
 
 
 def check_inventory_no_value_rows():
@@ -1100,6 +1269,8 @@ def coerce_vertical_dtypes(df: pd.DataFrame) -> pd.DataFrame:
     typed_df["Title"] = typed_df["Title"].astype("string")
     typed_df["ORG"] = typed_df["ORG"].astype("string")
     typed_df["Publisher"] = typed_df["Publisher"].astype("string")
+    typed_df["PGRP"] = typed_df["PGRP"].astype("string")
+    typed_df["Price"] = pd.to_numeric(typed_df["Price"], errors="coerce")
     typed_df["Value"] = pd.to_numeric(typed_df["Value"], errors="coerce").fillna(0)
     typed_df["Inventory"] = pd.to_numeric(typed_df["Inventory"], errors="coerce").fillna(0)
     return typed_df
@@ -1115,26 +1286,32 @@ def load_publisher_lookup() -> pd.DataFrame:
     cache_path = get_publisher_cache_path()
     if cache_path.exists():
         cached_df = pd.read_pickle(cache_path)
-        required_columns = {"ISBN", "Title", "Publisher"}
+        required_columns = {"ISBN", "Title", "Publisher", "PGRP", "Price"}
         if required_columns.issubset(set(cached_df.columns)):
-            return cached_df[["ISBN", "Title", "Publisher"]].copy()
+            return cached_df[["ISBN", "Title", "Publisher", "PGRP", "Price"]].copy()
 
     engine = get_connection()
     publisher_df = fetch_data_from_db(engine, PUBLISHER_LOOKUP_SQL)
     if publisher_df.empty:
-        return pd.DataFrame(columns=["ISBN", "Title", "Publisher"])
+        return pd.DataFrame(columns=["ISBN", "Title", "Publisher", "PGRP", "Price"])
 
-    required_columns = {"ISBN", "Title", "Publisher"}
+    required_columns = {"ISBN", "Title", "Publisher", "PGRP", "Price"}
     if not required_columns.issubset(set(publisher_df.columns)):
-        raise ValueError("Publisher lookup query must return ISBN, Title, and Publisher columns.")
+        raise ValueError(
+            "Publisher lookup query must return ISBN, Title, Publisher, PGRP, and Price columns."
+        )
 
     publisher_df = publisher_df.copy()
     publisher_df["ISBN"] = publisher_df["ISBN"].map(normalize_isbn)
     publisher_df["Title"] = publisher_df["Title"].astype("string").str.strip()
     publisher_df["Publisher"] = publisher_df["Publisher"].astype("string").str.strip()
+    publisher_df["PGRP"] = publisher_df["PGRP"].astype("string").str.strip()
+    publisher_df["Price"] = pd.to_numeric(publisher_df["Price"], errors="coerce")
     publisher_df = publisher_df[publisher_df["ISBN"].notna()].copy()
     publisher_df = publisher_df.drop_duplicates(subset=["ISBN"], keep="first")
-    publisher_df = publisher_df[["ISBN", "Title", "Publisher"]].reset_index(drop=True)
+    publisher_df = publisher_df[
+        ["ISBN", "Title", "Publisher", "PGRP", "Price"]
+    ].reset_index(drop=True)
 
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     publisher_df.to_pickle(cache_path)
@@ -1147,6 +1324,8 @@ def attach_publishers(df: pd.DataFrame) -> pd.DataFrame:
         enriched_df = df.copy()
         enriched_df["Title"] = pd.Series(pd.NA, index=enriched_df.index, dtype="string")
         enriched_df["Publisher"] = pd.Series(pd.NA, index=enriched_df.index, dtype="string")
+        enriched_df["PGRP"] = pd.Series(pd.NA, index=enriched_df.index, dtype="string")
+        enriched_df["Price"] = pd.Series(pd.NA, index=enriched_df.index, dtype="float64")
         return enriched_df
 
     enriched_df = df.merge(publisher_lookup, how="left", on="ISBN")
@@ -1156,13 +1335,33 @@ def attach_publishers(df: pd.DataFrame) -> pd.DataFrame:
 def load_existing_vertical_pickle() -> pd.DataFrame:
     if not PICKLE_FILE.exists():
         empty_df = pd.DataFrame(
-            columns=["period", "ISBN", "Title", "Publisher", "ORG", "Value", "Inventory"]
+            columns=[
+                "period",
+                "ISBN",
+                "Title",
+                "Publisher",
+                "PGRP",
+                "Price",
+                "ORG",
+                "Value",
+                "Inventory",
+            ]
         )
         return coerce_vertical_dtypes(empty_df)
 
     existing_df = pd.read_pickle(PICKLE_FILE)
-    expected_columns = ["period", "ISBN", "Title", "Publisher", "ORG", "Value", "Inventory"]
-    if "Publisher" not in existing_df.columns or "Title" not in existing_df.columns:
+    expected_columns = [
+        "period",
+        "ISBN",
+        "Title",
+        "Publisher",
+        "PGRP",
+        "Price",
+        "ORG",
+        "Value",
+        "Inventory",
+    ]
+    if any(column not in existing_df.columns for column in ["Title", "Publisher", "PGRP", "Price"]):
         existing_df = attach_publishers(
             existing_df[["period", "ISBN", "ORG", "Value", "Inventory"]]
         )
@@ -1328,7 +1527,9 @@ def process_consolidated_file(source_file: Path, period: str):
     output_df = vertical_df[["ISBN", "ORG", "Value", "Inventory"]].copy()
     output_df.insert(0, "period", period)
     output_df = attach_publishers(output_df)
-    output_df = output_df[["period", "ISBN", "Title", "Publisher", "ORG", "Value", "Inventory"]]
+    output_df = output_df[
+        ["period", "ISBN", "Title", "Publisher", "PGRP", "Price", "ORG", "Value", "Inventory"]
+    ]
     combined_df = save_vertical_pickle(output_df)
 
     print()

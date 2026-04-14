@@ -40,7 +40,7 @@ def main():
 
         # Unpack variables returned from get_variables()
         prior_day, prior_day_ly, tp, typ1, tply, lyp1 = variables
-        
+
         print('Processing, please wait...')
         print(f'Prior Day: {prior_day}')
         print(f'This Period: {tp}')
@@ -107,7 +107,7 @@ def main():
 
         # Saving results to an Excel file
         path = saved_query_location()
-        
+
         with pd.ExcelWriter(path, engine='xlsxwriter') as writer:
             df_q1.to_excel(writer, sheet_name='df_q1', index=False)
             df_q2.to_excel(writer, sheet_name='df_q2', index=False)
@@ -118,7 +118,6 @@ def main():
             df_q7.to_excel(writer, sheet_name='df_q7', index=False)
             df_q8.to_excel(writer, sheet_name='df_q8', index=False)
             df_q9.to_excel(writer, sheet_name='df_q9', index=False)
-
     finally:
         # Ensure the engine connection is closed
         engine.dispose()

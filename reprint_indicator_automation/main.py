@@ -6,6 +6,13 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+from tkinter import Tk, messagebox
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from shared import send_outlook_mail
 
 try:
     import pythoncom
@@ -37,6 +44,12 @@ BL_DETAIL_LAST_COL = "BO"
 FL_DETAIL_LAST_COL = "BY"
 EXPORT_FIRST_SHEET = "RPG_Risk_Analyzer"
 EXPORT_LAST_SHEET = "Explanation"
+EMAIL_TO = ["Mary_OHara@chroniclebooks.com"]
+EMAIL_CC = [
+    "john_carlson@chroniclebooks.com",
+    "Kate_BreitingSchmitz@chroniclebooks.com",
+]
+EMAIL_SUBJECT_PREFIX = "Reprint Indicator Updated thru"
 
 
 def parse_args() -> argparse.Namespace:
@@ -79,6 +92,11 @@ def parse_args() -> argparse.Namespace:
         default=1800,
         help="Maximum time to wait for refresh/calculation to finish. Default: 1800.",
     )
+    parser.add_argument(
+        "--save-template",
+        action="store_true",
+        help="Save refreshed/rebuilt changes back to the template workbook before exporting.",
+    )
     return parser.parse_args()
 
 
@@ -105,12 +123,70 @@ def prompt_refresh_required() -> bool:
         print("Please enter y or n.")
 
 
+def prompt_save_template() -> bool:
+    while True:
+        response = (
+            input(
+                "Save refreshed/rebuilt changes back to the template workbook too? [y/n]: "
+            )
+            .strip()
+            .lower()
+        )
+        if response in {"y", "yes"}:
+            return True
+        if response in {"n", "no"}:
+            return False
+        print("Please enter y or n.")
+
+
 def log_step(message: str) -> None:
     print(message, flush=True)
 
 
 def log_warning(message: str) -> None:
     print(f"Warning: {message}", flush=True)
+
+
+def show_popup(title: str, message: str) -> None:
+    root = Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    try:
+        messagebox.showinfo(title, message, parent=root)
+    finally:
+        root.destroy()
+
+
+def format_display_date(output_date: str) -> str:
+    return datetime.strptime(output_date, "%Y_%m_%d").strftime("%m/%d/%Y")
+
+
+def open_notification_draft(
+    *,
+    output_path: Path,
+    output_date: str,
+    bl_count: int,
+    fl_count: int,
+) -> None:
+    subject = f"{EMAIL_SUBJECT_PREFIX} {format_display_date(output_date)}"
+    body = "\n".join(
+        [
+            "Enjoy this week's updated version:",
+            "",
+            f'"{output_path}"',
+            "",
+            "Summary:",
+            f"BL_Detail rows: {bl_count}",
+            f"FL_Detail rows: {fl_count}",
+        ]
+    )
+    send_outlook_mail(
+        to=EMAIL_TO,
+        cc=EMAIL_CC,
+        subject=subject,
+        body=body,
+        display_before_send=True,
+    )
 
 
 def unique_output_path(output_dir: Path, prefix: str, output_date: str) -> Path:
@@ -189,7 +265,11 @@ def metadata_rows(workbook) -> tuple[list[str], list[tuple[str, str]]]:
             row = (row,)
 
         release_group = normalize_text(row[0] if len(row) >= 1 else "")
-        isbn = normalize_text(row[isbn_col - release_group_col] if len(row) > (isbn_col - release_group_col) else "")
+        isbn = normalize_text(
+            row[isbn_col - release_group_col]
+            if len(row) > (isbn_col - release_group_col)
+            else ""
+        )
         if not isbn:
             continue
 
@@ -207,7 +287,9 @@ def clear_detail_rows(worksheet, start_row: int, end_row: int, last_col: str) ->
     worksheet.Range(f"A{start_row}:{last_col}{end_row}").ClearContents()
 
 
-def autofill_template_row(worksheet, start_row: int, target_end_row: int, last_col: str) -> None:
+def autofill_template_row(
+    worksheet, start_row: int, target_end_row: int, last_col: str
+) -> None:
     if target_end_row < start_row:
         return
     source_range = worksheet.Range(f"A{start_row}:{last_col}{start_row}")
@@ -215,10 +297,14 @@ def autofill_template_row(worksheet, start_row: int, target_end_row: int, last_c
     source_range.AutoFill(Destination=destination_range)
 
 
-def write_column_values(worksheet, column_letter: str, start_row: int, values: list[str]) -> None:
+def write_column_values(
+    worksheet, column_letter: str, start_row: int, values: list[str]
+) -> None:
     if not values:
         return
-    range_ref = f"{column_letter}{start_row}:{column_letter}{start_row + len(values) - 1}"
+    range_ref = (
+        f"{column_letter}{start_row}:{column_letter}{start_row + len(values) - 1}"
+    )
     worksheet.Range(range_ref).Value = tuple((value,) for value in values)
 
 
@@ -234,34 +320,50 @@ def write_two_column_values(
 def rebuild_bl_detail(workbook, backlist_isbns: list[str]) -> int:
     worksheet = workbook.Worksheets("BL_Detail")
     current_last_row = max(last_used_row(worksheet, 1), DETAIL_START_ROW)
-    clear_detail_rows(worksheet, DETAIL_START_ROW + 1, current_last_row, BL_DETAIL_LAST_COL)
+    clear_detail_rows(
+        worksheet, DETAIL_START_ROW + 1, current_last_row, BL_DETAIL_LAST_COL
+    )
 
     if not backlist_isbns:
-        clear_detail_rows(worksheet, DETAIL_START_ROW, DETAIL_START_ROW, BL_DETAIL_LAST_COL)
+        clear_detail_rows(
+            worksheet, DETAIL_START_ROW, DETAIL_START_ROW, BL_DETAIL_LAST_COL
+        )
         return 0
 
     target_end_row = DETAIL_START_ROW + len(backlist_isbns) - 1
-    autofill_template_row(worksheet, DETAIL_START_ROW, target_end_row, BL_DETAIL_LAST_COL)
+    autofill_template_row(
+        worksheet, DETAIL_START_ROW, target_end_row, BL_DETAIL_LAST_COL
+    )
     write_column_values(worksheet, "A", DETAIL_START_ROW, backlist_isbns)
     if current_last_row > target_end_row:
-        clear_detail_rows(worksheet, target_end_row + 1, current_last_row, BL_DETAIL_LAST_COL)
+        clear_detail_rows(
+            worksheet, target_end_row + 1, current_last_row, BL_DETAIL_LAST_COL
+        )
     return len(backlist_isbns)
 
 
 def rebuild_fl_detail(workbook, frontlist_rows: list[tuple[str, str]]) -> int:
     worksheet = workbook.Worksheets("FL_Detail")
     current_last_row = max(last_used_row(worksheet, 1), DETAIL_START_ROW)
-    clear_detail_rows(worksheet, DETAIL_START_ROW + 1, current_last_row, FL_DETAIL_LAST_COL)
+    clear_detail_rows(
+        worksheet, DETAIL_START_ROW + 1, current_last_row, FL_DETAIL_LAST_COL
+    )
 
     if not frontlist_rows:
-        clear_detail_rows(worksheet, DETAIL_START_ROW, DETAIL_START_ROW, FL_DETAIL_LAST_COL)
+        clear_detail_rows(
+            worksheet, DETAIL_START_ROW, DETAIL_START_ROW, FL_DETAIL_LAST_COL
+        )
         return 0
 
     target_end_row = DETAIL_START_ROW + len(frontlist_rows) - 1
-    autofill_template_row(worksheet, DETAIL_START_ROW, target_end_row, FL_DETAIL_LAST_COL)
+    autofill_template_row(
+        worksheet, DETAIL_START_ROW, target_end_row, FL_DETAIL_LAST_COL
+    )
     write_two_column_values(worksheet, DETAIL_START_ROW, frontlist_rows)
     if current_last_row > target_end_row:
-        clear_detail_rows(worksheet, target_end_row + 1, current_last_row, FL_DETAIL_LAST_COL)
+        clear_detail_rows(
+            worksheet, target_end_row + 1, current_last_row, FL_DETAIL_LAST_COL
+        )
     return len(frontlist_rows)
 
 
@@ -345,6 +447,7 @@ def save_reprint_indicator(
     visible: bool,
     timeout_seconds: int,
     refresh_first: bool,
+    save_template: bool,
 ) -> tuple[Path, int, int, int, list[str], int]:
     if not template_path.exists():
         raise FileNotFoundError(f"Template not found: {template_path}")
@@ -387,6 +490,9 @@ def save_reprint_indicator(
             fl_count = rebuild_fl_detail(template_wb, frontlist_rows)
             log_step("Waiting for Excel calculations to finish...")
             wait_for_excel(template_wb, excel, timeout_seconds)
+            if save_template:
+                log_step("Saving refreshed template workbook...")
+                template_wb.Save()
 
         log_step("Resolving export sheets...")
         export_sheet_names = get_export_sheet_names(template_wb)
@@ -435,6 +541,9 @@ def main() -> int:
         output_date = normalize_output_date(args.date_text)
         output_path = unique_output_path(args.output_dir, args.prefix, output_date)
         refresh_first = prompt_refresh_required()
+        save_template = args.save_template
+        if refresh_first and not save_template:
+            save_template = prompt_save_template()
         (
             saved_path,
             broken_count,
@@ -449,6 +558,7 @@ def main() -> int:
             visible=args.visible,
             timeout_seconds=args.timeout_seconds,
             refresh_first=refresh_first,
+            save_template=save_template,
         )
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
@@ -459,6 +569,30 @@ def main() -> int:
     print(f"FL_Detail rows: {fl_count}")
     print(f"Exported sheets: {', '.join(exported_sheets)}")
     print(f"Broken links: {broken_count}")
+    try:
+        open_notification_draft(
+            output_path=saved_path,
+            output_date=output_date,
+            bl_count=bl_count,
+            fl_count=fl_count,
+        )
+        print("Opened Outlook draft notification.")
+        show_popup(
+            "Reprint Indicator Complete",
+            (
+                "The Reprint Indicator process completed successfully.\n\n"
+                "An Outlook draft email has been created for review."
+            ),
+        )
+    except Exception as exc:
+        log_warning(f"Could not open Outlook draft notification: {exc}")
+        show_popup(
+            "Reprint Indicator Complete",
+            (
+                "The Reprint Indicator process completed successfully.\n\n"
+                "The Outlook draft email could not be created."
+            ),
+        )
     return 0
 
 

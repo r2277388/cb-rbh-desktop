@@ -60,7 +60,7 @@ ACTIONS: dict[str, Action] = {
     ),
     "amazon_sql_upload": Action(
         "amazon_sql_upload",
-        "Amazon Sellthru SQL Upload",
+        "Amazon Create SQL Sellthrough Upload (XLSX)",
         [str(VENV_PYTHON), "amazon_sql_upload/main.py"],
         "Run the Amazon sellthru upload workflow.",
         "Amazon",

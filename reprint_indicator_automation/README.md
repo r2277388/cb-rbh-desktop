@@ -12,6 +12,9 @@ This script automates the manual Excel workflow for the Reprint Indicator file:
 8. Break external links and remove workbook connections in the saved copy
 9. Close Excel so the saved file is editable
 
+When you choose to refresh, the script can also save the refreshed/rebuilt state back to
+`Templates\Reprint indicator TEMPLATE.xlsx` before it creates the detached dated copy.
+
 ## Run
 
 ```powershell
@@ -30,6 +33,12 @@ Use a specific output date:
 
 ```powershell
 python reprint_indicator_automation\main.py --date 2026_03_30
+```
+
+Always save the refreshed/rebuilt results back to the template without the extra prompt:
+
+```powershell
+python reprint_indicator_automation\main.py --save-template
 ```
 
 ## Notes

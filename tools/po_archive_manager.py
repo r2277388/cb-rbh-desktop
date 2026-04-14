@@ -39,7 +39,7 @@ def main():
     root = tk.Tk()
     root.withdraw()
     src_file = filedialog.askopenfilename(
-        title="Select new 'current_amaz_preorders' file",
+        title="Select new Amazon Vendor Central PO Report (CSV)",
         initialdir=str(PO_ANALYSIS) if PO_ANALYSIS.exists() else None,
         filetypes=[("All files", "*.*")],
     )
