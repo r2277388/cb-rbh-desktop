@@ -5,6 +5,7 @@ def df_inventory():
     inventory_file = get_latest_inventory_csv()
     df = pd.read_csv(inventory_file,
             skiprows=1,
+            low_memory=False,
             usecols=['ASIN', 'Product Title', 'Open Purchase Order Quantity'
                     ,'Unfilled Customer Ordered Units','Sellable On Hand Units'])
 

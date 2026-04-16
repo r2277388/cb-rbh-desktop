@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import sys
 import textwrap
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from tkinter import Tk, filedialog
 
@@ -145,6 +145,13 @@ def parse_week_end_from_filename(file_path: str | Path) -> datetime | None:
     return datetime.strptime(match.group(1), "%m-%d-%Y")
 
 
+def normalize_to_week_ending_saturday(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    days_to_saturday = 5 - value.weekday()
+    return value + timedelta(days=days_to_saturday)
+
+
 def query_amazon_sellthrough_latest_week() -> datetime | None:
     query = """
     SELECT MAX(CAST([Week] AS date)) AS LatestWeek
@@ -256,7 +263,8 @@ def confirm_amazon_sql_upload_files() -> bool:
     )
     ypticod_file = process_paths.ORACLE_YPTICOD_FILE
     sales_week_end = parse_week_end_from_filename(sales_file)
-    sql_latest_week = query_amazon_sellthrough_latest_week()
+    sql_latest_week_raw = query_amazon_sellthrough_latest_week()
+    sql_latest_week_normalized = normalize_to_week_ending_saturday(sql_latest_week_raw)
 
     if not ypticod_file.exists():
         raise FileNotFoundError(f"Required file not found: {ypticod_file}")
@@ -279,10 +287,21 @@ def confirm_amazon_sql_upload_files() -> bool:
         )
         print(
             "  Current SQL max:   "
-            + (sql_latest_week.strftime("%A, %Y-%m-%d") if sql_latest_week else "Unavailable from this session")
+            + (
+                sql_latest_week_raw.strftime("%A, %Y-%m-%d")
+                if sql_latest_week_raw
+                else "Unavailable from this session"
+            )
         )
+        if sql_latest_week_normalized and (
+            not sql_latest_week_raw or sql_latest_week_normalized.date() != sql_latest_week_raw.date()
+        ):
+            print(
+                "  SQL week (Sat):    "
+                + sql_latest_week_normalized.strftime("%A, %Y-%m-%d")
+            )
         print(
-            f"  Default output:    {process_paths.amazon_sql_upload_output_file()}"
+            f"  Default output:    {process_paths.amazon_sql_upload_output_file(sales_week_end)}"
         )
         print(
             f"  Output folder:     {process_paths.AMAZON_SQL_UPLOAD_OUTPUT_DIR}"
@@ -325,19 +344,32 @@ def confirm_amazon_sql_upload_files() -> bool:
             continue
 
         print(f"  Expected week:     {expected_week_end.strftime('%A, %Y-%m-%d')}")
+        prior_expected_week_end = expected_week_end - timedelta(days=7)
+        print(f"  Prior SQL week:    {prior_expected_week_end.strftime('%A, %Y-%m-%d')}")
         if expected_week_end.weekday() != 5:
             print("  Warning:           The expected week-ending date is not a Saturday.")
         if sales_week_end and sales_week_end.date() != expected_week_end.date():
             print(
                 "  Warning:           The sales filename does not match the expected week-ending date."
             )
-        if sql_latest_week and sql_latest_week.date() != expected_week_end.date():
-            print(
-                "  Warning:           The current max [Week] in [CBQ2].[cb].[Sellthrough_Amazon] does not match the expected week-ending date."
-            )
-        if sql_latest_week and sql_latest_week.weekday() != 5:
+        if sql_latest_week_raw and sql_latest_week_raw.weekday() != 5:
             print(
                 "  Warning:           The current max [Week] in [CBQ2].[cb].[Sellthrough_Amazon] is not a Saturday."
+            )
+        if (
+            sql_latest_week_normalized
+            and sql_latest_week_normalized.date() != prior_expected_week_end.date()
+        ):
+            print(
+                "  Warning:           The normalized current SQL week does not match the prior expected loaded week."
+            )
+        if (
+            sql_latest_week_normalized
+            and sql_latest_week_raw
+            and sql_latest_week_normalized.date() != sql_latest_week_raw.date()
+        ):
+            print(
+                "  Note:              SQL contains a non-Saturday [Week] value, but it normalizes to the Saturday shown above."
             )
         print()
         print("    1. Continue")

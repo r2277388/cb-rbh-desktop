@@ -188,6 +188,11 @@ def print_totals(title: str, totals: dict[str, float], isbn_count: int | None = 
         print(f"  {column}: {display}")
 
 def main():
+    sales_file = get_latest_sales_csv()
+    if not sales_file:
+        raise FileNotFoundError("Could not find the latest Amazon sales CSV.")
+    week_end_date = parse_week_end_date_from_sales_file(sales_file)
+
     df = asin_isbn_conversion()
 
     float_cols = df.select_dtypes(include="float64").columns.tolist()
@@ -218,7 +223,7 @@ def main():
     root = tk.Tk()
     root.withdraw()
 
-    default_output = process_paths.amazon_sql_upload_output_file()
+    default_output = process_paths.amazon_sql_upload_output_file(week_end_date)
     output_dir = process_paths.AMAZON_SQL_UPLOAD_OUTPUT_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
 

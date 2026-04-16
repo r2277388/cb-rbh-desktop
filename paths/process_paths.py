@@ -20,10 +20,10 @@ AMAZON_WEEKLY_BASE_FOLDER = Path(
 AMAZON_WEEKLY_REPORTS_DIR = AMAZON_WEEKLY_BASE_FOLDER
 USER_DESKTOP = Path(r"C:\Users\rbh\Desktop")
 AMAZON_SQL_UPLOAD_SOURCE_FOLDERS = {
-    "sales": AMAZON_WEEKLY_BASE_FOLDER / "Sales",
-    "inventory": AMAZON_WEEKLY_BASE_FOLDER / "Inventory",
-    "traffic": AMAZON_WEEKLY_BASE_FOLDER / "Traffic",
-    "catalog": AMAZON_WEEKLY_BASE_FOLDER / "Catalog",
+    "sales": ATELIER_AMAZON_BASE_FOLDER / "Sales",
+    "inventory": ATELIER_AMAZON_BASE_FOLDER / "Inventory",
+    "traffic": ATELIER_AMAZON_BASE_FOLDER / "Traffic",
+    "catalog": ATELIER_AMAZON_BASE_FOLDER / "Catalog",
 }
 AMAZON_PO_FOLDER = Path(r"G:\SALES\Amazon\PURCHASE ORDERS\2026")
 AMAZON_PO_ROOT_FOLDER = AMAZON_PO_FOLDER.parent
@@ -235,7 +235,7 @@ def amazon_sql_upload_output_file(for_date: datetime | None = None) -> Path:
     date_value = for_date or datetime.now()
     return (
         AMAZON_SQL_UPLOAD_OUTPUT_DIR
-        / f"amazon_update_{date_value.strftime('%Y%m%d')}.xlsx"
+        / f"amazon_update__{date_value.strftime('%Y_%m_%d')}.xlsx"
     )
 
 

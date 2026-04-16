@@ -124,6 +124,13 @@ def prompt_for_period() -> str | None:
         return period
 
 
+def parse_positive_int_input(raw_value: str) -> int | None:
+    normalized = raw_value.replace(",", "").strip()
+    if not normalized.isdigit():
+        return None
+    return int(normalized)
+
+
 def prompt_for_month_count() -> int | None:
     while True:
         print()
@@ -136,11 +143,11 @@ def prompt_for_month_count() -> int | None:
         if raw_value.lower() in {"back", "b", "return", "menu"}:
             return None
 
-        if not raw_value.isdigit():
+        month_count = parse_positive_int_input(raw_value)
+        if month_count is None:
             print("Invalid entry. Please enter a whole number.")
             continue
 
-        month_count = int(raw_value)
         if month_count <= 0:
             print("Month count must be greater than zero.")
             continue
@@ -180,11 +187,11 @@ def prompt_for_row_count() -> int | None:
         if raw_value.lower() in {"back", "b", "return", "menu"}:
             return None
 
-        if not raw_value.isdigit():
+        row_count = parse_positive_int_input(raw_value)
+        if row_count is None:
             print("Invalid entry. Please enter a whole number.")
             continue
 
-        row_count = int(raw_value)
         if row_count <= 0:
             print("Row count must be greater than zero.")
             continue
@@ -681,6 +688,24 @@ def open_frozen_cbp_inventory_draft(
     )
 
 
+def open_inventory_no_value_draft(*, period: str, email_df: pd.DataFrame) -> None:
+    subject = f"Chronicle Inventory with No Value - {period}"
+    html_body = "".join(
+        [
+            "<html><body style='font-family:Calibri,Arial,sans-serif;font-size:11pt;'>",
+            f"<p>Chronicle rows with inventory but no value for period <strong>{html.escape(period)}</strong>.</p>",
+            build_html_table(email_df),
+            "</body></html>",
+        ]
+    )
+    send_outlook_mail(
+        to="",
+        subject=subject,
+        html_body=html_body,
+        display_before_send=True,
+    )
+
+
 def check_last_n_months():
     if not PICKLE_FILE.exists():
         print()
@@ -1112,20 +1137,55 @@ def check_inventory_no_value_rows():
 
     print()
     print(f"Chronicle rows with inventory but no value for period {period}:")
-    print("  " + "-" * 100)
-    print(f"  {'ISBN':<16}{'Title':<44}{'ORG':<8}{'Inventory':>16}{'Value':>16}")
-    print("  " + "-" * 100)
+    print("  " + "-" * 126)
+    print(
+        f"  {'ISBN':<16} {'Title':<40} {'PGRP':<10} {'Price':>10}  {'ORG':<8} {'Inventory':>16} {'Value':>16}"
+    )
+    print("  " + "-" * 126)
     for _, row in period_df.iterrows():
         title = ""
+        pgrp = ""
+        price_text = ""
         if pd.notna(row.get("Title")):
-            title = str(row["Title"])[:44]
+            title = str(row["Title"])[:40]
+        if pd.notna(row.get("PGRP")):
+            pgrp = str(row["PGRP"])[:10]
+        if pd.notna(row.get("Price")):
+            price_text = f"{float(row['Price']):,.2f}"
+        else:
+            price_text = "-"
         print(
-            f"  {str(row['ISBN']):<16}"
-            f"{title:<44}"
-            f"{str(row['ORG']).upper():<8}"
-            f"{int(round(row['Inventory'])):>16,}"
+            f"  {str(row['ISBN']):<16} "
+            f"{title:<40} "
+            f"{pgrp:<10} "
+            f"{price_text:>10}  "
+            f"{str(row['ORG']).upper():<8} "
+            f"{int(round(row['Inventory'])):>16,} "
             f"{int(round(row['Value'])):>16,}"
         )
+
+    email_df = period_df.copy()
+    email_df["Price"] = email_df["Price"].map(
+        lambda value: f"{float(value):,.2f}" if pd.notna(value) else ""
+    )
+    email_df["Inventory"] = email_df["Inventory"].map(lambda value: f"{int(round(value)):,}")
+    email_df["Value"] = email_df["Value"].map(lambda value: f"{int(round(value)):,}")
+    export_columns = ["ISBN", "Title", "PGRP", "Price", "ORG", "Inventory", "Value"]
+    email_table_df = email_df[export_columns].copy()
+    email_text = email_table_df.to_csv(sep="\t", index=False)
+
+    print()
+    try:
+        open_inventory_no_value_draft(period=period, email_df=email_table_df)
+        print("Opened an Outlook draft with the results as a formatted table.")
+    except Exception as exc:
+        print(f"Could not open the Outlook draft: {exc}")
+
+    if copy_text_to_clipboard(email_text):
+        print("Email-friendly tab-delimited version copied to clipboard.")
+        print("Paste into Outlook as text, or into Excel first if you want a cleaner table.")
+    else:
+        print("Could not copy the email-friendly tab-delimited version to the clipboard.")
 
 
 def check_value_no_inventory_rows():

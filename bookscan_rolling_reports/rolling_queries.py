@@ -102,7 +102,7 @@ ORDER BY [Week];
 """
 
 
-SOURCE_METADATA_QUERY = """
+SOURCE_METADATA_QUERY = f"""
 WITH raw_isbns AS (
     SELECT DISTINCT LTRIM(RTRIM(CAST([ISBN10] AS varchar(20)))) AS RawISBN
     FROM [CBQ2].[old].[Sellthrough_Bookscan_bkup]
