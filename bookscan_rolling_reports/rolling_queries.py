@@ -71,6 +71,27 @@ def build_sales_query(start_date: str) -> str:
     """
 
 
+def build_distinct_weeks_since_query(start_date: str) -> str:
+    return f"""
+    WITH all_weeks AS (
+        SELECT DISTINCT CAST([Week] AS date) AS [Week]
+        FROM [CBQ2].[old].[Sellthrough_Bookscan_bkup]
+        WHERE
+            [Week] <= '2018-03-31'
+            AND [Week] >= '{start_date}'
+        UNION
+        SELECT DISTINCT CAST([WEEK] AS date) AS [Week]
+        FROM [CBQ2].[cb].[Sellthrough_RollBookscan]
+        WHERE
+            [WEEK] > '2018-03-31'
+            AND [WEEK] >= '{start_date}'
+    )
+    SELECT [Week]
+    FROM all_weeks
+    ORDER BY [Week];
+    """
+
+
 LATEST_WEEK_QUERY = """
 WITH all_weeks AS (
     SELECT CAST([Week] AS date) AS [Week]
@@ -99,6 +120,47 @@ WITH all_weeks AS (
 SELECT [Week]
 FROM all_weeks
 ORDER BY [Week];
+"""
+
+
+MISSING_WEEKS_QUERY = """
+WITH all_weeks AS (
+    SELECT DISTINCT CAST([Week] AS date) AS week_end
+    FROM [CBQ2].[old].[Sellthrough_Bookscan_bkup]
+    WHERE [Week] <= '2018-03-31'
+
+    UNION
+
+    SELECT DISTINCT CAST([WEEK] AS date) AS week_end
+    FROM [CBQ2].[cb].[Sellthrough_RollBookscan]
+    WHERE [WEEK] > '2018-03-31'
+),
+ordered_weeks AS (
+    SELECT
+        week_end,
+        LEAD(week_end) OVER (ORDER BY week_end) AS next_week_end
+    FROM all_weeks
+),
+gaps AS (
+    SELECT
+        DATEADD(day, 7, week_end) AS missing_week,
+        next_week_end
+    FROM ordered_weeks
+    WHERE next_week_end IS NOT NULL
+      AND DATEADD(day, 7, week_end) < next_week_end
+
+    UNION ALL
+
+    SELECT
+        DATEADD(day, 7, missing_week),
+        next_week_end
+    FROM gaps
+    WHERE DATEADD(day, 7, missing_week) < next_week_end
+)
+SELECT missing_week
+FROM gaps
+ORDER BY missing_week DESC
+OPTION (MAXRECURSION 1000);
 """
 
 

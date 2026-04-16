@@ -24,7 +24,14 @@ try:
         metadata_cache_file,
         sales_cache_file,
     )
-    from .rolling_queries import DISTINCT_WEEKS_QUERY, LATEST_WEEK_QUERY, SOURCE_METADATA_QUERY, build_sales_query
+    from .rolling_queries import (
+        DISTINCT_WEEKS_QUERY,
+        LATEST_WEEK_QUERY,
+        MISSING_WEEKS_QUERY,
+        SOURCE_METADATA_QUERY,
+        build_distinct_weeks_since_query,
+        build_sales_query,
+    )
 except ImportError:
     from rolling_paths import (
         bookscan_dp_folders,
@@ -36,7 +43,14 @@ except ImportError:
         metadata_cache_file,
         sales_cache_file,
     )
-    from rolling_queries import DISTINCT_WEEKS_QUERY, LATEST_WEEK_QUERY, SOURCE_METADATA_QUERY, build_sales_query
+    from rolling_queries import (
+        DISTINCT_WEEKS_QUERY,
+        LATEST_WEEK_QUERY,
+        MISSING_WEEKS_QUERY,
+        SOURCE_METADATA_QUERY,
+        build_distinct_weeks_since_query,
+        build_sales_query,
+    )
 from shared.db.connection import get_connection
 from shared.db.query_runner import fetch_data_from_db
 
@@ -84,7 +98,9 @@ class CacheRefreshResult:
     latest_sql_week: pd.Timestamp | None
     sales_cache_week: pd.Timestamp | None
     inventory_cache_week: pd.Timestamp | None
+    expected_next_week: pd.Timestamp | None
     missing_week_count: int
+    missing_weeks: list[pd.Timestamp]
     sales_rows: int
     inventory_rows: int
 
@@ -95,6 +111,20 @@ class WeekCheckResult:
     max_week: pd.Timestamp | None
     missing_weeks: list[pd.Timestamp]
     latest_weeks: list[pd.Timestamp]
+
+
+@dataclass
+class DeltaWeekStatus:
+    latest_sql_week: pd.Timestamp | None
+    latest_cache_week: pd.Timestamp | None
+    expected_next_week: pd.Timestamp | None
+    missing_weeks: list[pd.Timestamp]
+
+
+def _expected_next_week(week: pd.Timestamp | None) -> pd.Timestamp | None:
+    if week is None:
+        return None
+    return pd.Timestamp(week) + pd.Timedelta(days=7)
 
 
 def _ensure_cache_dir() -> None:
@@ -233,15 +263,46 @@ def get_latest_cache_week() -> pd.Timestamp | None:
 
 def check_source_weeks() -> WeekCheckResult:
     engine = get_connection()
-    result = fetch_data_from_db(engine, DISTINCT_WEEKS_QUERY)
-    if result.empty:
+    week_result = fetch_data_from_db(engine, DISTINCT_WEEKS_QUERY)
+    if week_result.empty:
         return WeekCheckResult(None, None, [], [])
-    result["Week"] = pd.to_datetime(result["Week"])
-    weeks = sorted(result["Week"].dropna().tolist())
-    expected = pd.date_range(start=weeks[0], end=weeks[-1], freq="7D")
-    missing = list(expected.difference(pd.DatetimeIndex(weeks)))
+    week_result["Week"] = pd.to_datetime(week_result["Week"])
+    weeks = sorted(week_result["Week"].dropna().tolist())
+    missing_result = fetch_data_from_db(engine, MISSING_WEEKS_QUERY)
+    missing = []
+    if not missing_result.empty and "missing_week" in missing_result.columns:
+        missing_result["missing_week"] = pd.to_datetime(
+            missing_result["missing_week"], errors="coerce"
+        )
+        missing = sorted(missing_result["missing_week"].dropna().tolist())
     latest = weeks[-12:]
     return WeekCheckResult(weeks[0], weeks[-1], missing, latest)
+
+
+def get_delta_week_status(
+    latest_cache_week: pd.Timestamp | None = None,
+    latest_sql_week: pd.Timestamp | None = None,
+) -> DeltaWeekStatus:
+    cache_week = pd.Timestamp(latest_cache_week) if latest_cache_week is not None else get_latest_cache_week()
+    sql_week = pd.Timestamp(latest_sql_week) if latest_sql_week is not None else get_latest_sql_week()
+    expected_next_week = _expected_next_week(cache_week)
+
+    if expected_next_week is None or sql_week is None or expected_next_week > sql_week:
+        return DeltaWeekStatus(sql_week, cache_week, expected_next_week, [])
+
+    engine = get_connection()
+    result = fetch_data_from_db(
+        engine, build_distinct_weeks_since_query(expected_next_week.strftime("%Y-%m-%d"))
+    )
+    if result.empty:
+        expected = pd.date_range(start=expected_next_week, end=sql_week, freq="7D")
+        return DeltaWeekStatus(sql_week, cache_week, expected_next_week, list(expected))
+
+    result["Week"] = pd.to_datetime(result["Week"], errors="coerce")
+    weeks = pd.DatetimeIndex(sorted(result["Week"].dropna().tolist()))
+    expected = pd.date_range(start=expected_next_week, end=sql_week, freq="7D")
+    missing = list(expected.difference(weeks))
+    return DeltaWeekStatus(sql_week, cache_week, expected_next_week, missing)
 
 
 def refresh_manual_missing_weeks_cache(workbook_path: str | Path) -> pd.DataFrame:
@@ -877,8 +938,12 @@ def refresh_caches_only(
     if history_workbook and (refresh_manual_cache or full_refresh or not manual_missing_weeks_file.exists()):
         refresh_manual_missing_weeks_cache(history_workbook)
 
-    week_check = check_source_weeks()
+    prior_cache_week = None if full_refresh else get_latest_cache_week()
     latest_sql_week = get_latest_sql_week()
+    delta_status = get_delta_week_status(
+        latest_cache_week=prior_cache_week,
+        latest_sql_week=latest_sql_week,
+    )
     sales_df = refresh_sales_cache(
         full_refresh=full_refresh,
         refresh_lookback_weeks=refresh_lookback_weeks,
@@ -895,7 +960,9 @@ def refresh_caches_only(
         latest_sql_week=latest_sql_week,
         sales_cache_week=sales_cache_week,
         inventory_cache_week=inventory_cache_week,
-        missing_week_count=len(week_check.missing_weeks),
+        expected_next_week=delta_status.expected_next_week,
+        missing_week_count=len(delta_status.missing_weeks),
+        missing_weeks=delta_status.missing_weeks,
         sales_rows=len(sales_df),
         inventory_rows=len(inventory_df),
     )
@@ -911,8 +978,8 @@ def print_week_check(result: WeekCheckResult) -> None:
     )
     print(f"Missing weeks: {len(result.missing_weeks)}")
     if result.missing_weeks:
-        preview = ", ".join(week.strftime("%Y-%m-%d") for week in result.missing_weeks[-10:])
-        print(f"Most recent missing weeks: {preview}")
+        full_list = ", ".join(week.strftime("%Y-%m-%d") for week in reversed(result.missing_weeks))
+        print(f"Missing week list: {full_list}")
     if result.latest_weeks:
         latest = ", ".join(week.strftime("%Y-%m-%d") for week in result.latest_weeks)
         print(f"Latest weeks present: {latest}")
@@ -943,7 +1010,14 @@ def print_cache_refresh_summary(result: CacheRefreshResult) -> None:
         "Inventory snapshot date: "
         f"{result.inventory_cache_week.strftime('%Y-%m-%d') if result.inventory_cache_week is not None else 'None'}"
     )
+    print(
+        "Expected next week: "
+        f"{result.expected_next_week.strftime('%Y-%m-%d') if result.expected_next_week is not None else 'None'}"
+    )
     print(f"Missing SQL weeks detected: {result.missing_week_count}")
+    if result.missing_weeks:
+        preview = ", ".join(week.strftime("%Y-%m-%d") for week in result.missing_weeks)
+        print(f"Missing SQL week list: {preview}")
     print(f"Sales cache rows: {result.sales_rows:,}")
     print(f"Inventory cache rows: {result.inventory_rows:,}")
 

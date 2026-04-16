@@ -8,6 +8,7 @@ try:
         REFRESH_LOOKBACK_WEEKS,
         build_customer_sales_report,
         check_source_weeks,
+        get_delta_week_status,
         get_latest_cache_week,
         get_latest_sql_week,
         print_cache_refresh_summary,
@@ -20,6 +21,7 @@ except ImportError:
         REFRESH_LOOKBACK_WEEKS,
         build_customer_sales_report,
         check_source_weeks,
+        get_delta_week_status,
         get_latest_cache_week,
         get_latest_sql_week,
         print_cache_refresh_summary,
@@ -55,17 +57,23 @@ def _format_week_status(week) -> str:
 def _build_week_status_message() -> str:
     latest_sql_week = get_latest_sql_week()
     latest_cache_week = get_latest_cache_week()
-    week_check = check_source_weeks()
+    delta_status = get_delta_week_status(
+        latest_cache_week=latest_cache_week,
+        latest_sql_week=latest_sql_week,
+    )
     lines = [
         f"SQL is updated through: {_format_week_status(latest_sql_week)}",
         f"Current Bookscan cache through: {_format_week_status(latest_cache_week)}",
+        f"Expected next Bookscan week: {_format_week_status(delta_status.expected_next_week)}",
     ]
-    if week_check.missing_weeks:
-        recent_missing = ", ".join(week.strftime("%m/%d/%Y") for week in week_check.missing_weeks[-5:])
-        lines.append(f"Missing SQL weeks detected: {len(week_check.missing_weeks)}")
-        lines.append(f"Most recent missing week(s): {recent_missing}")
+    if delta_status.missing_weeks:
+        recent_missing = ", ".join(
+            week.strftime("%m/%d/%Y") for week in delta_status.missing_weeks
+        )
+        lines.append(f"Missing SQL weeks detected since cache max: {len(delta_status.missing_weeks)}")
+        lines.append(f"Missing delta week(s): {recent_missing}")
     else:
-        lines.append("Missing SQL weeks detected: 0")
+        lines.append("Missing SQL weeks detected since cache max: 0")
     lines.append("")
     lines.append("Would you like to proceed with the Bookscan rolling report for this SQL week?")
     return "\n".join(lines)
