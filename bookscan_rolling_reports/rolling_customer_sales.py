@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from dataclasses import dataclass
 from datetime import datetime
@@ -91,6 +92,13 @@ class RollingBuildResult:
     inventory_rows: int
     report_shape: tuple[int, int]
     dp_files_saved: int = 0
+
+
+@dataclass
+class DpSaveResult:
+    source_file: Path
+    latest_week: pd.Timestamp
+    dp_files_saved: int
 
 
 @dataclass
@@ -232,6 +240,40 @@ def _format_bookscan_output_filename(week_ending: pd.Timestamp) -> str:
         f"Week {week_ending.isocalendar().week:02d} - {week_ending:%Y} "
         f"Rolling Bookscan ({week_ending:%m%d%y}).xlsx"
     )
+
+
+def _parse_week_from_output_filename(path: Path) -> pd.Timestamp | None:
+    match = re.search(r"\((\d{6})\)\.xlsx$", path.name)
+    if not match:
+        return None
+    return pd.Timestamp(datetime.strptime(match.group(1), "%m%d%y").date())
+
+
+def find_latest_saved_main_report() -> Path | None:
+    candidates = sorted(bookscan_rolling_folder.glob("*Rolling Bookscan (*).xlsx"))
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: path.stat().st_mtime)
+
+
+def load_saved_main_report(source_file: str | Path | None = None) -> tuple[pd.DataFrame, pd.Timestamp, Path]:
+    workbook_path = Path(source_file) if source_file else find_latest_saved_main_report()
+    if workbook_path is None or not workbook_path.exists():
+        raise FileNotFoundError("No saved main Bookscan report was found to create DP versions from.")
+
+    report_df = pd.read_excel(workbook_path, header=5)
+    latest_week = _parse_week_from_output_filename(workbook_path)
+    if latest_week is None:
+        date_columns = [
+            pd.to_datetime(column, format="%m-%d-%Y", errors="coerce")
+            for column in report_df.columns
+            if isinstance(column, str) and len(column) == 10 and column.count("-") == 2
+        ]
+        valid_dates = [value for value in date_columns if not pd.isna(value)]
+        if not valid_dates:
+            raise ValueError(f"Could not determine the Bookscan week from {workbook_path.name}.")
+        latest_week = max(valid_dates)
+    return report_df, pd.Timestamp(latest_week), workbook_path
 
 
 def find_default_history_workbook() -> Path | None:
@@ -877,6 +919,16 @@ def save_reports_by_pub(report_df: pd.DataFrame, latest_week: pd.Timestamp) -> i
     return saved_count
 
 
+def save_dp_reports_from_main_workbook(source_file: str | Path | None = None) -> DpSaveResult:
+    report_df, latest_week, workbook_path = load_saved_main_report(source_file)
+    dp_files_saved = save_reports_by_pub(report_df, latest_week)
+    return DpSaveResult(
+        source_file=workbook_path,
+        latest_week=latest_week,
+        dp_files_saved=dp_files_saved,
+    )
+
+
 def build_customer_sales_report(
     refresh_sales: bool = False,
     refresh_inventory: bool = False,
@@ -993,9 +1045,15 @@ def print_result_summary(result: RollingBuildResult) -> None:
     print(f"Sales cache rows: {result.sales_rows:,}")
     print(f"Inventory cache rows: {result.inventory_rows:,}")
     print(f"Report shape: {result.report_shape}")
-    print(f"Saved file: {result.output_file}")
     if result.dp_files_saved:
         print(f"DP files saved: {result.dp_files_saved}")
+
+
+def print_dp_save_summary(result: DpSaveResult) -> None:
+    print()
+    print(f"Source main report: {result.source_file}")
+    print(f"Latest week: {result.latest_week:%Y-%m-%d}")
+    print(f"DP files saved: {result.dp_files_saved}")
 
 
 def print_cache_refresh_summary(result: CacheRefreshResult) -> None:

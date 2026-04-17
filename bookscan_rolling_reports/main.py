@@ -12,9 +12,11 @@ try:
         get_latest_cache_week,
         get_latest_sql_week,
         print_cache_refresh_summary,
+        print_dp_save_summary,
         print_result_summary,
         print_week_check,
         refresh_caches_only,
+        save_dp_reports_from_main_workbook,
     )
 except ImportError:
     from rolling_customer_sales import (
@@ -25,9 +27,11 @@ except ImportError:
         get_latest_cache_week,
         get_latest_sql_week,
         print_cache_refresh_summary,
+        print_dp_save_summary,
         print_result_summary,
         print_week_check,
         refresh_caches_only,
+        save_dp_reports_from_main_workbook,
     )
 
 
@@ -100,9 +104,10 @@ def run_menu(refresh_lookback_weeks: int = REFRESH_LOOKBACK_WEEKS) -> None:
         print("    1. Check Bookscan SQL weekly coverage")
         print("    2. Refresh Bookscan caches (latest changes)")
         print("    3. Build Bookscan rolling report (main only)")
-        print("    4. Build Bookscan rolling report (main + DP versions)")
-        print("    5. Build local review Bookscan rolling report")
-        print("    6. Exit")
+        print("    4. Create DP versions from current main report")
+        print("    5. Build Bookscan main report + DP versions")
+        print("    6. Build local review Bookscan rolling report")
+        print("    7. Exit")
         print()
         choice = input("Choose an option: ").strip().lower()
 
@@ -129,18 +134,25 @@ def run_menu(refresh_lookback_weeks: int = REFRESH_LOOKBACK_WEEKS) -> None:
             continue
 
         if choice == "4":
+            print("\nCreating DP versions from the current main Bookscan report...")
+            result = save_dp_reports_from_main_workbook()
+            print_dp_save_summary(result)
+            continue
+
+        if choice == "5":
             if not confirm_build_from_week_status():
                 print("Bookscan rolling report cancelled.")
                 continue
             print("\nBuilding Bookscan rolling report + DP versions...")
-            result = build_customer_sales_report(
-                refresh_lookback_weeks=refresh_lookback_weeks,
-                save_dp=True,
+            build_result = build_customer_sales_report(
+                refresh_lookback_weeks=refresh_lookback_weeks
             )
-            print_result_summary(result)
+            print_result_summary(build_result)
+            dp_result = save_dp_reports_from_main_workbook(build_result.output_file)
+            print_dp_save_summary(dp_result)
             continue
 
-        if choice == "5":
+        if choice == "6":
             if not confirm_build_from_week_status():
                 print("Bookscan rolling report cancelled.")
                 continue
@@ -152,7 +164,7 @@ def run_menu(refresh_lookback_weeks: int = REFRESH_LOOKBACK_WEEKS) -> None:
             print_result_summary(result)
             continue
 
-        if choice in {"6", "q", "quit", "exit"}:
+        if choice in {"7", "q", "quit", "exit"}:
             print("Exiting Bookscan Rolling Reports.")
             return
 
