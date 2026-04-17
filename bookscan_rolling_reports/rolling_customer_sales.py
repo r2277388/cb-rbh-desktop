@@ -95,6 +95,7 @@ class RollingBuildResult:
 
 @dataclass
 class CacheRefreshResult:
+    refresh_mode: str
     latest_sql_week: pd.Timestamp | None
     sales_cache_week: pd.Timestamp | None
     inventory_cache_week: pd.Timestamp | None
@@ -957,6 +958,7 @@ def refresh_caches_only(
     sales_cache_week = pd.to_datetime(sales_df["Week"]).max() if not sales_df.empty else None
     inventory_cache_week = pd.to_datetime(inventory_df["SnapshotDate"]).max() if not inventory_df.empty else None
     return CacheRefreshResult(
+        refresh_mode="full" if full_refresh else "incremental",
         latest_sql_week=latest_sql_week,
         sales_cache_week=sales_cache_week,
         inventory_cache_week=inventory_cache_week,
@@ -998,6 +1000,10 @@ def print_result_summary(result: RollingBuildResult) -> None:
 
 def print_cache_refresh_summary(result: CacheRefreshResult) -> None:
     print()
+    print(
+        "Refresh mode: "
+        + ("Full historical rebuild" if result.refresh_mode == "full" else "Latest changes only")
+    )
     print(
         "Latest SQL week: "
         f"{result.latest_sql_week.strftime('%Y-%m-%d') if result.latest_sql_week is not None else 'None'}"

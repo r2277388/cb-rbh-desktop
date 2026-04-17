@@ -98,7 +98,7 @@ def run_menu(refresh_lookback_weeks: int = REFRESH_LOOKBACK_WEEKS) -> None:
         print("\nBookscan Rolling Reports")
         print()
         print("    1. Check Bookscan SQL weekly coverage")
-        print("    2. Refresh Bookscan caches")
+        print("    2. Refresh Bookscan caches (latest changes)")
         print("    3. Build Bookscan rolling report (main only)")
         print("    4. Build Bookscan rolling report (main + DP versions)")
         print("    5. Build local review Bookscan rolling report")
@@ -112,7 +112,7 @@ def run_menu(refresh_lookback_weeks: int = REFRESH_LOOKBACK_WEEKS) -> None:
             continue
 
         if choice == "2":
-            print("\nRefreshing Bookscan caches...")
+            print("\nRefreshing Bookscan caches (latest changes)...")
             result = refresh_caches_only(refresh_lookback_weeks=refresh_lookback_weeks)
             print_cache_refresh_summary(result)
             continue

@@ -1,6 +1,35 @@
 from __future__ import annotations
 
 
+ROLLOVER_EXCEPTION_WEEKS = (
+    "2017-12-09",
+    "2017-11-18",
+    "2017-08-26",
+    "2017-07-08",
+    "2017-05-27",
+)
+ROLLOVER_EXCEPTION_WEEKS_SQL = ", ".join(f"'{week}'" for week in ROLLOVER_EXCEPTION_WEEKS)
+
+
+def _old_bookscan_week_filter(week_column: str, start_date: str | None = None) -> str:
+    conditions = [
+        f"{week_column} <= '2018-03-31'",
+        f"CAST({week_column} AS date) NOT IN ({ROLLOVER_EXCEPTION_WEEKS_SQL})",
+    ]
+    if start_date is not None:
+        conditions.append(f"{week_column} >= '{start_date}'")
+    return "\n            AND ".join(conditions)
+
+
+def _new_bookscan_week_filter(week_column: str, start_date: str | None = None) -> str:
+    conditions = [
+        f"({week_column} > '2018-03-31' OR CAST({week_column} AS date) IN ({ROLLOVER_EXCEPTION_WEEKS_SQL}))",
+    ]
+    if start_date is not None:
+        conditions.append(f"{week_column} >= '{start_date}'")
+    return "\n            AND ".join(conditions)
+
+
 PUBLISHER_EXCLUSION_SQL = """
     AND i.PUBLISHER_CODE IS NOT NULL
     AND i.PUBLISHER_CODE NOT IN (
@@ -32,8 +61,7 @@ def build_sales_query(start_date: str) -> str:
             SUM(CAST([TotalSales] AS bigint)) AS qty
         FROM [CBQ2].[old].[Sellthrough_Bookscan_bkup]
         WHERE
-            [Week] <= '2018-03-31'
-            AND [Week] >= '2007-01-01'
+            {_old_bookscan_week_filter("[Week]", "2007-01-01")}
         GROUP BY
             CAST([Week] AS date),
             LTRIM(RTRIM(CAST([ISBN10] AS varchar(20))))
@@ -44,8 +72,7 @@ def build_sales_query(start_date: str) -> str:
             SUM(CAST([Sales] AS bigint)) AS qty
         FROM [CBQ2].[cb].[Sellthrough_RollBookscan]
         WHERE
-            [WEEK] > '2018-03-31'
-            AND [WEEK] >= '2007-01-01'
+            {_new_bookscan_week_filter("[WEEK]", "2007-01-01")}
         GROUP BY
             CAST([WEEK] AS date),
             LTRIM(RTRIM(CAST([ISBN] AS varchar(20))))
@@ -77,14 +104,12 @@ def build_distinct_weeks_since_query(start_date: str) -> str:
         SELECT DISTINCT CAST([Week] AS date) AS [Week]
         FROM [CBQ2].[old].[Sellthrough_Bookscan_bkup]
         WHERE
-            [Week] <= '2018-03-31'
-            AND [Week] >= '{start_date}'
+            {_old_bookscan_week_filter("[Week]", start_date)}
         UNION
         SELECT DISTINCT CAST([WEEK] AS date) AS [Week]
         FROM [CBQ2].[cb].[Sellthrough_RollBookscan]
         WHERE
-            [WEEK] > '2018-03-31'
-            AND [WEEK] >= '{start_date}'
+            {_new_bookscan_week_filter("[WEEK]", start_date)}
     )
     SELECT [Week]
     FROM all_weeks
@@ -92,30 +117,30 @@ def build_distinct_weeks_since_query(start_date: str) -> str:
     """
 
 
-LATEST_WEEK_QUERY = """
+LATEST_WEEK_QUERY = f"""
 WITH all_weeks AS (
     SELECT CAST([Week] AS date) AS [Week]
     FROM [CBQ2].[old].[Sellthrough_Bookscan_bkup]
-    WHERE [Week] <= '2018-03-31'
+    WHERE {_old_bookscan_week_filter("[Week]")}
     UNION ALL
     SELECT CAST([WEEK] AS date) AS [Week]
     FROM [CBQ2].[cb].[Sellthrough_RollBookscan]
-    WHERE [WEEK] > '2018-03-31'
+    WHERE {_new_bookscan_week_filter("[WEEK]")}
 )
 SELECT MAX([Week]) AS latest_week
 FROM all_weeks;
 """
 
 
-DISTINCT_WEEKS_QUERY = """
+DISTINCT_WEEKS_QUERY = f"""
 WITH all_weeks AS (
     SELECT DISTINCT CAST([Week] AS date) AS [Week]
     FROM [CBQ2].[old].[Sellthrough_Bookscan_bkup]
-    WHERE [Week] <= '2018-03-31'
+    WHERE {_old_bookscan_week_filter("[Week]")}
     UNION
     SELECT DISTINCT CAST([WEEK] AS date) AS [Week]
     FROM [CBQ2].[cb].[Sellthrough_RollBookscan]
-    WHERE [WEEK] > '2018-03-31'
+    WHERE {_new_bookscan_week_filter("[WEEK]")}
 )
 SELECT [Week]
 FROM all_weeks
@@ -123,17 +148,17 @@ ORDER BY [Week];
 """
 
 
-MISSING_WEEKS_QUERY = """
+MISSING_WEEKS_QUERY = f"""
 WITH all_weeks AS (
     SELECT DISTINCT CAST([Week] AS date) AS week_end
     FROM [CBQ2].[old].[Sellthrough_Bookscan_bkup]
-    WHERE [Week] <= '2018-03-31'
+    WHERE {_old_bookscan_week_filter("[Week]")}
 
     UNION
 
     SELECT DISTINCT CAST([WEEK] AS date) AS week_end
     FROM [CBQ2].[cb].[Sellthrough_RollBookscan]
-    WHERE [WEEK] > '2018-03-31'
+    WHERE {_new_bookscan_week_filter("[WEEK]")}
 ),
 ordered_weeks AS (
     SELECT
@@ -169,14 +194,12 @@ WITH raw_isbns AS (
     SELECT DISTINCT LTRIM(RTRIM(CAST([ISBN10] AS varchar(20)))) AS RawISBN
     FROM [CBQ2].[old].[Sellthrough_Bookscan_bkup]
     WHERE
-        [Week] <= '2018-03-31'
-        AND [Week] >= '2007-01-01'
+        {_old_bookscan_week_filter("[Week]", "2007-01-01")}
     UNION
     SELECT DISTINCT LTRIM(RTRIM(CAST([ISBN] AS varchar(20)))) AS RawISBN
     FROM [CBQ2].[cb].[Sellthrough_RollBookscan]
     WHERE
-        [WEEK] > '2018-03-31'
-        AND [WEEK] >= '2007-01-01'
+        {_new_bookscan_week_filter("[WEEK]", "2007-01-01")}
 )
 SELECT DISTINCT
     COALESCE(i.ITEM_TITLE, r.RawISBN) AS ISBN,
