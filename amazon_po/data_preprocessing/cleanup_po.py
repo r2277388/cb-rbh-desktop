@@ -11,7 +11,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from paths import process_paths
 
-DEFAULT_PO_FILE = process_paths.AMAZON_PO_DATAWAREHOUSE_ANALYSIS_FILE
+DEFAULT_PO_FILE = process_paths.AMAZON_PO_ANALYSIS_INPUT_FILE
 LAST_PO_FILE_PATH: Path | None = None
 
 def upload_po() -> pd.DataFrame:
