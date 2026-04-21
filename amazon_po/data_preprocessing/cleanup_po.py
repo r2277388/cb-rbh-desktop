@@ -11,8 +11,23 @@ if str(REPO_ROOT) not in sys.path:
 
 from paths import process_paths
 
-DEFAULT_PO_FILE = process_paths.AMAZON_PO_ANALYSIS_INPUT_FILE
 LAST_PO_FILE_PATH: Path | None = None
+
+
+def get_default_po_file() -> Path | None:
+    archive_dir = process_paths.AMAZON_PO_DATAWAREHOUSE_ARCHIVE_DIR
+    if archive_dir.exists():
+        matches = list(archive_dir.glob(process_paths.AMAZON_PO_ARCHIVE_GLOB))
+        if matches:
+            return max(matches, key=lambda path: path.stat().st_mtime)
+
+    if process_paths.AMAZON_PO_CURRENT_FILE.exists():
+        return process_paths.AMAZON_PO_CURRENT_FILE
+
+    if process_paths.AMAZON_PO_ANALYSIS_INPUT_FILE.exists():
+        return process_paths.AMAZON_PO_ANALYSIS_INPUT_FILE
+
+    return None
 
 def upload_po() -> pd.DataFrame:
     """
@@ -22,8 +37,9 @@ def upload_po() -> pd.DataFrame:
     Returns:
     - DataFrame with selected columns and appropriate data types.
     """
-    if DEFAULT_PO_FILE.exists():
-        file = str(DEFAULT_PO_FILE)
+    default_po_file = get_default_po_file()
+    if default_po_file is not None and default_po_file.exists():
+        file = str(default_po_file)
         print(f"Using saved PO file: {file}")
     else:
         Tk().withdraw()  # Hide the root Tkinter window
@@ -37,7 +53,7 @@ def upload_po() -> pd.DataFrame:
     
     if not file.endswith('.csv'):
         raise ValueError("The selected file is not a CSV file. Please select a valid CSV file.")
-    if not DEFAULT_PO_FILE.exists() or str(DEFAULT_PO_FILE) != file:
+    if default_po_file is None or str(default_po_file) != file:
         print(f"Selected file: {file}")
     global LAST_PO_FILE_PATH
     LAST_PO_FILE_PATH = Path(file)

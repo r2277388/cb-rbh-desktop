@@ -30,6 +30,10 @@ AMAZON_PO_ROOT_FOLDER = AMAZON_PO_FOLDER.parent
 AMAZON_PO_ANALYSIS_INPUT_FILE = (
     AMAZON_PO_ROOT_FOLDER / "atelier" / "po_analysis" / "PurchaseOrderItems.csv"
 )
+AMAZON_PO_CURRENT_FILE = Path(
+    r"F:\ANALYSIS\Finance\DataWarehouse\Atelier Amazon\po_analysis\current_amaz_po_file.csv"
+)
+AMAZON_PO_ARCHIVE_GLOB = "POItemExport_*.csv"
 AMAZON_PO_CURRENT_PREORDERS_FILE = (
     AMAZON_PO_ROOT_FOLDER / "atelier" / "po_analysis" / "current_amaz_preorders.csv"
 )

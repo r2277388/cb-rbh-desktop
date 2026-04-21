@@ -101,10 +101,14 @@ def display_info(choice):
         "10": "UK Rolling File Combining: This combines the sales, reserve and midas files together.",
         "11": "XGBoost Model: Launches the xgboost_model workflow menu.",
         "12": "Monthend Reports: Opens the monthend reports menu, including Barnes & Noble Monthly Coop (Ailing).",
-        "101": "Amazon (1) PO Archive Manager: Launches the PO archive helper to archive prior current_amaz_preorders and copy the new file into po_analysis.",
+        "101": f"""Amazon (1) PO Archive Manager: Copies the selected Amazon Vendor Central PO CSV to:
+        {process_paths.AMAZON_PO_CURRENT_FILE}
+        and also archives an unchanged copy in:
+        {process_paths.AMAZON_PO_DATAWAREHOUSE_ARCHIVE_DIR}""",
         "102": f"""Amazon (2) PO Report: Generates a detailed report based on Amazon Purchase Orders.
-        Before running, save the Vendor Central PO File to:
-        {process_paths.AMAZON_PO_ANALYSIS_INPUT_FILE}
+        Before running, use Amazon (1) PO Archive Manager to save/archive the latest Vendor Central PO file.
+        The PO Report will use the newest archived file matching:
+        {process_paths.AMAZON_PO_ARCHIVE_GLOB}
         A PO Report is saved off to: {process_paths.AMAZON_PO_ROOT_FOLDER} folder""",
         "103": "Amazon (3) PreOrders: Generates a report for Amazon NYP PreOrders. Save the relevant data file to the appropriate location before running.",
         "104": "Amazon (4) Customer Orders: Generates a report for Amazon Customer Orders. Save the relevant data file to the appropriate location before running.",
