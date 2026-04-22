@@ -4,6 +4,9 @@ from importlib.util import module_from_spec, spec_from_file_location
 
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = BASE_DIR / "output"
+FRONTLIST_MAIN_OUTPUT_DIR = Path(
+    r"F:\ANALYSIS\Finance\DataWarehouse\Atelier FL_SuperCharged"
+)
 SQL_DIR = BASE_DIR / "sql"
 
 def _load_shared_paths():
