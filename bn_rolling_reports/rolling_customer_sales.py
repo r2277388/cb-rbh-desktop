@@ -706,7 +706,7 @@ def _build_save_options(report_df: pd.DataFrame, latest_week: pd.Timestamp) -> d
         "integer_accounting_no_symbol": True,
         "rolling_main_layout": True,
         "pre_date_column_count": 24,
-        "summary_label_col_idx": 10,
+        "summary_label_col_idx": 9,
         "top_row_groups": top_row_groups,
         "header_overrides": header_overrides,
         "header_fill_overrides": header_fill_overrides,

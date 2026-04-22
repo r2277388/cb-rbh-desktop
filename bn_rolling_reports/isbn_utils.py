@@ -9,6 +9,7 @@ import pandas as pd
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
+from rolling_paths import cache_dir
 from shared.db.connection import get_connection
 from shared.db.query_runner import fetch_data_from_db
 
@@ -47,7 +48,7 @@ WHERE
 """
 
 ISBN12_EXCEPTIONS_FALLBACK = Path(__file__).with_name("isbn12_exceptions.txt")
-BN_UPLOAD_ISBNS_CACHE_DIR = Path(__file__).with_name("cache")
+BN_UPLOAD_ISBNS_CACHE_DIR = cache_dir
 _ISBN12_NOTICE_PRINTED = False
 
 
