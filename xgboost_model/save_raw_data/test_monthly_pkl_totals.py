@@ -5,17 +5,13 @@ import pandas as pd
 # Add the parent directory (code_xgboost) to sys.path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-from paths import DATAWAREHOUSE_PICKLE_PATH, LOCAL_PICKLE_PATH
+from paths import DATAWAREHOUSE_PICKLE_PATH
 from functions import load_pickled_data
 
-path = 'df_pickle.pkl'
+if not DATAWAREHOUSE_PICKLE_PATH.exists():
+    raise FileNotFoundError(f"The file {DATAWAREHOUSE_PICKLE_PATH} does not exist.")
 
-# Check if the file exists
-if not Path(path).exists():
-    raise FileNotFoundError(f"The file {path} does not exist.")
-
-# unpickle saved off saldet
-df_pickled = pd.read_pickle(path)
+df_pickled = load_pickled_data(DATAWAREHOUSE_PICKLE_PATH)
 
 print(df_pickled.info())
 

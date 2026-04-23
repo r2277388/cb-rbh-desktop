@@ -7,7 +7,7 @@ from queries import query_saldet
 
 # Add the parent directory (code_xgboost) to sys.path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-from paths import DATAWAREHOUSE_PICKLE_PATH, LOCAL_PICKLE_PATH
+from paths import DATAWAREHOUSE_PICKLE_PATH
 
 
 def query_data(period="201501") -> pd.DataFrame:
@@ -24,8 +24,6 @@ def main():
     df_additional = query_data()
     print(df_additional.info())
     print(df_additional.head())
-    # Save to both locations so downstream loaders stay in sync.
-    save_pickle(df_additional, LOCAL_PICKLE_PATH.parent, LOCAL_PICKLE_PATH.name)
     save_pickle(
         df_additional, DATAWAREHOUSE_PICKLE_PATH.parent, DATAWAREHOUSE_PICKLE_PATH.name
     )

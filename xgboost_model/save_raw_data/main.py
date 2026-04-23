@@ -13,8 +13,6 @@ import time
 from paths import (
     DATAWAREHOUSE_PARQUET_PATH,
     DATAWAREHOUSE_PICKLE_PATH,
-    LOCAL_PARQUET_PATH,
-    LOCAL_PICKLE_PATH,
     get_pickle_path,
 )
 
@@ -56,10 +54,8 @@ def main():
     
     check_combination(df_combo, df_pickled, df_additional)
     
-    save_pickle(df_combo, LOCAL_PICKLE_PATH.parent, LOCAL_PICKLE_PATH.name)
     save_pickle(df_combo, DATAWAREHOUSE_PICKLE_PATH.parent, DATAWAREHOUSE_PICKLE_PATH.name)
 
-    save_parquet(df_combo, LOCAL_PARQUET_PATH.parent, LOCAL_PARQUET_PATH.name)
     save_parquet(df_combo, DATAWAREHOUSE_PARQUET_PATH.parent, DATAWAREHOUSE_PARQUET_PATH.name)
 
     end_time = time.time()
@@ -70,9 +66,7 @@ def main():
     print(
         "The updated files are saved at:\n"
         f"- Source pickle used: {source_pickle_path}\n"
-        f"- Local pickle: {LOCAL_PICKLE_PATH}\n"
         f"- DataWarehouse pickle: {DATAWAREHOUSE_PICKLE_PATH}\n"
-        f"- Local parquet: {LOCAL_PARQUET_PATH}\n"
         f"- DataWarehouse parquet: {DATAWAREHOUSE_PARQUET_PATH}"
     )
     print()
