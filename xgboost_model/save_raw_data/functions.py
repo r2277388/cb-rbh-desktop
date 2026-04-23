@@ -73,19 +73,15 @@ def check_combination(df_combo, df1, df2):
 
 def save_pickle(df, folder_path, filename):
     folder_path = Path(folder_path)
-    if not folder_path.exists():
-        print(f"The folder '{folder_path}' does not exist. Please check the path.")
-    else:
-        full_path = folder_path / filename
-        df.to_pickle(full_path)
+    folder_path.mkdir(parents=True, exist_ok=True)
+    full_path = folder_path / filename
+    df.to_pickle(full_path)
         
 def save_parquet(df, folder_path, filename):
     folder_path = Path(folder_path)
-    if not folder_path.exists():
-        print(f"The folder '{folder_path}' does not exist. Please check the path.")
-    else:
-        full_path = folder_path / filename
-        df.to_parquet(full_path)
+    folder_path.mkdir(parents=True, exist_ok=True)
+    full_path = folder_path / filename
+    df.to_parquet(full_path)
 
 def read_sql_query(file_path):
     with open(file_path, 'r') as file:

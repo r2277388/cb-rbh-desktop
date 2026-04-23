@@ -15,6 +15,7 @@ from paths import (
     DATAWAREHOUSE_PICKLE_PATH,
     LOCAL_PARQUET_PATH,
     LOCAL_PICKLE_PATH,
+    get_pickle_path,
 )
 
 from queries import query_saldet
@@ -35,8 +36,8 @@ def main():
     # Get connection to Microsoft SQL Server
     engine = get_connection()
     
-    # unpickle saved off saldet
-    df_pickled = load_pickled_data(LOCAL_PICKLE_PATH)
+    source_pickle_path = get_pickle_path()
+    df_pickled = load_pickled_data(source_pickle_path)
     
     # obtain current period and prior period
     current_period, previous_period = get_period_info()
@@ -68,6 +69,7 @@ def main():
     print(f"Process completed in {int(minutes)} minutes and {int(seconds)} seconds.")
     print(
         "The updated files are saved at:\n"
+        f"- Source pickle used: {source_pickle_path}\n"
         f"- Local pickle: {LOCAL_PICKLE_PATH}\n"
         f"- DataWarehouse pickle: {DATAWAREHOUSE_PICKLE_PATH}\n"
         f"- Local parquet: {LOCAL_PARQUET_PATH}\n"
