@@ -1,4 +1,5 @@
 from functions import get_connection, fetch_data_from_db
+from paths import customer_orders_pickle_file
 from query_datecheck import check_date
 import pandas as pd
 from datetime import datetime
@@ -53,7 +54,7 @@ def display_pickle_last_modified(filename):
         
 def main():
     lastdate_display()
-    display_pickle_last_modified('rr_customer_orders.pkl')
+    display_pickle_last_modified(customer_orders_pickle_file)
 
 if __name__ == "__main__":
     main()

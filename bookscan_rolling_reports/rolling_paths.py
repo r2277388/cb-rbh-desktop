@@ -21,7 +21,7 @@ bookscan_dp_folders = {
     name: Path(path) for name, path in _shared.BOOKSCAN_ROLLING_DP_FOLDERS.items()
 }
 inventory_detail_workbook = _shared.INVENTORY_DAILY_FINANCE_ONLY_FOLDER / "Inventory Detail.xlsx"
-cache_dir = Path(__file__).resolve().parent / "cache"
+cache_dir = Path(r"F:\ANALYSIS\Finance\DataWarehouse\Atelier Bookscan\cache")
 local_review_dir = Path(__file__).resolve().parent / "review_output"
 sales_cache_file = cache_dir / "bookscan_sales.parquet"
 metadata_cache_file = cache_dir / "bookscan_metadata.parquet"

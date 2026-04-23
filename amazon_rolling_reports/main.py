@@ -13,7 +13,14 @@ from load_lastdate import (
     lastdate_formats,
 )
 from load_rolling_reports import run_query_and_save, sql_co, sql_us
-from paths import amazon_po_folder, amazon_rolling_folder, dp_folders
+from paths import (
+    amazon_po_folder,
+    amazon_po_pickle_file,
+    amazon_rolling_folder,
+    customer_orders_pickle_file,
+    dp_folders,
+    units_shipped_pickle_file,
+)
 
 #############
 
@@ -153,19 +160,19 @@ def build_parser():
 def main():
     args = build_parser().parse_args()
     start_time = time.time()
-    pickle_po_file = "latest_amazon_po.pkl"
+    pickle_po_file = amazon_po_pickle_file
     if args.report_only:
         print("Report-only mode: using existing local pickles without SQL refresh.")
         required_files = [
             pickle_po_file,
-            "rr_customer_orders.pkl",
-            "rr_units_shipped.pkl",
+            customer_orders_pickle_file,
+            units_shipped_pickle_file,
         ]
         missing_files = [filename for filename in required_files if not os.path.exists(filename)]
         if missing_files:
             raise FileNotFoundError(
                 "Report-only mode requires existing local pickle files. Missing: "
-                + ", ".join(missing_files)
+                + ", ".join(str(filename) for filename in missing_files)
             )
     else:
         print("PO file status:")
@@ -178,14 +185,14 @@ def main():
         )
 
         # --- Customer Orders ---
-        pickle_file1 = "rr_customer_orders.pkl"
+        pickle_file1 = customer_orders_pickle_file
         print("Customer Orders file status:")
         prompt_update(
             pickle_file1, run_query_and_save, sql_co, pickle_file1, "Customer Orders"
         )
 
         # --- Units Shipped ---
-        pickle_file2 = "rr_units_shipped.pkl"
+        pickle_file2 = units_shipped_pickle_file
         print("Units Shipped file status:")
         prompt_update(
             pickle_file2, run_query_and_save, sql_us, pickle_file2, "Units Shipped"
@@ -197,7 +204,7 @@ def main():
     ###### CUSTOMER ORDERS ############################################
 
     # Create and save Customer Orders report
-    pickle_file1 = "rr_customer_orders.pkl"
+    pickle_file1 = customer_orders_pickle_file
     name1 = "Customer Orders"
     df_customer = create_rolling_report(pickle_file1, pickle_po_file)
     date_formatted, week_number, full_year = get_report_period_from_df(df_customer)
@@ -252,7 +259,7 @@ def main():
     print("Now creating the Units Shipped report...")
     print("#############################################")
     # Create and save Units Shipped report
-    pickle_file2 = "rr_units_shipped.pkl"
+    pickle_file2 = units_shipped_pickle_file
     name2 = "Units Shipped"
     df_units = create_rolling_report(pickle_file2, pickle_po_file)
     units_date_formatted, units_week_number, units_full_year = get_report_period_from_df(df_units)

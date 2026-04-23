@@ -1,6 +1,8 @@
 import pandas as pd
 pd.set_option('future.no_silent_downcasting', True)
 
+from paths import amazon_po_pickle_file, customer_orders_pickle_file
+
 def create_rolling_report(pickle_file,pickle_po):
     df_co = pd.read_pickle(pickle_file)
     df_po = pd.read_pickle(pickle_po)
@@ -41,10 +43,8 @@ def create_rolling_report(pickle_file,pickle_po):
     return df_combined
 
 def main():
-    
-    pickle_file1 = "rr_customer_orders.pkl"
-    
-    pickle_po = "latest_amazon_po.pkl"
+    pickle_file1 = customer_orders_pickle_file
+    pickle_po = amazon_po_pickle_file
     
     df_combined = create_rolling_report(pickle_file1,pickle_po)
     print(df_combined.shape)

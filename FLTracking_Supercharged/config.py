@@ -3,7 +3,7 @@ from importlib.util import module_from_spec, spec_from_file_location
 
 
 BASE_DIR = Path(__file__).resolve().parent
-OUTPUT_DIR = BASE_DIR / "output"
+OUTPUT_DIR = Path(r"F:\ANALYSIS\Finance\DataWarehouse\Atelier FL_SuperCharged\cache")
 FRONTLIST_MAIN_OUTPUT_DIR = Path(
     r"F:\ANALYSIS\Finance\DataWarehouse\Atelier FL_SuperCharged"
 )

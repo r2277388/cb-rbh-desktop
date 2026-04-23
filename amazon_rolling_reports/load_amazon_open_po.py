@@ -1,4 +1,4 @@
-from paths import amazon_po_folder
+from paths import amazon_po_folder, amazon_po_pickle_file
 import pandas as pd
 import glob
 import os
@@ -37,7 +37,7 @@ def main():
 
     print()
     
-    df = save_latest_amazon_po_as_pickle(amazon_po_folder, "latest_amazon_po.pkl")
+    df = save_latest_amazon_po_as_pickle(amazon_po_folder, amazon_po_pickle_file)
     if df is not None:
         print(df.head())
         

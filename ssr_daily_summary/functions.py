@@ -17,6 +17,9 @@ if str(ROOT_DIR) not in sys.path:
 from shared.db import get_connection as shared_get_connection
 
 
+CACHE_DIR = Path(r"F:\ANALYSIS\Finance\DataWarehouse\Atelier SSR\cache")
+
+
 def get_connection():
     return shared_get_connection()
 
@@ -49,14 +52,15 @@ def load_data(ty=None,ly=None):
     engine = get_connection()
     # Define the filename with the current date
     today = datetime.today().strftime('%Y-%m-%d')
-    filename = f"data_{today}.pkl"
+    filename = CACHE_DIR / f"data_{today}.pkl"
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
     # Set default years if not provided
     ty = ty or datetime.today().year
     ly = ly or (ty - 1)
 
     # Check if the file already exists
-    if os.path.exists(filename):
+    if filename.exists():
         # Load the data from the pickle file
         with open(filename, 'rb') as file:
             df = pickle.load(file)

@@ -5,11 +5,12 @@ from pathlib import Path
 import pandas as pd
 
 from functions import get_connection, fetch_data_from_db, save_to_pickle
+from paths import amazon_rolling_backup_dir, customer_orders_pickle_file, units_shipped_pickle_file
 from query_co import sql_co
 from query_us import sql_us
 
 
-BACKUP_DIR = Path("amazon_rolling_reports") / "backups"
+BACKUP_DIR = amazon_rolling_backup_dir
 RECENT_HISTORY_WEEKS_TO_CHECK = 12
 MIN_NONZERO_PRIOR_WEEKS = 3
 
@@ -87,10 +88,10 @@ def main():
     print("Starting the data extraction and saving process...")
     time.sleep(2)
     print("First, we are running the customer orders query ...")
-    run_query_and_save(sql_co, "rr_customer_orders.pkl", "Customer Orders")
+    run_query_and_save(sql_co, customer_orders_pickle_file, "Customer Orders")
     time.sleep(2)
     print("Now, we are running the units shipped query ...")
-    run_query_and_save(sql_us, "rr_units_shipped.pkl", "Units Shipped")
+    run_query_and_save(sql_us, units_shipped_pickle_file, "Units Shipped")
 
 if __name__ == "__main__":
     main()
