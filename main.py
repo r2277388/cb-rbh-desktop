@@ -962,22 +962,22 @@ def confirm_bn_rolling_reports_files() -> Path | None:
 
 def run_program(choice):
     reports = {
-        "2": ("Barnes & Noble Rolling Reports", "bn_rolling_reports/main.py"),
+        "2": ("Barnes & Noble Rolling Reports", str(process_paths.repo_path("bn_rolling_reports", "main.py"))),
         "3": ("Bookscan Rolling Reports", str(process_paths.BOOKSCAN_ROLLING_REPORTS_SCRIPT)),
         "4": (
             "Consolidate Inventory Manager",
-            "consolidate_inventory_verticalization/main.py",
+            str(process_paths.repo_path("consolidate_inventory_verticalization", "main.py")),
         ),
-        "5": ("Frontlist Supercharged Data", "FLTracking_Supercharged/main.py"),
-        "6": ("Hachette Orders - Shipping Estimates", "hachette_orders/main.py"),
+        "5": ("Frontlist Supercharged Data", str(process_paths.repo_path("FLTracking_Supercharged", "main.py"))),
+        "6": ("Hachette Orders - Shipping Estimates", str(process_paths.repo_path("hachette_orders", "main.py"))),
         "7": (
             "Reprint Indicator Report Updater",
             str(process_paths.REPRINT_INDICATOR_AUTOMATION_SCRIPT),
         ),
-        "10": ("UK Rolling File Combining", "UK_Rolling_File_Combining/main.py"),
-        "11": ("XGBoost Model", "xgboost_model/main.py"),
-        "12": ("Monthend Reports", "monthend/main.py"),
-        "97": ("Desk Procedures", "desk_procedures/main.py"),
+        "10": ("UK Rolling File Combining", str(process_paths.repo_path("UK_Rolling_File_Combining", "main.py"))),
+        "11": ("XGBoost Model", str(process_paths.repo_path("xgboost_model", "main.py"))),
+        "12": ("Monthend Reports", str(process_paths.repo_path("monthend", "main.py"))),
+        "97": ("Desk Procedures", str(process_paths.repo_path("desk_procedures", "main.py"))),
     }
 
     if choice == "1":
@@ -1019,7 +1019,7 @@ def run_program(choice):
             command = [python_executable, script_path]
             if choice == "2":
                 command.extend(["--default-raw-folder", str(selected_bn_raw_folder)])
-            subprocess.run(command, check=True)
+            subprocess.run(command, check=True, cwd=process_paths.REPO_ROOT)
             print(f"The {report_name} is now ready.")
         except subprocess.CalledProcessError:
             print(f"An error occurred while running {script_path}.")
