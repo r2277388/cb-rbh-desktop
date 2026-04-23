@@ -22,13 +22,11 @@ from processes.amazon_preorders import (
     load_amazon_preorders,
     load_amazon_preorders_cached,
 )
-from processes.amazon_sellthrough import SQL_FILE as AMAZON_SELLTHROUGH_SQL_FILE
+from processes.amazon_sellthrough import get_amazon_sellthrough_source_metadata
 from processes.amazon_sellthrough import load_amazon_sellthrough
 from processes.barnes_noble_weekly import (
-    build_bn_date_header,
-    load_barnes_noble_weekly,
+    get_barnes_noble_source_metadata,
     load_barnes_noble_weekly_cached,
-    resolve_barnes_noble_weekly_path,
 )
 from processes.faire_orders import SQL_FILE as FAIRE_ORDERS_SQL_FILE
 from processes.faire_orders import load_faire_orders
@@ -88,6 +86,8 @@ SUMMARY_HEADER_ROW = 6
 SUMMARY_FIRST_DATA_ROW = 7
 SUMMARY_HEADER_TOP_ROW = 2
 SUPERCHARGED_SUFFIX = "_SuperCharged"
+SUPERCHARGED_TOP_BAND_FILL = "222B35"
+SUPERCHARGED_UPPER_PANEL_FILL = "9BC2E6"
 
 
 @dataclass(frozen=True)
@@ -213,7 +213,8 @@ def fill_missing_metric_values(df: pd.DataFrame) -> pd.DataFrame:
 
 def build_metadata_sheet(frontlist_path: Path, combined: pd.DataFrame) -> pd.DataFrame:
     ingram_path = resolve_ingram_daily_report_path()
-    barnes_noble_path = resolve_barnes_noble_weekly_path()
+    barnes_noble_metadata = get_barnes_noble_source_metadata()
+    amazon_sellthrough_metadata = get_amazon_sellthrough_source_metadata()
     inventory_detail_path = resolve_inventory_detail_path()
     amazon_preorders_path = AMAZON_PREORDERS_PATH
     bookshop_preorders_path = resolve_bookshop_preorders_path()
@@ -221,7 +222,6 @@ def build_metadata_sheet(frontlist_path: Path, combined: pd.DataFrame) -> pd.Dat
     run_date = datetime.now().strftime("%m/%d/%Y")
 
     _, ingram_report_date = build_modified_date_header(ingram_path)
-    _, bn_report_date = build_bn_date_header(barnes_noble_path)
 
     amz_last_week_value = ""
     if "AmzLastWeek" in combined.columns:
@@ -244,9 +244,9 @@ def build_metadata_sheet(frontlist_path: Path, combined: pd.DataFrame) -> pd.Dat
         },
         {
             "Source": "Barnes & Noble",
-            "FileName": barnes_noble_path.name,
-            "ReportDate": bn_report_date,
-            "ModifiedDate": datetime.fromtimestamp(barnes_noble_path.stat().st_mtime).strftime("%m/%d/%Y"),
+            "FileName": _metadata_filename(barnes_noble_metadata),
+            "ReportDate": barnes_noble_metadata["report_date"],
+            "ModifiedDate": barnes_noble_metadata["modified_date"],
         },
         {
             "Source": "Inventory Detail",
@@ -267,10 +267,10 @@ def build_metadata_sheet(frontlist_path: Path, combined: pd.DataFrame) -> pd.Dat
             "ModifiedDate": datetime.fromtimestamp(bookshop_preorders_path.stat().st_mtime).strftime("%m/%d/%Y"),
         },
         {
-            "Source": "Amazon Sellthrough SQL",
-            "FileName": AMAZON_SELLTHROUGH_SQL_FILE.name,
-            "ReportDate": amz_last_week_value,
-            "ModifiedDate": run_date,
+            "Source": "Amazon Sellthrough",
+            "FileName": _metadata_filename(amazon_sellthrough_metadata),
+            "ReportDate": amz_last_week_value or amazon_sellthrough_metadata["report_date"],
+            "ModifiedDate": amazon_sellthrough_metadata["modified_date"],
         },
         {
             "Source": "Faire Qty SQL",
@@ -287,6 +287,18 @@ def build_metadata_sheet(frontlist_path: Path, combined: pd.DataFrame) -> pd.Dat
     ]
 
     return pd.DataFrame(rows)
+
+
+def _metadata_filename(metadata: dict[str, object]) -> str:
+    if "cache_path" in metadata:
+        return Path(metadata["cache_path"]).name
+    if "sql_path" in metadata:
+        return Path(metadata["sql_path"]).name
+    if "source_path" in metadata:
+        return Path(metadata["source_path"]).name
+    if "sales_path" in metadata and "inventory_path" in metadata:
+        return f"{Path(metadata['sales_path']).name}; {Path(metadata['inventory_path']).name}"
+    return ""
 
 
 def build_frontlist_main(frontlist_path: Path | None = None) -> tuple[pd.DataFrame, pd.DataFrame, Path]:
@@ -396,6 +408,16 @@ def _build_section_fill(section: SuperchargedSectionSpec) -> PatternFill:
         fill_type="solid",
         fgColor=Color(theme=8, tint=section.fill_tint),
     )
+
+
+def _apply_supercharged_upper_fill(worksheet) -> None:
+    dark_fill = PatternFill(fill_type="solid", fgColor=SUPERCHARGED_TOP_BAND_FILL)
+    light_fill = PatternFill(fill_type="solid", fgColor=SUPERCHARGED_UPPER_PANEL_FILL)
+
+    for row_idx in range(1, 4):
+        fill = dark_fill if row_idx == 1 else light_fill
+        for spec in SUPERCHARGED_COLUMNS:
+            worksheet[f"{spec.excel_column}{row_idx}"].fill = copy(fill)
 
 
 def _build_supercharged_header_border(
@@ -518,7 +540,7 @@ def _build_summary_row5_dates(metadata_df: pd.DataFrame) -> dict[str, str | None
         "amazon_preorders_modified": metadata_date("Amazon Preorders", "ModifiedDate"),
         "bookshop_report": metadata_date("Bookshop Preorders", "ReportDate"),
         "ingram_modified": metadata_date("Ingram", "ModifiedDate"),
-        "amazon_sellthrough_report": metadata_date("Amazon Sellthrough SQL", "ReportDate"),
+        "amazon_sellthrough_report": metadata_date("Amazon Sellthrough", "ReportDate"),
         "bn_report": metadata_date("Barnes & Noble", "ReportDate"),
         "run_date": run_date,
     }
@@ -578,6 +600,8 @@ def create_supercharged_frontlist_workbook(
     worksheet.row_dimensions[6].height = 60.75
     for spec in SUPERCHARGED_COLUMNS:
         worksheet.column_dimensions[spec.excel_column].width = spec.width
+
+    _apply_supercharged_upper_fill(worksheet)
 
     for row_idx in (4, 5, 6):
         for spec in SUPERCHARGED_COLUMNS:

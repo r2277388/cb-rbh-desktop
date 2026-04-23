@@ -438,7 +438,7 @@ def confirm_amazon_rolling_reports_run_files() -> bool:
         print(f"  Customer Orders query:   {customer_orders_sql}")
         print(f"  Units Shipped query:     {units_shipped_sql}")
         print(f"  Date check query:        {date_check_sql}")
-        print("  SQL source:              sql-2-db / CBQ2")
+        print("  SQL source:              sql-2-db / CBQ2 (Faire only)")
         print(f"  Main output folder:      {output_folder}")
         print("  DP output folders:       Configured in amazon_rolling_reports/paths.py")
         print()
@@ -743,21 +743,25 @@ def confirm_amazon_ams_files() -> bool:
 def confirm_frontlist_supercharged_files() -> bool:
     script_path = process_paths.FRONTLIST_SUPERCHARGED_SCRIPT
     output_dir = process_paths.FRONTLIST_SUPERCHARGED_OUTPUT_DIR
+    from FLTracking_Supercharged.processes.amazon_sellthrough import (
+        get_amazon_sellthrough_source_metadata,
+    )
+    from FLTracking_Supercharged.processes.barnes_noble_weekly import (
+        get_barnes_noble_source_metadata,
+    )
 
     frontlist_file = get_latest_matching_file(process_paths.FRONTLIST_TRACKING_FOLDER, "*.xlsx")
     ingram_file = get_latest_matching_file(
         process_paths.INGRAM_DAILY_REPORT_FOLDER, "Daily Report*.xlsx"
     )
-    barnes_noble_file = get_latest_matching_file(
-        process_paths.BN_WEEKLY_REPORT_FOLDER, "Week *.xlsx"
-    )
     inventory_file = next(
         process_paths.INVENTORY_DAILY_FINANCE_ONLY_FOLDER.glob("Inventory*.xlsx"), None
     )
     amazon_preorders_file = process_paths.CURRENT_AMAZON_PREORDERS_FILE
-    amazon_sellthrough_sql = process_paths.FRONTLIST_AMAZON_SELLTHROUGH_SQL
     faire_qty_sql = process_paths.FRONTLIST_FAIRE_QTY_SQL
     faire_orders_sql = process_paths.FRONTLIST_FAIRE_ORDERS_SQL
+    barnes_noble_metadata = get_barnes_noble_source_metadata()
+    amazon_sellthrough_metadata = get_amazon_sellthrough_source_metadata()
 
     if inventory_file is None:
         raise FileNotFoundError(
@@ -775,8 +779,8 @@ def confirm_frontlist_supercharged_files() -> bool:
         print(f"  Inventory Detail:        {inventory_file}")
         print(f"  Amazon Preorders:        {amazon_preorders_file}")
         print(f"  Ingram Daily Report:     {ingram_file}")
-        print(f"  Barnes & Noble Weekly:   {barnes_noble_file}")
-        print(f"  Amazon Sellthrough SQL:  {amazon_sellthrough_sql}")
+        print_frontlist_barnes_noble_source(barnes_noble_metadata)
+        print_frontlist_amazon_sellthrough_source(amazon_sellthrough_metadata)
         print(f"  Faire Qty SQL:           {faire_qty_sql}")
         print(f"  Faire Orders SQL:        {faire_orders_sql}")
         print("  SQL source:              sql-2-db / CBQ2")
@@ -795,6 +799,43 @@ def confirm_frontlist_supercharged_files() -> bool:
             return False
 
         print("Invalid choice. Please select a valid option.")
+
+
+def print_frontlist_barnes_noble_source(metadata: dict[str, object]) -> None:
+    if metadata["source_type"] == "parquet":
+        print(
+            "  B&N Sales Parquet:       "
+            f"{metadata['sales_path']} "
+            f"(updated {metadata['sales_modified_date']})"
+        )
+        print(
+            "  B&N Inventory Parquet:   "
+            f"{metadata['inventory_path']} "
+            f"(updated {metadata['inventory_modified_date']})"
+        )
+    else:
+        print(
+            "  B&N Weekly Excel Fallback:"
+            f" {metadata['source_path']} "
+            f"(updated {metadata['modified_date']})"
+        )
+        print(f"  B&N fallback reason:     {metadata['fallback_reason']}")
+
+
+def print_frontlist_amazon_sellthrough_source(metadata: dict[str, object]) -> None:
+    if metadata["source_type"] == "cache":
+        print(
+            "  Amazon Sellthrough Cache:"
+            f" {metadata['cache_path']} "
+            f"(updated {metadata['modified_date']})"
+        )
+    else:
+        print(
+            "  Amazon SQL Fallback:     "
+            f"{metadata['sql_path']} "
+            f"(updated {metadata['modified_date']})"
+        )
+        print(f"  Amazon fallback reason:  {metadata['fallback_reason']}")
 
 
 def choose_bn_raw_folder_with_window(initial_dir: Path) -> Path | None:
