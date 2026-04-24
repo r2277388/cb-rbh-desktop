@@ -66,11 +66,12 @@ def display_options():
         "05. Frontlist Supercharged Data",
         "06. Hachette Orders - Shipping Estimates",
         "07. Reprint Indicator Report Updater",
-        "08. Automation Processes",
-        "09. SSR Daily Summary",
-        "10. UK Rolling File Combining",
-        "11. XGBoost Model",
-        "12. Monthend Reports",
+        "08. SSR Daily Summary",
+        "09. UK Rolling File Combining",
+        "10. XGBoost Model",
+        "11. Monthend Reports",
+        "12. Power BI Reports",
+        "93. Automation Processes",
         "94. Check Table Updates",
         "95. Install Main Venv Requirements",
         "96. Open Main Venv Shell",
@@ -93,14 +94,15 @@ def display_info(choice):
         "5": "Frontlist Supercharged Data: Builds the frontlist ISBN master file by merging Frontlist Tracking with cached Excel extracts and SQL source data.",
         "6": "Hachette Orders - Shipping Estimates: Generates a report for Hachette Orders.",
         "7": "Reprint Indicator Report Updater: Refreshes the template workbook when requested, rebuilds the BL_Detail and FL_Detail tabs from MetaData, then exports a detached workbook with links removed.",
-        "8": f"""Automation Processes: Opens a submenu for scheduled or semi-automated jobs.
+        "93": f"""Automation Processes: Opens a submenu for scheduled or semi-automated jobs.
         First item: Title Lookup Refresh (weekly)
         Default schedule: {process_paths.TITLE_LOOKUP_SCHEDULE_DESCRIPTION}
         Task name: {process_paths.TITLE_LOOKUP_TASK_NAME}""",
-        "9": "SSR Daily Summary: Opens the SSR Daily Summary menu, including Ebs.Sales Prior 5 Days and the summary process.",
-        "10": "UK Rolling File Combining: This combines the sales, reserve and midas files together.",
-        "11": "XGBoost Model: Launches the xgboost_model workflow menu.",
-        "12": "Monthend Reports: Opens the monthend reports menu, including Barnes & Noble Monthly Coop (Ailing).",
+        "8": "SSR Daily Summary: Opens the SSR Daily Summary menu, including Ebs.Sales Prior 5 Days and the summary process.",
+        "9": "UK Rolling File Combining: This combines the sales, reserve and midas files together.",
+        "10": "XGBoost Model: Launches the xgboost_model workflow menu.",
+        "11": "Monthend Reports: Opens the monthend reports menu, including Barnes & Noble Monthly Coop (Ailing).",
+        "12": "Power BI Reports: Lists Power BI files in the configured report folders and shows each file's last modified date.",
         "101": f"""Amazon (1) PO Archive Manager: Copies the selected Amazon Vendor Central PO CSV to:
         {process_paths.AMAZON_PO_CURRENT_FILE}
         and also archives an unchanged copy in:
@@ -974,9 +976,10 @@ def run_program(choice):
             "Reprint Indicator Report Updater",
             str(process_paths.REPRINT_INDICATOR_AUTOMATION_SCRIPT),
         ),
-        "10": ("UK Rolling File Combining", str(process_paths.repo_path("UK_Rolling_File_Combining", "main.py"))),
-        "11": ("XGBoost Model", str(process_paths.repo_path("xgboost_model", "main.py"))),
-        "12": ("Monthend Reports", str(process_paths.repo_path("monthend", "main.py"))),
+        "9": ("UK Rolling File Combining", str(process_paths.repo_path("UK_Rolling_File_Combining", "main.py"))),
+        "10": ("XGBoost Model", str(process_paths.repo_path("xgboost_model", "main.py"))),
+        "11": ("Monthend Reports", str(process_paths.repo_path("monthend", "main.py"))),
+        "12": ("Power BI Reports", str(process_paths.POWER_BI_REPORTS_SCRIPT)),
         "97": ("Desk Procedures", str(process_paths.repo_path("desk_procedures", "main.py"))),
     }
 
@@ -984,11 +987,11 @@ def run_program(choice):
         run_amazon_menu()
         return
 
-    if choice == "8":
+    if choice == "93":
         run_automation_processes_menu()
         return
 
-    if choice == "9":
+    if choice == "8":
         run_ssr_daily_summary_menu()
         return
 

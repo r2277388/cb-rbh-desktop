@@ -171,6 +171,13 @@ ACTIONS: dict[str, Action] = {
         "Run the XGBoost launcher.",
         "Main Processes",
     ),
+    "power_bi_reports": Action(
+        "power_bi_reports",
+        "Power BI Reports",
+        [str(VENV_PYTHON), str(process_paths.POWER_BI_REPORTS_SCRIPT)],
+        "List Power BI files in Visual Dashboards with last modified dates.",
+        "Main Processes",
+    ),
     "desk_procedures": Action(
         "desk_procedures",
         "Desk Procedures",

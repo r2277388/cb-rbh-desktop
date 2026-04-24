@@ -59,6 +59,14 @@ BN_WEEKLY_REPORT_FOLDER = Path(
 BOOKSCAN_WEEKLY_REPORT_FOLDER = Path(
     r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Bookscan"
 )
+POWER_BI_REPORTS_FOLDER = Path(
+    r"\\sfx\SFNY-Files\SF\Groups\Visual Dashboards"
+)
+POWER_BI_BARRETT_REPORT_FOLDERS = {
+    "Faire Sales": Path(r"\\sfx\sfny-files\SF\Groups\Tableau Dashboards\Faire Sales"),
+    "Inventory": Path(r"\\sfx\sfny-files\SF\Groups\Tableau Dashboards\Inventory"),
+    "Production": Path(r"\\sfx\sfny-files\SF\Groups\Tableau Dashboards\Production"),
+}
 CONSOLIDATED_INVENTORY_VERTICALIZATION_FOLDER = Path(
     r"F:\ANALYSIS\Finance\DataWarehouse\consolidated_inventory"
 )
@@ -219,6 +227,7 @@ FRONTLIST_FAIRE_ORDERS_SQL = repo_path(
 )
 BN_ROLLING_REPORTS_SCRIPT = repo_path("bn_rolling_reports", "main.py")
 BOOKSCAN_ROLLING_REPORTS_SCRIPT = repo_path("bookscan_rolling_reports", "main.py")
+POWER_BI_REPORTS_SCRIPT = repo_path("power_bi_reports", "main.py")
 REPRINT_INDICATOR_AUTOMATION_SCRIPT = repo_path(
     "reprint_indicator_automation", "main.py"
 )
