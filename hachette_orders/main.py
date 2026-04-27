@@ -35,11 +35,27 @@ def sum_val_next_5_days(df):
     
     # Group by Publisher and EstimateDate, and sum the val field
     summary = df_next_5_days.groupby(['Publisher', 'EstimateDate'])['val'].sum().reset_index()
-    
-    # Print the summary
-    print("Sum of 'val' for the next 5 days for each Publisher:")
-    for index, row in summary.iterrows():
-        print(f"Publisher: {row['Publisher']}, Date: {row['EstimateDate'].date()}, Value: {row['val']:,}")
+
+    if summary.empty:
+        print("No Hachette order value found for the next 5 days.")
+        return summary
+
+    table = summary.pivot_table(
+        index="Publisher",
+        columns="EstimateDate",
+        values="val",
+        aggfunc="sum",
+        fill_value=0,
+    )
+    table.columns = [column.strftime("%Y-%m-%d") for column in table.columns]
+    table["Total"] = table.sum(axis=1)
+    table = table.sort_values("Total", ascending=False)
+    total_row = pd.DataFrame([table.sum(axis=0)], index=["Total"])
+    table = pd.concat([table, total_row])
+    display_table = table.map(lambda value: f"{value:,.2f}" if value else "-")
+
+    print("Next 5 Days by Publisher")
+    print(display_table.to_string())
     
     return summary
     

@@ -228,6 +228,16 @@ FRONTLIST_FAIRE_ORDERS_SQL = repo_path(
 BN_ROLLING_REPORTS_SCRIPT = repo_path("bn_rolling_reports", "main.py")
 BOOKSCAN_ROLLING_REPORTS_SCRIPT = repo_path("bookscan_rolling_reports", "main.py")
 POWER_BI_REPORTS_SCRIPT = repo_path("power_bi_reports", "main.py")
+CROSS_GAP_SCRIPT = repo_path("cross_gap", "main.py")
+CROSS_GAP_CONFIG_FILE = repo_path("cross_gap", "title_groups.json")
+CROSS_GAP_OUTPUT_DIR = Path(
+    r"\\sfx\sfny-files\SF\Groups\Sales\2026 Sales Reports\Reports\Cross Gap"
+)
+CROSS_GAP_TASK_NAME = "Chronicle Weekly Cross Gap Report"
+CROSS_GAP_TASK_LOCATION = "Task Scheduler Library"
+CROSS_GAP_SCHEDULE_DAY = "SUN"
+CROSS_GAP_SCHEDULE_TIME = "12:00"
+CROSS_GAP_SCHEDULE_DESCRIPTION = "Every Sunday at 12:00 PM"
 REPRINT_INDICATOR_AUTOMATION_SCRIPT = repo_path(
     "reprint_indicator_automation", "main.py"
 )

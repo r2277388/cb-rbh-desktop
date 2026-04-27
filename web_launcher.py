@@ -178,6 +178,13 @@ ACTIONS: dict[str, Action] = {
         "List Power BI files in Visual Dashboards with last modified dates.",
         "Main Processes",
     ),
+    "cross_gap": Action(
+        "cross_gap",
+        "Cross Gap",
+        [str(VENV_PYTHON), str(process_paths.CROSS_GAP_SCRIPT), "run"],
+        "Build the Cross Gap sales and Hachette open-order workbook.",
+        "Main Processes",
+    ),
     "desk_procedures": Action(
         "desk_procedures",
         "Desk Procedures",

@@ -70,20 +70,25 @@ def sum_val_next_5_days_by_ssr_row(df):
     
     # Group by SSR_Row and EstimateDate, and sum the 'val' column
     summary = df_next_5_days.groupby(['SSR_Row', 'EstimateDate'])['val'].sum().unstack(fill_value=0)
+
+    if summary.empty:
+        print("No SSR row value found for the next 5 days.")
+        return summary
     
     # Format the column headers (EstimateDate) to only show yyyy-mm-dd
     summary.columns = [col.strftime('%Y-%m-%d') for col in summary.columns]
+    summary["Total"] = summary.sum(axis=1)
     
     # Sort by the first date column in descending order
     first_date_column = summary.columns[0]
     summary = summary.sort_values(by=first_date_column, ascending=False)
     
     # Round the numbers, remove decimals, and format with commas using apply on each column
-    summary = summary.round(0).astype(int).apply(lambda col: col.map(lambda x: f"{x:,}"))
+    summary = summary.apply(lambda col: col.map(lambda x: f"{x:,.2f}" if x else "-"))
     
     # Print only the top 20 rows
     top_20 = summary.head(20)
-    print("Top 20 SSR_Rows by 'val' in the first EstimateDate column:")
-    print(top_20)
+    print("Top 20 SSR Rows by First Estimate Date")
+    print(top_20.to_string())
     
     return top_20

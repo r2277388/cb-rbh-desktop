@@ -16,6 +16,7 @@ import pandas as pd
 from paths import process_paths
 import tools.po_archive_manager as po_archive_manager
 from shared.db import fetch_data_from_db, get_connection
+from cross_gap.main import run_cross_gap_menu
 
 
 def get_full_name():
@@ -71,6 +72,7 @@ def display_options():
         "10. XGBoost Model",
         "11. Monthend Reports",
         "12. Power BI Reports",
+        "13. Cross Gap",
         "93. Automation Processes",
         "94. Check Table Updates",
         "95. Install Main Venv Requirements",
@@ -103,6 +105,7 @@ def display_info(choice):
         "10": "XGBoost Model: Launches the xgboost_model workflow menu.",
         "11": "Monthend Reports: Opens the monthend reports menu, including Barnes & Noble Monthly Coop (Ailing).",
         "12": "Power BI Reports: Lists Power BI files in the configured report folders and shows each file's last modified date.",
+        "13": "Cross Gap: Opens a submenu to run the workbook, list current groupings, add ISBN groupings, or remove groupings.",
         "101": f"""Amazon (1) PO Archive Manager: Copies the selected Amazon Vendor Central PO CSV to:
         {process_paths.AMAZON_PO_CURRENT_FILE}
         and also archives an unchanged copy in:
@@ -586,6 +589,60 @@ def disable_title_lookup_weekly_automation() -> None:
     print("Weekly Title Lookup automation is now disabled.")
 
 
+def get_cross_gap_task_details() -> dict[str, str] | None:
+    result = subprocess.run(
+        [
+            "schtasks",
+            "/Query",
+            "/TN",
+            process_paths.CROSS_GAP_TASK_NAME,
+            "/FO",
+            "LIST",
+            "/V",
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    return parse_schtasks_list_output(result.stdout)
+
+
+def run_cross_gap_report_now() -> None:
+    print("Running the Cross Gap report... Please wait.")
+    subprocess.run(
+        ["venv/Scripts/python", str(process_paths.CROSS_GAP_SCRIPT), "run"],
+        check=True,
+    )
+    print("The Cross Gap report is now ready.")
+
+
+def enable_cross_gap_weekly_automation() -> None:
+    print("Creating or updating the weekly Cross Gap scheduled task... Please wait.")
+    subprocess.run(
+        ["venv/Scripts/python", str(process_paths.repo_path("tools", "cross_gap_automation.py")), "register"],
+        check=True,
+    )
+    print("Weekly Cross Gap automation is configured.")
+
+
+def show_cross_gap_automation_details() -> None:
+    subprocess.run(
+        ["venv/Scripts/python", str(process_paths.repo_path("tools", "cross_gap_automation.py")), "status"],
+        check=True,
+    )
+
+
+def disable_cross_gap_weekly_automation() -> None:
+    print("Disabling the weekly Cross Gap scheduled task... Please wait.")
+    subprocess.run(
+        ["venv/Scripts/python", str(process_paths.repo_path("tools", "cross_gap_automation.py")), "disable"],
+        check=True,
+    )
+    print("Weekly Cross Gap automation is now disabled.")
+
+
 def run_title_lookup_refresh_menu() -> None:
     workbook_path = process_paths.TITLE_LOOKUP_WORKBOOK
 
@@ -664,12 +721,77 @@ def run_title_lookup_refresh_menu() -> None:
         print("Invalid choice. Please select a valid option.")
 
 
+def run_cross_gap_automation_menu() -> None:
+    while True:
+        task_details = get_cross_gap_task_details()
+        print()
+        print("Weekly Cross Gap Report")
+        print(f"  Script:            {process_paths.CROSS_GAP_SCRIPT}")
+        print(f"  Output folder:     {process_paths.CROSS_GAP_OUTPUT_DIR}")
+        print("  Automation type:   Windows Task Scheduler")
+        print(f"  Task name:         {process_paths.CROSS_GAP_TASK_NAME}")
+        print(f"  Task location:     {process_paths.CROSS_GAP_TASK_LOCATION}")
+        print(f"  Default schedule:  {process_paths.CROSS_GAP_SCHEDULE_DESCRIPTION}")
+        if task_details is None:
+            print("  Current status:    Not currently scheduled")
+            print("  Next run:          Not available")
+        else:
+            print("  Current status:    Scheduled")
+            print(f"  Next run:          {task_details.get('Next Run Time', 'Unknown')}")
+            print(f"  Last run:          {task_details.get('Last Run Time', 'Unknown')}")
+            print(f"  Last result:       {task_details.get('Last Result', 'Unknown')}")
+        print("  Notes:             This automation writes a dated Cross Gap workbook to the shared reports folder.")
+        print()
+        print("    1. Run Cross Gap Now")
+        print("    2. Enable or Update Weekly Automation")
+        print("    3. Disable Weekly Automation")
+        print("    4. Show Automation Details")
+        print("    5. Return to Automation Processes")
+        print()
+        choice = input("Choose an option: ").strip().lower()
+
+        if choice in {"1", "run", "now"}:
+            try:
+                run_cross_gap_report_now()
+            except subprocess.CalledProcessError as e:
+                print(f"An error occurred while running the Cross Gap report: {e}")
+            continue
+
+        if choice in {"2", "enable", "schedule", "automation"}:
+            try:
+                enable_cross_gap_weekly_automation()
+            except subprocess.CalledProcessError as e:
+                print(f"An error occurred while configuring weekly Cross Gap automation: {e}")
+            continue
+
+        if choice in {"3", "disable", "off"}:
+            try:
+                disable_cross_gap_weekly_automation()
+            except subprocess.CalledProcessError as e:
+                print(f"An error occurred while disabling weekly Cross Gap automation: {e}")
+            continue
+
+        if choice in {"4", "details", "status", "info"}:
+            try:
+                show_cross_gap_automation_details()
+            except subprocess.CalledProcessError as e:
+                print(f"Unable to show Cross Gap automation details: {e}")
+            input("\nPress Enter to return to the Cross Gap automation menu...")
+            continue
+
+        if choice in {"5", "b", "back", "return", "menu"}:
+            return
+
+        print("Invalid choice. Please select a valid option.")
+
+
 def run_automation_processes_menu() -> None:
     while True:
         print("\nAutomation Processes")
         print()
         print("    1. Title Lookup Refresh (weekly)")
-        print("    2. Back to main menu")
+        print("    2. Cross Gap Report (weekly)")
+        print("    3. Back to main menu")
         print()
         try:
             subchoice = input("Choose an option: ").strip().lower()
@@ -684,7 +806,11 @@ def run_automation_processes_menu() -> None:
                 print(f"Unable to locate the Title Lookup workbook: {e}")
             continue
 
-        if subchoice in {"2", "b", "back", "return", "menu"}:
+        if subchoice == "2":
+            run_cross_gap_automation_menu()
+            continue
+
+        if subchoice in {"3", "b", "back", "return", "menu"}:
             return
 
         print("Invalid choice. Please select a valid option.")
@@ -993,6 +1119,10 @@ def run_program(choice):
 
     if choice == "8":
         run_ssr_daily_summary_menu()
+        return
+
+    if choice == "13":
+        run_cross_gap_menu()
         return
 
     if choice in reports:
