@@ -132,7 +132,7 @@ def display_info(choice):
 
 def get_latest_matching_file(folder_path: str | Path, pattern: str) -> Path:
     folder = Path(folder_path)
-    matches = list(folder.glob(pattern))
+    matches = [path for path in folder.glob(pattern) if not path.name.startswith("~$")]
     if not matches:
         raise FileNotFoundError(f"No files found in {folder} with pattern {pattern}")
     return max(matches, key=os.path.getctime)
@@ -140,7 +140,7 @@ def get_latest_matching_file(folder_path: str | Path, pattern: str) -> Path:
 
 def get_latest_matching_file_by_mtime(folder_path: str | Path, pattern: str) -> Path:
     folder = Path(folder_path)
-    matches = list(folder.glob(pattern))
+    matches = [path for path in folder.glob(pattern) if not path.name.startswith("~$")]
     if not matches:
         raise FileNotFoundError(f"No files found in {folder} with pattern {pattern}")
     return max(matches, key=lambda path: path.stat().st_mtime)
@@ -877,8 +877,11 @@ def confirm_frontlist_supercharged_files() -> bool:
     from FLTracking_Supercharged.processes.barnes_noble_weekly import (
         get_barnes_noble_source_metadata,
     )
+    from FLTracking_Supercharged.processes.frontlist_main import (
+        resolve_frontlist_tracking_path,
+    )
 
-    frontlist_file = get_latest_matching_file(process_paths.FRONTLIST_TRACKING_FOLDER, "*.xlsx")
+    frontlist_file = resolve_frontlist_tracking_path(process_paths.FRONTLIST_TRACKING_FOLDER)
     ingram_file = get_latest_matching_file(
         process_paths.INGRAM_DAILY_REPORT_FOLDER, "Daily Report*.xlsx"
     )

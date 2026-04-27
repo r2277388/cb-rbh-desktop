@@ -28,6 +28,23 @@ def _normalize_recipients(recipients: str | Iterable[str] | None) -> str:
     return "; ".join(cleaned)
 
 
+def _resolve_recipients(mail_item) -> None:
+    recipients = mail_item.Recipients
+    if recipients.Count == 0:
+        return
+    if not recipients.ResolveAll():
+        unresolved = []
+        for index in range(1, recipients.Count + 1):
+            recipient = recipients.Item(index)
+            if not recipient.Resolved:
+                unresolved.append(recipient.Name)
+        if unresolved:
+            raise RuntimeError(
+                "Outlook could not resolve recipient(s): "
+                + "; ".join(unresolved)
+            )
+
+
 def create_outlook_mail(
     *,
     to: str | Iterable[str],
@@ -37,6 +54,7 @@ def create_outlook_mail(
     cc: str | Iterable[str] | None = None,
     bcc: str | Iterable[str] | None = None,
     attachments: Iterable[str | Path] | None = None,
+    resolve_recipients: bool = True,
 ):
     pythoncom.CoInitialize()
     try:
@@ -56,6 +74,9 @@ def create_outlook_mail(
             for attachment in attachments:
                 mail_item.Attachments.Add(str(Path(attachment)))
 
+        if resolve_recipients:
+            _resolve_recipients(mail_item)
+
         return mail_item
     except Exception:
         pythoncom.CoUninitialize()
@@ -72,6 +93,8 @@ def send_outlook_mail(
     bcc: str | Iterable[str] | None = None,
     attachments: Iterable[str | Path] | None = None,
     display_before_send: bool = False,
+    modal_display: bool = False,
+    resolve_recipients: bool = True,
 ):
     mail_item = create_outlook_mail(
         to=to,
@@ -81,9 +104,11 @@ def send_outlook_mail(
         cc=cc,
         bcc=bcc,
         attachments=attachments,
+        resolve_recipients=resolve_recipients,
     )
     if display_before_send:
-        mail_item.Display()
+        mail_item.Save()
+        mail_item.Display(modal_display)
         pythoncom.CoUninitialize()
         return mail_item
 

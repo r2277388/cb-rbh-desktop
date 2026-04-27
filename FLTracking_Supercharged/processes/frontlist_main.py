@@ -375,6 +375,35 @@ def _resolve_supercharged_output_path(
     return output_dir / default_output_path.name
 
 
+def _versioned_output_path(output_path: Path) -> Path:
+    if not output_path.exists():
+        return output_path
+
+    for version in range(1, 100):
+        candidate = output_path.with_name(
+            f"{output_path.stem}_v{version}{output_path.suffix}"
+        )
+        if not candidate.exists():
+            return candidate
+
+    raise FileExistsError(f"Could not find an available output path for {output_path}")
+
+
+def _copy_frontlist_workbook(frontlist_path: Path, output_path: Path) -> Path:
+    selected_output_path = _versioned_output_path(output_path)
+    try:
+        copy2(frontlist_path, selected_output_path)
+        return selected_output_path
+    except PermissionError:
+        fallback_path = _versioned_output_path(selected_output_path)
+        copy2(frontlist_path, fallback_path)
+        print(
+            "SuperCharged output file was locked; "
+            f"saved a versioned copy instead: {fallback_path}"
+        )
+        return fallback_path
+
+
 def _find_column_by_header(worksheet, header_name: str, row: int = SUMMARY_HEADER_ROW) -> int:
     for col_idx in range(1, worksheet.max_column + 1):
         if worksheet.cell(row=row, column=col_idx).value == header_name:
@@ -559,7 +588,7 @@ def create_supercharged_frontlist_workbook(
     output_dir: Path | None = None,
 ) -> Path:
     output_path = _resolve_supercharged_output_path(frontlist_path, output_dir)
-    copy2(frontlist_path, output_path)
+    output_path = _copy_frontlist_workbook(frontlist_path, output_path)
 
     workbook = load_workbook(output_path)
     if "Summary" not in workbook.sheetnames:

@@ -186,6 +186,7 @@ def open_notification_draft(
         subject=subject,
         body=body,
         display_before_send=True,
+        modal_display=True,
     )
 
 
@@ -576,12 +577,12 @@ def main() -> int:
             bl_count=bl_count,
             fl_count=fl_count,
         )
-        print("Opened Outlook draft notification.")
+        print("Opened Outlook notification for review.")
         show_popup(
             "Reprint Indicator Complete",
             (
                 "The Reprint Indicator process completed successfully.\n\n"
-                "An Outlook draft email has been created for review."
+                "The Outlook email review window has been closed."
             ),
         )
     except Exception as exc:
