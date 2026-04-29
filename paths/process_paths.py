@@ -56,6 +56,22 @@ INGRAM_DAILY_REPORT_FOLDER = Path(
 BN_WEEKLY_REPORT_FOLDER = Path(
     r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Barnes & Noble"
 )
+TARGET_NOC_OUTPUT_FOLDER = Path(
+    r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Target NOC"
+)
+TARGET_NOC_DP_FOLDERS = {
+    "Quadrille Publishing Limited": Path(
+        r"G:\SALES\Distribution_Partners\Quadrille\QD REPORTS\Sell Through Reporting\Target NOC"
+    ),
+    "Galison": Path(r"G:\SALES\Distribution_Partners\Galison\GA REPORTS\Target NOC"),
+}
+TARGET_NOC_SALES_FOLDER = Path(
+    r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Target NOC\TargetNOC_Sales"
+)
+TARGET_NOC_INVENTORY_FOLDER = Path(
+    r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Target NOC\TargetNOC_Inventory"
+)
+TARGET_NOC_CACHE_DIR = repo_path("target_rolling_report", "cache")
 BOOKSCAN_WEEKLY_REPORT_FOLDER = Path(
     r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Bookscan"
 )

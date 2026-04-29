@@ -63,16 +63,17 @@ def display_options():
         "01. Amazon",
         "02. Barnes & Noble Rolling Reports",
         "03. Bookscan Rolling Reports",
-        "04. Consolidate Inventory Manager",
-        "05. Frontlist Supercharged Data",
-        "06. Hachette Orders - Shipping Estimates",
-        "07. Reprint Indicator Report Updater",
-        "08. SSR Daily Summary",
-        "09. UK Rolling File Combining",
-        "10. XGBoost Model",
-        "11. Monthend Reports",
-        "12. Power BI Reports",
-        "13. Cross Gap",
+        "04. Target NOC Rolling Reports",
+        "05. Consolidate Inventory Manager",
+        "06. Frontlist Supercharged Data",
+        "07. Hachette Orders - Shipping Estimates",
+        "08. Reprint Indicator Report Updater",
+        "09. SSR Daily Summary",
+        "10. UK Rolling File Combining",
+        "11. XGBoost Model",
+        "12. Monthend Reports",
+        "13. Power BI Reports",
+        "14. Cross Gap",
         "93. Automation Processes",
         "94. Check Table Updates",
         "95. Install Main Venv Requirements",
@@ -92,20 +93,21 @@ def display_info(choice):
         "1": "Amazon: Opens a submenu containing the PO archive manager, PO report, PreOrders, Customer Orders, Create SQL Sellthrough Upload (XLSX), Rolling Reports, and AMS Manager.",
         "2": f"""Barnes & Noble Rolling Reports: Builds weekly Barnes & Noble rolling-report source files, starting with the combined POS non-book extract.""",
         "3": "Bookscan Rolling Reports: Opens the Bookscan rolling report helper for SQL week checks, cache refreshes, and rolling workbook builds.",
-        "4": "Consolidate Inventory Manager: Opens the consolidated inventory workflow menu, including depot file intake, verticalization, summaries, and related inventory tools.",
-        "5": "Frontlist Supercharged Data: Builds the frontlist ISBN master file by merging Frontlist Tracking with cached Excel extracts and SQL source data.",
-        "6": "Hachette Orders - Shipping Estimates: Generates a report for Hachette Orders.",
-        "7": "Reprint Indicator Report Updater: Refreshes the template workbook when requested, rebuilds the BL_Detail and FL_Detail tabs from MetaData, then exports a detached workbook with links removed.",
+        "4": "Target NOC Rolling Reports: Refreshes the Target NOC sales/inventory cache from the newest source files and builds the weekly rolling workbook.",
+        "5": "Consolidate Inventory Manager: Opens the consolidated inventory workflow menu, including depot file intake, verticalization, summaries, and related inventory tools.",
+        "6": "Frontlist Supercharged Data: Builds the frontlist ISBN master file by merging Frontlist Tracking with cached Excel extracts and SQL source data.",
+        "7": "Hachette Orders - Shipping Estimates: Generates a report for Hachette Orders.",
+        "8": "Reprint Indicator Report Updater: Refreshes the template workbook when requested, rebuilds the BL_Detail and FL_Detail tabs from MetaData, then exports a detached workbook with links removed.",
         "93": f"""Automation Processes: Opens a submenu for scheduled or semi-automated jobs.
         First item: Title Lookup Refresh (weekly)
         Default schedule: {process_paths.TITLE_LOOKUP_SCHEDULE_DESCRIPTION}
         Task name: {process_paths.TITLE_LOOKUP_TASK_NAME}""",
-        "8": "SSR Daily Summary: Opens the SSR Daily Summary menu, including Ebs.Sales Prior 5 Days and the summary process.",
-        "9": "UK Rolling File Combining: This combines the sales, reserve and midas files together.",
-        "10": "XGBoost Model: Launches the xgboost_model workflow menu.",
-        "11": "Monthend Reports: Opens the monthend reports menu, including Barnes & Noble Monthly Coop (Ailing).",
-        "12": "Power BI Reports: Lists Power BI files in the configured report folders and shows each file's last modified date.",
-        "13": "Cross Gap: Opens a submenu to run the workbook, list current groupings, add ISBN groupings, or remove groupings.",
+        "9": "SSR Daily Summary: Opens the SSR Daily Summary menu, including Ebs.Sales Prior 5 Days and the summary process.",
+        "10": "UK Rolling File Combining: This combines the sales, reserve and midas files together.",
+        "11": "XGBoost Model: Launches the xgboost_model workflow menu.",
+        "12": "Monthend Reports: Opens the monthend reports menu, including Barnes & Noble Monthly Coop (Ailing).",
+        "13": "Power BI Reports: Lists Power BI files in the configured report folders and shows each file's last modified date.",
+        "14": "Cross Gap: Opens a submenu to run the workbook, list current groupings, add ISBN groupings, or remove groupings.",
         "101": f"""Amazon (1) PO Archive Manager: Copies the selected Amazon Vendor Central PO CSV to:
         {process_paths.AMAZON_PO_CURRENT_FILE}
         and also archives an unchanged copy in:
@@ -1095,20 +1097,21 @@ def run_program(choice):
     reports = {
         "2": ("Barnes & Noble Rolling Reports", str(process_paths.repo_path("bn_rolling_reports", "main.py"))),
         "3": ("Bookscan Rolling Reports", str(process_paths.BOOKSCAN_ROLLING_REPORTS_SCRIPT)),
-        "4": (
+        "4": ("Target NOC Rolling Reports", str(process_paths.repo_path("target_rolling_report", "main.py"))),
+        "5": (
             "Consolidate Inventory Manager",
             str(process_paths.repo_path("consolidate_inventory_verticalization", "main.py")),
         ),
-        "5": ("Frontlist Supercharged Data", str(process_paths.repo_path("FLTracking_Supercharged", "main.py"))),
-        "6": ("Hachette Orders - Shipping Estimates", str(process_paths.repo_path("hachette_orders", "main.py"))),
-        "7": (
+        "6": ("Frontlist Supercharged Data", str(process_paths.repo_path("FLTracking_Supercharged", "main.py"))),
+        "7": ("Hachette Orders - Shipping Estimates", str(process_paths.repo_path("hachette_orders", "main.py"))),
+        "8": (
             "Reprint Indicator Report Updater",
             str(process_paths.REPRINT_INDICATOR_AUTOMATION_SCRIPT),
         ),
-        "9": ("UK Rolling File Combining", str(process_paths.repo_path("UK_Rolling_File_Combining", "main.py"))),
-        "10": ("XGBoost Model", str(process_paths.repo_path("xgboost_model", "main.py"))),
-        "11": ("Monthend Reports", str(process_paths.repo_path("monthend", "main.py"))),
-        "12": ("Power BI Reports", str(process_paths.POWER_BI_REPORTS_SCRIPT)),
+        "10": ("UK Rolling File Combining", str(process_paths.repo_path("UK_Rolling_File_Combining", "main.py"))),
+        "11": ("XGBoost Model", str(process_paths.repo_path("xgboost_model", "main.py"))),
+        "12": ("Monthend Reports", str(process_paths.repo_path("monthend", "main.py"))),
+        "13": ("Power BI Reports", str(process_paths.POWER_BI_REPORTS_SCRIPT)),
         "97": ("Desk Procedures", str(process_paths.repo_path("desk_procedures", "main.py"))),
     }
 
@@ -1120,11 +1123,11 @@ def run_program(choice):
         run_automation_processes_menu()
         return
 
-    if choice == "8":
+    if choice == "9":
         run_ssr_daily_summary_menu()
         return
 
-    if choice == "13":
+    if choice == "14":
         run_cross_gap_menu()
         return
 
@@ -1138,7 +1141,7 @@ def run_program(choice):
             except FileNotFoundError as e:
                 print(f"Unable to locate the Barnes & Noble Rolling Reports files: {e}")
                 return
-        if choice == "5":
+        if choice == "6":
             try:
                 if not confirm_frontlist_supercharged_files():
                     return
@@ -1149,7 +1152,7 @@ def run_program(choice):
             print(f"Running the {report_name}... Please wait.")
         try:
             python_executable = "venv/Scripts/python"
-            if choice == "7":
+            if choice == "8":
                 python_executable = get_excel_automation_python()
 
             command = [python_executable, script_path]
