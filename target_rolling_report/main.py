@@ -32,6 +32,7 @@ METADATA_CACHE = process_paths.TARGET_NOC_CACHE_DIR / "target_noc_metadata.parqu
 INVENTORY_CACHE = process_paths.TARGET_NOC_CACHE_DIR / "target_noc_inventory.parquet"
 
 METADATA_COLUMNS = ["DPCI", "Pub", "PT", "FT", "PGRP", "ISBN", "Title", "Price", "PubDate"]
+REPORT_MIN_POSITIVE_SALES_DATE = pd.Timestamp("2023-01-01")
 
 ELIGIBLE_TITLE_SQL_TEMPLATE = """
 SELECT
@@ -53,7 +54,6 @@ WHERE
     )
     AND i.SHORT_TITLE IS NOT NULL
     AND i.ITEM_TITLE IS NOT NULL
-    AND i.PRICE_AMOUNT IS NOT NULL
     AND i.PRODUCT_TYPE IN ('BK', 'FT', 'CP', 'RP')
 """
 
@@ -508,7 +508,12 @@ def refresh_cache(use_samples: bool = False, assume_yes: bool = False) -> pd.Tim
     if not new_metadata.empty:
         for col in METADATA_COLUMNS:
             if col not in new_metadata.columns:
-                new_metadata[col] = "" if col not in {"Price", "PubDate"} else 0
+                if col == "Price":
+                    new_metadata[col] = 0
+                elif col == "PubDate":
+                    new_metadata[col] = pd.NaT
+                else:
+                    new_metadata[col] = ""
         metadata = pd.concat([metadata, new_metadata[METADATA_COLUMNS]], ignore_index=True)
         metadata = metadata.drop_duplicates(subset=["DPCI", "ISBN"], keep="first")
         metadata.to_parquet(METADATA_CACHE, index=False)
@@ -626,6 +631,27 @@ def output_path_for(latest_week: pd.Timestamp, weeknum: int, output_folder: Path
     return folder / filename
 
 
+def filter_report_to_recent_positive_sales(report: pd.DataFrame, weekly: pd.DataFrame) -> pd.DataFrame:
+    weekly = weekly.copy()
+    weekly["DPCI"] = weekly["DPCI"].astype(str).str.strip()
+    weekly["ISBN"] = weekly["ISBN"].map(normalize_isbn)
+    weekly["Week"] = pd.to_datetime(weekly["Week"]).dt.normalize()
+    weekly["Units"] = pd.to_numeric(weekly["Units"], errors="coerce").fillna(0)
+
+    recent_keys = weekly[
+        weekly["Week"].ge(REPORT_MIN_POSITIVE_SALES_DATE) & weekly["Units"].gt(0)
+    ][["DPCI", "ISBN"]].drop_duplicates()
+
+    filtered = report.merge(recent_keys, on=["DPCI", "ISBN"], how="inner")
+    removed = len(report) - len(filtered)
+    if removed:
+        print(
+            f"Removed {removed:,} Target title rows with no positive sales since "
+            f"{REPORT_MIN_POSITIVE_SALES_DATE:%Y-%m-%d}."
+        )
+    return filtered
+
+
 def build_report(
     output_folder: Path | None = None,
     publisher_filter: str | None = None,
@@ -646,6 +672,7 @@ def build_report(
         yearly = pd.read_parquet(YEARLY_CACHE)
 
     report, latest_week, weeknum = build_summary(metadata, weekly, yearly, inventory)
+    report = filter_report_to_recent_positive_sales(report, weekly)
     if publisher_filter is not None:
         publisher_key = publisher_filter.strip().casefold()
         report = report[
