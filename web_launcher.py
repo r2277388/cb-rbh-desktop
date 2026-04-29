@@ -152,9 +152,9 @@ ACTIONS: dict[str, Action] = {
     ),
     "uk_rolling_file_combining": Action(
         "uk_rolling_file_combining",
-        "UK Rolling File Combining",
-        [str(VENV_PYTHON), "UK_Rolling_File_Combining/main.py"],
-        "Run the UK rolling file combine process.",
+        "Abrams & Chronicle UK Rolling Reports",
+        [str(VENV_PYTHON), "Abrams_Chronicle_rollling_reports/main.py"],
+        "Run the Abrams & Chronicle UK rolling report process.",
         "Main Processes",
     ),
     "hachette_orders": Action(

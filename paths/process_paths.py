@@ -102,11 +102,13 @@ AMAZON_SQL_UPLOAD_OUTPUT_DIR = Path(
     r"F:\ANALYSIS\Finance\DataWarehouse\Atelier Amazon\vc_weekly_summary"
 )
 UK_ROLLING_SOURCE_FOLDER = Path(
-    r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Abrams & Chronicle\Script Files"
+    r"F:\ANALYSIS\Finance\DataWarehouse\Atelier UK\Script Files"
 )
-UK_ROLLING_OUTPUT_FILE = Path(
-    r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Abrams & Chronicle\Title Sales Week ##.xlsx"
+UK_ROLLING_CACHE_DIR = Path(r"F:\ANALYSIS\Finance\DataWarehouse\Atelier UK\cache")
+UK_ROLLING_OUTPUT_FOLDER = Path(
+    r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Abrams & Chronicle"
 )
+UK_ROLLING_OUTPUT_FILE = UK_ROLLING_OUTPUT_FOLDER / "Title Sales Week ##.xlsx"
 SSR_QUERY_OUTPUT_FILE = Path(
     r"G:\SALES\2026 Sales Reports\SSR\SSR_Template\rbh_daily_py.xlsx"
 )

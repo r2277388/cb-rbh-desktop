@@ -1176,7 +1176,7 @@ def run_retailer_rolling_reports_menu() -> None:
         print("    03. Barnes & Noble Rolling Reports")
         print("    04. Bookscan Rolling Reports")
         print("    05. Target NOC Rolling Reports")
-        print("    06. UK Rolling File Combining")
+        print("    06. Abrams & Chronicle UK Rolling Reports")
         print()
         print("    99. Back to main menu")
         print()
@@ -1225,8 +1225,8 @@ def run_retailer_rolling_reports_menu() -> None:
 
         if choice == "6":
             run_python_process(
-                "UK Rolling File Combining",
-                process_paths.repo_path("UK_Rolling_File_Combining", "main.py"),
+                "Abrams & Chronicle UK Rolling Reports",
+                process_paths.repo_path("Abrams_Chronicle_rollling_reports", "main.py"),
             )
             continue
 
