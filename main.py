@@ -61,24 +61,10 @@ def get_farewell_message():
 def display_options():
     options = [
         "01. Amazon",
-        "02. Barnes & Noble Rolling Reports",
-        "03. Bookscan Rolling Reports",
-        "04. Target NOC Rolling Reports",
-        "05. Consolidate Inventory Manager",
-        "06. Frontlist Supercharged Data",
-        "07. Hachette Orders - Shipping Estimates",
-        "08. Reprint Indicator Report Updater",
-        "09. SSR Daily Summary",
-        "10. UK Rolling File Combining",
-        "11. XGBoost Model",
-        "12. Monthend Reports",
-        "13. Power BI Reports",
-        "14. Cross Gap",
-        "93. Automation Processes",
-        "94. Check Table Updates",
-        "95. Install Main Venv Requirements",
-        "96. Open Main Venv Shell",
-        "97. Desk Procedures",
+        "02. Retailer Rolling Reports",
+        "03. Sales / Operational Reports",
+        "04. Data & Automation Tools",
+        "05. Admin / Utilities",
         "98. Graphical Menu",
         "99. Exit",
     ]
@@ -90,24 +76,11 @@ def display_options():
 
 def display_info(choice):
     info = {
-        "1": "Amazon: Opens a submenu containing the PO archive manager, PO report, PreOrders, Customer Orders, Create SQL Sellthrough Upload (XLSX), Rolling Reports, and AMS Manager.",
-        "2": f"""Barnes & Noble Rolling Reports: Builds weekly Barnes & Noble rolling-report source files, starting with the combined POS non-book extract.""",
-        "3": "Bookscan Rolling Reports: Opens the Bookscan rolling report helper for SQL week checks, cache refreshes, and rolling workbook builds.",
-        "4": "Target NOC Rolling Reports: Refreshes the Target NOC sales/inventory cache from the newest source files and builds the weekly rolling workbook.",
-        "5": "Consolidate Inventory Manager: Opens the consolidated inventory workflow menu, including depot file intake, verticalization, summaries, and related inventory tools.",
-        "6": "Frontlist Supercharged Data: Builds the frontlist ISBN master file by merging Frontlist Tracking with cached Excel extracts and SQL source data.",
-        "7": "Hachette Orders - Shipping Estimates: Generates a report for Hachette Orders.",
-        "8": "Reprint Indicator Report Updater: Refreshes the template workbook when requested, rebuilds the BL_Detail and FL_Detail tabs from MetaData, then exports a detached workbook with links removed.",
-        "93": f"""Automation Processes: Opens a submenu for scheduled or semi-automated jobs.
-        First item: Title Lookup Refresh (weekly)
-        Default schedule: {process_paths.TITLE_LOOKUP_SCHEDULE_DESCRIPTION}
-        Task name: {process_paths.TITLE_LOOKUP_TASK_NAME}""",
-        "9": "SSR Daily Summary: Opens the SSR Daily Summary menu, including Ebs.Sales Prior 5 Days and the summary process.",
-        "10": "UK Rolling File Combining: This combines the sales, reserve and midas files together.",
-        "11": "XGBoost Model: Launches the xgboost_model workflow menu.",
-        "12": "Monthend Reports: Opens the monthend reports menu, including Barnes & Noble Monthly Coop (Ailing).",
-        "13": "Power BI Reports: Lists Power BI files in the configured report folders and shows each file's last modified date.",
-        "14": "Cross Gap: Opens a submenu to run the workbook, list current groupings, add ISBN groupings, or remove groupings.",
+        "1": "Amazon: Opens Amazon PO, PreOrders, Customer Orders, and AMS Manager workflows.",
+        "2": "Retailer Rolling Reports: Opens Amazon, Barnes & Noble, Bookscan, Target NOC, and UK rolling-report workflows.",
+        "3": "Sales / Operational Reports: Opens Cross Gap, Frontlist, Hachette, Monthend, Reprint Indicator, and SSR workflows.",
+        "4": "Data & Automation Tools: Opens Automation Processes, Check Table Updates, Consolidate Inventory, Power BI Reports, and XGBoost Model.",
+        "5": "Admin / Utilities: Opens Desk Procedures, requirements installation, and the main venv shell.",
         "101": f"""Amazon (1) PO Archive Manager: Copies the selected Amazon Vendor Central PO CSV to:
         {process_paths.AMAZON_PO_CURRENT_FILE}
         and also archives an unchanged copy in:
@@ -130,6 +103,13 @@ def display_info(choice):
         "99": "Exit: Exits the program.",
     }
     return info.get(choice, "Invalid choice. No information available.")
+
+
+def normalize_menu_choice(choice: str) -> str:
+    choice = choice.strip().lower()
+    if choice.isdigit():
+        return str(int(choice))
+    return choice
 
 
 def get_latest_matching_file(folder_path: str | Path, pattern: str) -> Path:
@@ -1094,120 +1074,24 @@ def confirm_bn_rolling_reports_files() -> Path | None:
 
 
 def run_program(choice):
-    reports = {
-        "2": ("Barnes & Noble Rolling Reports", str(process_paths.repo_path("bn_rolling_reports", "main.py"))),
-        "3": ("Bookscan Rolling Reports", str(process_paths.BOOKSCAN_ROLLING_REPORTS_SCRIPT)),
-        "4": ("Target NOC Rolling Reports", str(process_paths.repo_path("target_rolling_report", "main.py"))),
-        "5": (
-            "Consolidate Inventory Manager",
-            str(process_paths.repo_path("consolidate_inventory_verticalization", "main.py")),
-        ),
-        "6": ("Frontlist Supercharged Data", str(process_paths.repo_path("FLTracking_Supercharged", "main.py"))),
-        "7": ("Hachette Orders - Shipping Estimates", str(process_paths.repo_path("hachette_orders", "main.py"))),
-        "8": (
-            "Reprint Indicator Report Updater",
-            str(process_paths.REPRINT_INDICATOR_AUTOMATION_SCRIPT),
-        ),
-        "10": ("UK Rolling File Combining", str(process_paths.repo_path("UK_Rolling_File_Combining", "main.py"))),
-        "11": ("XGBoost Model", str(process_paths.repo_path("xgboost_model", "main.py"))),
-        "12": ("Monthend Reports", str(process_paths.repo_path("monthend", "main.py"))),
-        "13": ("Power BI Reports", str(process_paths.POWER_BI_REPORTS_SCRIPT)),
-        "97": ("Desk Procedures", str(process_paths.repo_path("desk_procedures", "main.py"))),
-    }
-
     if choice == "1":
         run_amazon_menu()
         return
 
-    if choice == "93":
-        run_automation_processes_menu()
+    if choice == "2":
+        run_retailer_rolling_reports_menu()
         return
 
-    if choice == "9":
-        run_ssr_daily_summary_menu()
+    if choice == "3":
+        run_sales_operational_reports_menu()
         return
 
-    if choice == "14":
-        run_cross_gap_menu()
+    if choice == "4":
+        run_data_automation_tools_menu()
         return
 
-    if choice in reports:
-        report_name, script_path = reports[choice]
-        if choice == "2":
-            try:
-                selected_bn_raw_folder = confirm_bn_rolling_reports_files()
-                if selected_bn_raw_folder is None:
-                    return
-            except FileNotFoundError as e:
-                print(f"Unable to locate the Barnes & Noble Rolling Reports files: {e}")
-                return
-        if choice == "6":
-            try:
-                if not confirm_frontlist_supercharged_files():
-                    return
-            except FileNotFoundError as e:
-                print(f"Unable to locate the Frontlist Supercharged source files: {e}")
-                return
-        if choice != "2":
-            print(f"Running the {report_name}... Please wait.")
-        try:
-            python_executable = "venv/Scripts/python"
-            if choice == "8":
-                python_executable = get_excel_automation_python()
-
-            command = [python_executable, script_path]
-            if choice == "2":
-                command.extend(["--default-raw-folder", str(selected_bn_raw_folder)])
-            subprocess.run(command, check=True, cwd=process_paths.REPO_ROOT)
-            print(f"The {report_name} is now ready.")
-        except subprocess.CalledProcessError:
-            print(f"An error occurred while running {script_path}.")
-        return
-
-    if choice == "94":
-        run_check_table_updates_menu()
-        return
-
-    if choice == "95":
-        print("Installing requirements into the main venv... Please wait.")
-        try:
-            subprocess.run(
-                ["venv/Scripts/python", "-m", "pip", "install", "-r", "requirements.txt"],
-                check=True,
-            )
-            print("Main venv requirements are up to date.")
-        except subprocess.CalledProcessError:
-            print("An error occurred while installing requirements.txt into the main venv.")
-        return
-
-    if choice == "96":
-        activate_script = Path("venv") / "Scripts" / "Activate.ps1"
-        if not activate_script.exists():
-            print(f"Main venv activation script not found: {activate_script}")
-            return
-        print("Opening a PowerShell window with the main venv activated.")
-        try:
-            subprocess.Popen(
-                [
-                    "powershell",
-                    "-NoExit",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-Command",
-                    f"& '{activate_script.resolve()}'",
-                ]
-            )
-        except OSError as e:
-            print(f"Unable to open the main venv shell: {e}")
-        return
-
-    if choice == "97":
-        print("Opening Desk Procedures...")
-        try:
-            subprocess.run(["venv/Scripts/python", "desk_procedures/main.py"], check=True)
-            print("Returned from Desk Procedures.")
-        except subprocess.CalledProcessError:
-            print("An error occurred while running desk_procedures/main.py.")
+    if choice == "5":
+        run_admin_utilities_menu()
         return
 
     if choice == "98":
@@ -1229,21 +1113,290 @@ def run_program(choice):
     print("Invalid choice. Please select a valid option.")
 
 
+def run_python_process(
+    report_name: str,
+    script_path: str | Path,
+    *,
+    python_executable: str | Path = "venv/Scripts/python",
+    extra_args: list[str] | None = None,
+) -> None:
+    print(f"Running the {report_name}... Please wait.")
+    command = [str(python_executable), str(script_path)]
+    if extra_args:
+        command.extend(extra_args)
+    try:
+        subprocess.run(command, check=True, cwd=process_paths.REPO_ROOT)
+        print(f"The {report_name} is now ready.")
+    except subprocess.CalledProcessError:
+        print(f"An error occurred while running {script_path}.")
+
+
+def install_main_venv_requirements() -> None:
+    print("Installing requirements into the main venv... Please wait.")
+    try:
+        subprocess.run(
+            ["venv/Scripts/python", "-m", "pip", "install", "-r", "requirements.txt"],
+            check=True,
+        )
+        print("Main venv requirements are up to date.")
+    except subprocess.CalledProcessError:
+        print("An error occurred while installing requirements.txt into the main venv.")
+
+
+def open_main_venv_shell() -> None:
+    activate_script = Path("venv") / "Scripts" / "Activate.ps1"
+    if not activate_script.exists():
+        print(f"Main venv activation script not found: {activate_script}")
+        return
+    print("Opening a PowerShell window with the main venv activated.")
+    try:
+        subprocess.Popen(
+            [
+                "powershell",
+                "-NoExit",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                f"& '{activate_script.resolve()}'",
+            ]
+        )
+    except OSError as e:
+        print(f"Unable to open the main venv shell: {e}")
+
+
+def run_retailer_rolling_reports_menu() -> None:
+    while True:
+        print("\nRetailer Rolling Reports")
+        print()
+        print("Amazon Rolling Reports")
+        print("    01. Create SQL Sellthrough Upload (XLSX)")
+        print("    02. Rolling Reports")
+        print()
+        print("Other Retailer Rolling Reports")
+        print("    03. Barnes & Noble Rolling Reports")
+        print("    04. Bookscan Rolling Reports")
+        print("    05. Target NOC Rolling Reports")
+        print("    06. UK Rolling File Combining")
+        print()
+        print("    99. Back to main menu")
+        print()
+        try:
+            choice = normalize_menu_choice(input("Choose an option: "))
+        except KeyboardInterrupt:
+            print("\nReturning to main menu.")
+            return
+
+        if choice == "1":
+            try:
+                if not confirm_amazon_sql_upload_files():
+                    continue
+            except FileNotFoundError as e:
+                print(f"Unable to locate the Amazon Create SQL Sellthrough Upload (XLSX) source files: {e}")
+                continue
+            run_python_process("Amazon Create SQL Sellthrough Upload (XLSX)", "amazon_sql_upload/main.py")
+            continue
+
+        if choice == "2":
+            run_amazon_rolling_reports_menu()
+            continue
+
+        if choice == "3":
+            try:
+                selected_bn_raw_folder = confirm_bn_rolling_reports_files()
+                if selected_bn_raw_folder is None:
+                    continue
+            except FileNotFoundError as e:
+                print(f"Unable to locate the Barnes & Noble Rolling Reports files: {e}")
+                continue
+            run_python_process(
+                "Barnes & Noble Rolling Reports",
+                process_paths.repo_path("bn_rolling_reports", "main.py"),
+                extra_args=["--default-raw-folder", str(selected_bn_raw_folder)],
+            )
+            continue
+
+        if choice == "4":
+            run_python_process("Bookscan Rolling Reports", process_paths.BOOKSCAN_ROLLING_REPORTS_SCRIPT)
+            continue
+
+        if choice == "5":
+            run_python_process("Target NOC Rolling Reports", process_paths.repo_path("target_rolling_report", "main.py"))
+            continue
+
+        if choice == "6":
+            run_python_process(
+                "UK Rolling File Combining",
+                process_paths.repo_path("UK_Rolling_File_Combining", "main.py"),
+            )
+            continue
+
+        if choice in {"99", "back", "b", "return", "menu"}:
+            return
+
+        print("Invalid choice. Please select a valid option.")
+
+
+def run_sales_operational_reports_menu() -> None:
+    while True:
+        print("\nSales / Operational Reports")
+        print()
+        print("    01. Cross Gap")
+        print("    02. Frontlist Supercharged Data")
+        print("    03. Hachette Orders - Shipping Estimates")
+        print("    04. Monthend Reports")
+        print("    05. Reprint Indicator Report Updater")
+        print("    06. SSR Daily Summary")
+        print()
+        print("    99. Back to main menu")
+        print()
+        try:
+            choice = normalize_menu_choice(input("Choose an option: "))
+        except KeyboardInterrupt:
+            print("\nReturning to main menu.")
+            return
+
+        if choice == "1":
+            run_cross_gap_menu()
+            continue
+
+        if choice == "2":
+            try:
+                if not confirm_frontlist_supercharged_files():
+                    continue
+            except FileNotFoundError as e:
+                print(f"Unable to locate the Frontlist Supercharged source files: {e}")
+                continue
+            run_python_process("Frontlist Supercharged Data", process_paths.repo_path("FLTracking_Supercharged", "main.py"))
+            continue
+
+        if choice == "3":
+            run_python_process("Hachette Orders - Shipping Estimates", process_paths.repo_path("hachette_orders", "main.py"))
+            continue
+
+        if choice == "4":
+            run_python_process("Monthend Reports", process_paths.repo_path("monthend", "main.py"))
+            continue
+
+        if choice == "5":
+            run_python_process(
+                "Reprint Indicator Report Updater",
+                process_paths.REPRINT_INDICATOR_AUTOMATION_SCRIPT,
+                python_executable=get_excel_automation_python(),
+            )
+            continue
+
+        if choice == "6":
+            run_ssr_daily_summary_menu()
+            continue
+
+        if choice in {"99", "back", "b", "return", "menu"}:
+            return
+
+        print("Invalid choice. Please select a valid option.")
+
+
+def run_data_automation_tools_menu() -> None:
+    while True:
+        print("\nData & Automation Tools")
+        print()
+        print("    01. Automation Processes")
+        print("    02. Check Table Updates")
+        print("    03. Consolidate Inventory Manager")
+        print("    04. Power BI Reports")
+        print("    05. XGBoost Model")
+        print()
+        print("    99. Back to main menu")
+        print()
+        try:
+            choice = normalize_menu_choice(input("Choose an option: "))
+        except KeyboardInterrupt:
+            print("\nReturning to main menu.")
+            return
+
+        if choice == "1":
+            run_automation_processes_menu()
+            continue
+
+        if choice == "2":
+            run_check_table_updates_menu()
+            continue
+
+        if choice == "3":
+            run_python_process(
+                "Consolidate Inventory Manager",
+                process_paths.repo_path("consolidate_inventory_verticalization", "main.py"),
+            )
+            continue
+
+        if choice == "4":
+            run_python_process("Power BI Reports", process_paths.POWER_BI_REPORTS_SCRIPT)
+            continue
+
+        if choice == "5":
+            run_python_process("XGBoost Model", process_paths.repo_path("xgboost_model", "main.py"))
+            continue
+
+        if choice in {"99", "back", "b", "return", "menu"}:
+            return
+
+        print("Invalid choice. Please select a valid option.")
+
+
+def run_admin_utilities_menu() -> None:
+    while True:
+        print("\nAdmin / Utilities")
+        print()
+        print("    01. Desk Procedures")
+        print("    02. Install Main Venv Requirements")
+        print("    03. Open Main Venv Shell")
+        print()
+        print("    99. Back to main menu")
+        print()
+        try:
+            choice = normalize_menu_choice(input("Choose an option: "))
+        except KeyboardInterrupt:
+            print("\nReturning to main menu.")
+            return
+
+        if choice == "1":
+            run_python_process("Desk Procedures", process_paths.repo_path("desk_procedures", "main.py"))
+            continue
+
+        if choice == "2":
+            install_main_venv_requirements()
+            continue
+
+        if choice == "3":
+            open_main_venv_shell()
+            continue
+
+        if choice in {"99", "back", "b", "return", "menu"}:
+            return
+
+        print("Invalid choice. Please select a valid option.")
+
+
 def run_amazon_menu():
     while True:
         print("\nAmazon")
         print()
-        print("    1. PO Archive Manager")
-        print("    2. PO Report")
-        print("    3. PreOrders")
-        print("    4. Customer Orders")
-        print("    5. Create SQL Sellthrough Upload (XLSX)")
-        print("    6. Rolling Reports")
-        print("    7. AMS Manager (monthly)")
-        print("    8. Back to main menu")
+        print("Purchase Order Report")
+        print("    01. PO Archive Manager")
+        print("    02. PO Report")
+        print()
+        print("PreOrders Report")
+        print("    03. PreOrders")
+        print()
+        print("Customer Order Reports")
+        print("    04. Customer Orders")
+        print()
+        print("AMS Manager")
+        print("    05. AMS Manager (monthly)")
+        print()
+        print("    99. Back to main menu")
         print()
         try:
-            subchoice = input("Choose an option: ").strip().lower()
+            subchoice = normalize_menu_choice(input("Choose an option: "))
         except KeyboardInterrupt:
             print("\nReturning to main menu.")
             return
@@ -1259,13 +1412,8 @@ def run_amazon_menu():
             "2": ("Amazon (2) PO Report", "amazon_po/main.py"),
             "3": ("Amazon (3) PreOrders", "amazon_preorders/main.py"),
             "4": ("Amazon (4) Customer Orders", "amazon_customer_orders/main.py"),
-            "5": ("Amazon (5) Create SQL Sellthrough Upload (XLSX)", "amazon_sql_upload/main.py"),
-            "7": ("Amazon AMS Manager (monthly)", "amazon_ams/manage_ams.py"),
+            "5": ("Amazon AMS Manager (monthly)", "amazon_ams/manage_ams.py"),
         }
-
-        if subchoice == "6":
-            run_amazon_rolling_reports_menu()
-            continue
 
         if subchoice in amazon_reports:
             report_name, script_path = amazon_reports[subchoice]
@@ -1285,13 +1433,6 @@ def run_amazon_menu():
                     continue
             if subchoice == "5":
                 try:
-                    if not confirm_amazon_sql_upload_files():
-                        continue
-                except FileNotFoundError as e:
-                    print(f"Unable to locate the Amazon (5) Create SQL Sellthrough Upload (XLSX) source files: {e}")
-                    continue
-            if subchoice == "7":
-                try:
                     if not confirm_amazon_ams_files():
                         continue
                 except (FileNotFoundError, ImportError, AttributeError) as e:
@@ -1306,7 +1447,7 @@ def run_amazon_menu():
                 print(f"An error occurred while running {script_path}.")
             continue
 
-        if subchoice in {"8", "back", "b", "return", "menu"}:
+        if subchoice in {"99", "back", "b", "return", "menu"}:
             return
 
         print("Invalid choice. Please select a valid option.")
@@ -1551,21 +1692,17 @@ def main():
     while True:
         display_options()
         try:
-            choice = input(
+            choice = normalize_menu_choice(input(
                 "\nPlease enter the number of your choice (or type 'info' to learn more): "
-            ).strip()
+            ))
         except KeyboardInterrupt:
             print(get_farewell_message())
             break
-        if choice.isdigit():
-            choice = str(int(choice))
 
         if choice.lower() == "info":
-            choice_info = input(
+            choice_info = normalize_menu_choice(input(
                 "\nEnter the number of the option you want to learn more about: "
-            ).strip()
-            if choice_info.isdigit():
-                choice_info = str(int(choice_info))
+            ))
             print(display_info(choice_info))
             continue
 

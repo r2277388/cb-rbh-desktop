@@ -143,6 +143,13 @@ ACTIONS: dict[str, Action] = {
         "Run the frontlist supercharged process.",
         "Main Processes",
     ),
+    "target_noc_rolling_reports": Action(
+        "target_noc_rolling_reports",
+        "Target NOC Rolling Reports",
+        [str(VENV_PYTHON), "target_rolling_report/main.py"],
+        "Run the Target NOC rolling reports process.",
+        "Main Processes",
+    ),
     "uk_rolling_file_combining": Action(
         "uk_rolling_file_combining",
         "UK Rolling File Combining",
