@@ -71,7 +71,7 @@ TARGET_NOC_SALES_FOLDER = Path(
 TARGET_NOC_INVENTORY_FOLDER = Path(
     r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Target NOC\TargetNOC_Inventory"
 )
-TARGET_NOC_CACHE_DIR = repo_path("target_rolling_report", "cache")
+TARGET_NOC_CACHE_DIR = Path(r"F:\ANALYSIS\Finance\DataWarehouse\Atelier TargetNOC\cache")
 BOOKSCAN_WEEKLY_REPORT_FOLDER = Path(
     r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Bookscan"
 )
