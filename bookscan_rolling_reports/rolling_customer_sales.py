@@ -639,11 +639,12 @@ def refresh_metadata_cache(
     sales_df: pd.DataFrame,
     inventory_df: pd.DataFrame,
     force: bool = False,
+    include_manual_missing_weeks: bool = False,
 ) -> pd.DataFrame:
     cached = pd.DataFrame() if force else _load_parquet_or_empty(metadata_cache_file)
     if force or cached.empty:
         cached = _fetch_source_metadata()
-    manual = _build_manual_metadata()
+    manual = _build_manual_metadata() if include_manual_missing_weeks else pd.DataFrame()
     if not cached.empty:
         cached["ISBN"] = normalize_bookscan_isbn_series(cached["ISBN"].astype("string"))
         cached["PubDate"] = pd.to_datetime(cached["PubDate"], errors="coerce")
@@ -651,7 +652,8 @@ def refresh_metadata_cache(
 
     target_isbns = set(sales_df["ISBN"].dropna().astype(str).tolist())
     target_isbns.update(inventory_df["ISBN"].dropna().astype(str).tolist())
-    target_isbns.update(manual["ISBN"].dropna().astype(str).tolist())
+    if "ISBN" in manual.columns:
+        target_isbns.update(manual["ISBN"].dropna().astype(str).tolist())
     cached_isbns = set(cached["ISBN"].dropna().astype(str).tolist()) if not cached.empty else set()
     fetched = _fetch_item_metadata_for_isbns(sorted(target_isbns - cached_isbns))
 
@@ -939,9 +941,12 @@ def build_customer_sales_report(
     save_dp: bool = False,
     local_only: bool = False,
     manual_missing_weeks_workbook: str | Path | None = None,
+    include_manual_missing_weeks: bool = False,
 ) -> RollingBuildResult:
     history_workbook = Path(manual_missing_weeks_workbook) if manual_missing_weeks_workbook else find_default_history_workbook()
-    if history_workbook and (refresh_manual_cache or full_refresh or not manual_missing_weeks_file.exists()):
+    if include_manual_missing_weeks and history_workbook and (
+        refresh_manual_cache or full_refresh or not manual_missing_weeks_file.exists()
+    ):
         refresh_manual_missing_weeks_cache(history_workbook)
 
     sales_df = (
@@ -952,7 +957,8 @@ def build_customer_sales_report(
         if refresh_sales or full_refresh or not sales_cache_file.exists()
         else _load_parquet_or_empty(sales_cache_file)
     )
-    sales_df = _apply_manual_missing_weeks(sales_df)
+    if include_manual_missing_weeks:
+        sales_df = _apply_manual_missing_weeks(sales_df)
     inventory_df = (
         refresh_inventory_cache(
             force=(refresh_inventory or full_refresh),
@@ -961,7 +967,12 @@ def build_customer_sales_report(
         if refresh_inventory or full_refresh or not inventory_cache_file.exists()
         else _load_parquet_or_empty(inventory_cache_file)
     )
-    metadata_df = refresh_metadata_cache(sales_df, inventory_df, force=full_refresh)
+    metadata_df = refresh_metadata_cache(
+        sales_df,
+        inventory_df,
+        force=full_refresh,
+        include_manual_missing_weeks=include_manual_missing_weeks,
+    )
 
     report_df, latest_week = build_report_dataframe(sales_df, inventory_df, metadata_df)
     output_dir = local_review_dir if local_only else bookscan_rolling_folder
@@ -986,9 +997,12 @@ def refresh_caches_only(
     refresh_lookback_weeks: int = REFRESH_LOOKBACK_WEEKS,
     inventory_detail_workbook_override: str | Path | None = None,
     manual_missing_weeks_workbook: str | Path | None = None,
+    include_manual_missing_weeks: bool = False,
 ) -> CacheRefreshResult:
     history_workbook = Path(manual_missing_weeks_workbook) if manual_missing_weeks_workbook else find_default_history_workbook()
-    if history_workbook and (refresh_manual_cache or full_refresh or not manual_missing_weeks_file.exists()):
+    if include_manual_missing_weeks and history_workbook and (
+        refresh_manual_cache or full_refresh or not manual_missing_weeks_file.exists()
+    ):
         refresh_manual_missing_weeks_cache(history_workbook)
 
     prior_cache_week = None if full_refresh else get_latest_cache_week()
@@ -1001,12 +1015,18 @@ def refresh_caches_only(
         full_refresh=full_refresh,
         refresh_lookback_weeks=refresh_lookback_weeks,
     )
-    sales_df = _apply_manual_missing_weeks(sales_df)
+    if include_manual_missing_weeks:
+        sales_df = _apply_manual_missing_weeks(sales_df)
     inventory_df = refresh_inventory_cache(
         force=full_refresh,
         inventory_detail_workbook_override=inventory_detail_workbook_override,
     )
-    refresh_metadata_cache(sales_df, inventory_df, force=full_refresh)
+    refresh_metadata_cache(
+        sales_df,
+        inventory_df,
+        force=full_refresh,
+        include_manual_missing_weeks=include_manual_missing_weeks,
+    )
     sales_cache_week = pd.to_datetime(sales_df["Week"]).max() if not sales_df.empty else None
     inventory_cache_week = pd.to_datetime(inventory_df["SnapshotDate"]).max() if not inventory_df.empty else None
     return CacheRefreshResult(
@@ -1091,6 +1111,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--refresh-sales-cache", action="store_true", help="Refresh the sales cache from SQL before building.")
     parser.add_argument("--refresh-inventory-cache", action="store_true", help="Refresh the inventory detail cache before building.")
     parser.add_argument("--refresh-manual-cache", action="store_true", help="Refresh the missing-week supplement cache from the local historical workbook.")
+    parser.add_argument(
+        "--include-manual-missing-weeks",
+        action="store_true",
+        help="Include the legacy manual missing-week supplement. Normal builds skip it when SQL has complete weekly coverage.",
+    )
     parser.add_argument("--full-refresh", action="store_true", help="Rebuild all Bookscan caches from scratch before building.")
     parser.add_argument(
         "--refresh-lookback-weeks",
@@ -1125,6 +1150,7 @@ def main() -> None:
             refresh_lookback_weeks=args.refresh_lookback_weeks,
             inventory_detail_workbook_override=args.inventory_detail_workbook,
             manual_missing_weeks_workbook=args.manual_missing_weeks_workbook,
+            include_manual_missing_weeks=args.include_manual_missing_weeks,
         )
         print_cache_refresh_summary(result)
         return
@@ -1139,6 +1165,7 @@ def main() -> None:
         save_dp=args.save_dp,
         local_only=args.local_only,
         manual_missing_weeks_workbook=args.manual_missing_weeks_workbook,
+        include_manual_missing_weeks=args.include_manual_missing_weeks,
     )
     print_result_summary(result)
 

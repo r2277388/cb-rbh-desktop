@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-from tkinter import Tk, messagebox
 
 try:
     from .rolling_customer_sales import (
@@ -84,17 +83,10 @@ def _build_week_status_message() -> str:
 
 
 def confirm_build_from_week_status() -> bool:
-    root = Tk()
-    root.withdraw()
-    root.attributes("-topmost", True)
-    try:
-        return messagebox.askyesno(
-            "Run Bookscan Rolling Report",
-            _build_week_status_message(),
-            parent=root,
-        )
-    finally:
-        root.destroy()
+    print()
+    print(_build_week_status_message())
+    answer = input("Proceed? [Y/n]: ").strip().lower()
+    return answer not in {"n", "no"}
 
 
 def run_menu(refresh_lookback_weeks: int = REFRESH_LOOKBACK_WEEKS) -> None:
