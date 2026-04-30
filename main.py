@@ -78,7 +78,7 @@ def display_info(choice):
         "1": "Amazon: Opens Amazon PO, PreOrders, Customer Orders, and AMS Manager workflows.",
         "2": "Retailer Rolling Reports: Opens Amazon, Barnes & Noble, Bookscan, Target NOC, and UK rolling-report workflows.",
         "3": "Sales / Operational Reports: Opens Cross Gap, Frontlist, General Editorial variations, Hachette, Monthend, Reprint Indicator, and SSR workflows.",
-        "4": "Data & Automation Tools: Opens Automation Processes, Check Table Updates, Consolidate Inventory, Power BI Reports, and XGBoost Model.",
+        "4": "Data & Automation Tools: Opens Automation Processes, Check Table Updates, Inventory Obsolescence Manager, Power BI Reports, and XGBoost Model.",
         "5": "Admin / Utilities: Opens Desk Procedures, requirements installation, and the main venv shell.",
         "101": f"""Amazon (1) PO Archive Manager: Copies the selected Amazon Vendor Central PO CSV to:
         {process_paths.AMAZON_PO_CURRENT_FILE}
@@ -1305,7 +1305,7 @@ def run_data_automation_tools_menu() -> None:
         print()
         print("    01. Automation Processes")
         print("    02. Check Table Updates")
-        print("    03. Consolidate Inventory Manager")
+        print("    03. Inventory Obsolescence Manager")
         print("    04. Power BI Reports")
         print("    05. XGBoost Model")
         print()
@@ -1326,10 +1326,7 @@ def run_data_automation_tools_menu() -> None:
             continue
 
         if choice == "3":
-            run_python_process(
-                "Consolidate Inventory Manager",
-                process_paths.repo_path("consolidate_inventory_verticalization", "main.py"),
-            )
+            run_inventory_obsolescence_manager_menu()
             continue
 
         if choice == "4":
@@ -1338,6 +1335,41 @@ def run_data_automation_tools_menu() -> None:
 
         if choice == "5":
             run_python_process("XGBoost Model", process_paths.repo_path("xgboost_model", "main.py"))
+            continue
+
+        if choice in {"99", "back", "b", "return", "menu"}:
+            return
+
+        print("Invalid choice. Please select a valid option.")
+
+
+def run_inventory_obsolescence_manager_menu() -> None:
+    while True:
+        print("\nInventory Obsolescence Manager")
+        print()
+        print("    01. Consolidate Inventory Manager")
+        print("    02. HBG vs Oracle Inventory Comparison")
+        print()
+        print("    99. Back to previous menu")
+        print()
+        try:
+            choice = normalize_menu_choice(input("Choose an option: "))
+        except KeyboardInterrupt:
+            print("\nReturning to previous menu.")
+            return
+
+        if choice == "1":
+            run_python_process(
+                "Consolidate Inventory Manager",
+                process_paths.CONSOLIDATED_INVENTORY_VERTICALIZATION_SCRIPT,
+            )
+            continue
+
+        if choice == "2":
+            run_python_process(
+                "HBG vs Oracle Inventory Comparison",
+                process_paths.HBG_ORACLE_INVENTORY_COMPARISON_SCRIPT,
+            )
             continue
 
         if choice in {"99", "back", "b", "return", "menu"}:

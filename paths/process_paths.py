@@ -86,6 +86,9 @@ POWER_BI_BARRETT_REPORT_FOLDERS = {
 CONSOLIDATED_INVENTORY_VERTICALIZATION_FOLDER = Path(
     r"F:\ANALYSIS\Finance\DataWarehouse\consolidated_inventory"
 )
+INVENTORY_OBSOLESCENCE_FOLDER = repo_path("Inventory_Obsolescence")
+HBG_MOON_HEADER_WORKBOOK = INVENTORY_OBSOLESCENCE_FOLDER / "hbg_inventory_moon_headers_only.xlsx"
+HBG_ORACLE_COMPARISON_OUTPUT_FOLDER = CONSOLIDATED_INVENTORY_VERTICALIZATION_FOLDER / "hbg_oracle_comparison"
 GENOPS_BASE_FOLDER = Path(r"F:\ANALYSIS\Finance\DataWarehouse\Atelier GenOps")
 GEN_EDITORIAL_SOURCE_WORKBOOK = Path(r"J:\SCHEDULE\SchedPubGrpAll.xlsx")
 GEN_EDITORIAL_CACHE_DIR = GENOPS_BASE_FOLDER / "cache"
@@ -220,6 +223,9 @@ AMAZON_ROLLING_SQL_FILE = repo_path(
 AMAZON_ROLLING_REPORTS_SCRIPT = repo_path("amazon_rolling_reports", "main.py")
 CONSOLIDATED_INVENTORY_VERTICALIZATION_SCRIPT = repo_path(
     "consolidate_inventory_verticalization", "main.py"
+)
+HBG_ORACLE_INVENTORY_COMPARISON_SCRIPT = repo_path(
+    "Inventory_Obsolescence", "hbg_oracle_inventory_comparison.py"
 )
 AMAZON_ROLLING_CUSTOMER_ORDERS_PICKLE = repo_path("rr_customer_orders.pkl")
 AMAZON_ROLLING_UNITS_SHIPPED_PICKLE = repo_path("rr_units_shipped.pkl")
