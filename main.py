@@ -78,7 +78,7 @@ def display_info(choice):
     info = {
         "1": "Amazon: Opens Amazon PO, PreOrders, Customer Orders, and AMS Manager workflows.",
         "2": "Retailer Rolling Reports: Opens Amazon, Barnes & Noble, Bookscan, Target NOC, and UK rolling-report workflows.",
-        "3": "Sales / Operational Reports: Opens Cross Gap, Frontlist, Hachette, Monthend, Reprint Indicator, and SSR workflows.",
+        "3": "Sales / Operational Reports: Opens Cross Gap, Frontlist, General Editorial variations, Hachette, Monthend, Reprint Indicator, and SSR workflows.",
         "4": "Data & Automation Tools: Opens Automation Processes, Check Table Updates, Consolidate Inventory, Power BI Reports, and XGBoost Model.",
         "5": "Admin / Utilities: Opens Desk Procedures, requirements installation, and the main venv shell.",
         "101": f"""Amazon (1) PO Archive Manager: Copies the selected Amazon Vendor Central PO CSV to:
@@ -773,7 +773,8 @@ def run_automation_processes_menu() -> None:
         print()
         print("    1. Title Lookup Refresh (weekly)")
         print("    2. Cross Gap Report (weekly)")
-        print("    3. Back to main menu")
+        print("    3. General Editorial Data Variations (daily)")
+        print("    4. Back to main menu")
         print()
         try:
             subchoice = input("Choose an option: ").strip().lower()
@@ -792,7 +793,16 @@ def run_automation_processes_menu() -> None:
             run_cross_gap_automation_menu()
             continue
 
-        if subchoice in {"3", "b", "back", "return", "menu"}:
+        if subchoice == "3":
+            run_python_process(
+                "General Editorial Data Variations Automation Status",
+                process_paths.repo_path("tools", "gen_editorial_automation.py"),
+                extra_args=["status"],
+            )
+            input("\nPress Enter to return to Automation Processes...")
+            continue
+
+        if subchoice in {"4", "b", "back", "return", "menu"}:
             return
 
         print("Invalid choice. Please select a valid option.")
@@ -1246,6 +1256,7 @@ def run_sales_operational_reports_menu() -> None:
         print("    04. Monthend Reports")
         print("    05. Reprint Indicator Report Updater")
         print("    06. SSR Daily Summary")
+        print("    07. General Editorial Data Variations")
         print()
         print("    99. Back to main menu")
         print()
@@ -1287,6 +1298,13 @@ def run_sales_operational_reports_menu() -> None:
 
         if choice == "6":
             run_ssr_daily_summary_menu()
+            continue
+
+        if choice == "7":
+            run_python_process(
+                "General Editorial Data Variations",
+                process_paths.GEN_EDITORIAL_VARIATIONS_SCRIPT,
+            )
             continue
 
         if choice in {"99", "back", "b", "return", "menu"}:

@@ -86,6 +86,11 @@ POWER_BI_BARRETT_REPORT_FOLDERS = {
 CONSOLIDATED_INVENTORY_VERTICALIZATION_FOLDER = Path(
     r"F:\ANALYSIS\Finance\DataWarehouse\consolidated_inventory"
 )
+GENOPS_BASE_FOLDER = Path(r"F:\ANALYSIS\Finance\DataWarehouse\Atelier GenOps")
+GEN_EDITORIAL_SOURCE_WORKBOOK = Path(r"J:\SCHEDULE\SchedPubGrpAll.xlsx")
+GEN_EDITORIAL_CACHE_DIR = GENOPS_BASE_FOLDER / "cache"
+GEN_EDITORIAL_CACHE_FILE = GEN_EDITORIAL_CACHE_DIR / "cache_gen_editorial.parquet"
+GEN_EDITORIAL_REPORT_FILE = GENOPS_BASE_FOLDER / "General Editorial Data Variations.xlsx"
 INVENTORY_DAILY_FINANCE_ONLY_FOLDER = Path(r"G:\OPS\Inventory\Daily\Finance_Only")
 CURRENT_AMAZON_PREORDERS_FILE = Path(
     r"G:\SALES\Amazon\PREORDERS\2026\current_amaz_preorders.xlsx"
@@ -247,6 +252,7 @@ BN_ROLLING_REPORTS_SCRIPT = repo_path("bn_rolling_reports", "main.py")
 BOOKSCAN_ROLLING_REPORTS_SCRIPT = repo_path("bookscan_rolling_reports", "main.py")
 POWER_BI_REPORTS_SCRIPT = repo_path("power_bi_reports", "main.py")
 CROSS_GAP_SCRIPT = repo_path("cross_gap", "main.py")
+GEN_EDITORIAL_VARIATIONS_SCRIPT = repo_path("gen_editorial_variations", "main.py")
 CROSS_GAP_CONFIG_FILE = repo_path("cross_gap", "title_groups.json")
 CROSS_GAP_OUTPUT_DIR = Path(
     r"\\sfx\sfny-files\SF\Groups\Sales\2026 Sales Reports\Reports\Cross Gap"
@@ -270,6 +276,11 @@ TITLE_LOOKUP_TASK_LOCATION = "Task Scheduler Library"
 TITLE_LOOKUP_SCHEDULE_DAY = "SUN"
 TITLE_LOOKUP_SCHEDULE_TIME = "07:00"
 TITLE_LOOKUP_SCHEDULE_DESCRIPTION = "Every Sunday at 7:00 AM"
+GEN_EDITORIAL_TASK_NAME = "Chronicle Daily General Editorial Data Variations"
+GEN_EDITORIAL_TASK_LOCATION = "Task Scheduler Library"
+GEN_EDITORIAL_SCHEDULE_DAYS = "MON"
+GEN_EDITORIAL_SCHEDULE_TIME = "09:00"
+GEN_EDITORIAL_SCHEDULE_DESCRIPTION = "Every Monday at 9:00 AM"
 
 
 def amazon_sql_upload_output_file(for_date: datetime | None = None) -> Path:

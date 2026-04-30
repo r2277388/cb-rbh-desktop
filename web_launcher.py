@@ -122,6 +122,27 @@ ACTIONS: dict[str, Action] = {
         "Disable the weekly scheduled task without removing the workbook refresh tool.",
         "Automation Processes",
     ),
+    "gen_editorial_automation_status": Action(
+        "gen_editorial_automation_status",
+        "General Editorial Automation Status",
+        [str(VENV_PYTHON), "tools/gen_editorial_automation.py", "status"],
+        "Show the weekday General Editorial archive/report scheduled task status.",
+        "Automation Processes",
+    ),
+    "gen_editorial_automation_register": Action(
+        "gen_editorial_automation_register",
+        "Enable General Editorial Automation",
+        [str(VENV_PYTHON), "tools/gen_editorial_automation.py", "register"],
+        "Create or update the weekday General Editorial archive/report scheduled task.",
+        "Automation Processes",
+    ),
+    "gen_editorial_automation_disable": Action(
+        "gen_editorial_automation_disable",
+        "Disable General Editorial Automation",
+        [str(VENV_PYTHON), "tools/gen_editorial_automation.py", "disable"],
+        "Disable the weekday General Editorial archive/report scheduled task.",
+        "Automation Processes",
+    ),
     "bn_rolling_reports": Action(
         "bn_rolling_reports",
         "Barnes & Noble Rolling Reports",
@@ -190,6 +211,13 @@ ACTIONS: dict[str, Action] = {
         "Cross Gap",
         [str(VENV_PYTHON), str(process_paths.CROSS_GAP_SCRIPT), "run"],
         "Build the Cross Gap sales and Hachette open-order workbook.",
+        "Main Processes",
+    ),
+    "gen_editorial_variations": Action(
+        "gen_editorial_variations",
+        "General Editorial Data Variations",
+        [str(VENV_PYTHON), str(process_paths.GEN_EDITORIAL_VARIATIONS_SCRIPT), "run"],
+        "Archive General Editorial schedule data and build the variation report.",
         "Main Processes",
     ),
     "desk_procedures": Action(
