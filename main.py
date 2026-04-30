@@ -65,7 +65,6 @@ def display_options():
         "03. Sales / Operational Reports",
         "04. Data & Automation Tools",
         "05. Admin / Utilities",
-        "98. Graphical Menu",
         "99. Exit",
     ]
     print("\nWhat would you like to run?")
@@ -99,7 +98,6 @@ def display_info(choice):
         "95": "Install Main Venv Requirements: Runs `pip install -r requirements.txt` using the repo's main virtual environment.",
         "96": "Open Main Venv Shell: Opens a PowerShell window with the repo's main virtual environment activated.",
         "97": "Desk Procedures: Opens a menu of desk procedures and run instructions.",
-        "98": "Graphical Menu: Opens a browser-based launcher for the available processes.",
         "99": "Exit: Exits the program.",
     }
     return info.get(choice, "Invalid choice. No information available.")
@@ -1102,18 +1100,6 @@ def run_program(choice):
 
     if choice == "5":
         run_admin_utilities_menu()
-        return
-
-    if choice == "98":
-        try:
-            from web_launcher import launch_browser_menu
-        except ModuleNotFoundError as exc:
-            print(
-                "Graphical Menu is unavailable because a required package is missing. "
-                f"Install dependencies from requirements.txt and try again. Missing module: {exc.name}"
-            )
-            return
-        launch_browser_menu()
         return
 
     if choice == "99":

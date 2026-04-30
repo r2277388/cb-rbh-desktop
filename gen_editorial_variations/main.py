@@ -361,6 +361,33 @@ def print_status() -> None:
     print(f"  Latest rows:     {len(build_current_snapshot(cache)):,}")
 
 
+def print_process_description() -> None:
+    print("\nProcess Description")
+    print()
+    print("General Editorial Data Variations tracks changes in Chronicle editorial schedule data.")
+    print("This process was requested by Meghan Clarke on April 30, 2026.")
+    print()
+    print("Source:")
+    print(f"  Workbook: {process_paths.GEN_EDITORIAL_SOURCE_WORKBOOK}")
+    print("  Filter:   Publisher = Chronicle")
+    print("  Fields:   ISBN, Title, Sea, Task Name, Due Date, Release Date, Price")
+    print()
+    print("Schedule:")
+    print(f"  Automatic archive/report run: {process_paths.GEN_EDITORIAL_SCHEDULE_DESCRIPTION}")
+    print("  Manual archive: available from this menu when an extra comparison point is needed.")
+    print()
+    print("Cache:")
+    print(f"  File: {process_paths.GEN_EDITORIAL_CACHE_FILE}")
+    print("  Each archived row includes CacheDate, which identifies the snapshot date.")
+    print()
+    print("Report:")
+    print(f"  File: {process_paths.GEN_EDITORIAL_REPORT_FILE}")
+    print("  The Variations sheet shows changes over time by ISBN.")
+    print("  ISBN-level changes tracked: Sea, Release Date, Price.")
+    print("  Task-level changes tracked: Due Date by ISBN and Task Name.")
+    print("  The Current Snapshot sheet shows the most recent archived schedule rows.")
+
+
 def run_menu() -> None:
     while True:
         print("\nGeneral Editorial Data Variations")
@@ -368,7 +395,8 @@ def run_menu() -> None:
         print("    2. Manual archive today's snapshot only")
         print("    3. Build variation report from cache")
         print("    4. Show cache/source status")
-        print("    5. Back to previous menu")
+        print("    5. Process Description")
+        print("    6. Back to previous menu")
         choice = input("\nChoose an option: ").strip().lower()
 
         try:
@@ -380,7 +408,9 @@ def run_menu() -> None:
                 save_variation_report()
             elif choice == "4":
                 print_status()
-            elif choice in {"5", "b", "back", "return", "menu"}:
+            elif choice == "5":
+                print_process_description()
+            elif choice in {"6", "b", "back", "return", "menu"}:
                 return
             else:
                 print("Invalid choice. Please select a valid option.")
@@ -396,7 +426,7 @@ def parse_args() -> argparse.Namespace:
         "command",
         nargs="?",
         default="menu",
-        choices=["menu", "run", "archive", "manual-archive", "report", "status"],
+        choices=["menu", "run", "archive", "manual-archive", "report", "status", "description"],
     )
     parser.add_argument("--allow-weekend", action="store_true", help="Allow archive runs on weekends.")
     return parser.parse_args()
@@ -416,6 +446,8 @@ def main() -> None:
         save_variation_report()
     elif args.command == "status":
         print_status()
+    elif args.command == "description":
+        print_process_description()
 
 
 if __name__ == "__main__":
