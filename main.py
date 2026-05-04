@@ -771,7 +771,7 @@ def run_automation_processes_menu() -> None:
         print()
         print("    1. Title Lookup Refresh (weekly)")
         print("    2. Cross Gap Report (weekly)")
-        print("    3. General Editorial Data Variations (daily)")
+        print("    3. General Editorial Data Variations (weekly Monday)")
         print("    4. Back to main menu")
         print()
         try:

@@ -282,11 +282,11 @@ TITLE_LOOKUP_TASK_LOCATION = "Task Scheduler Library"
 TITLE_LOOKUP_SCHEDULE_DAY = "SUN"
 TITLE_LOOKUP_SCHEDULE_TIME = "07:00"
 TITLE_LOOKUP_SCHEDULE_DESCRIPTION = "Every Sunday at 7:00 AM"
-GEN_EDITORIAL_TASK_NAME = "Chronicle Daily General Editorial Data Variations"
+GEN_EDITORIAL_TASK_NAME = "Chronicle Weekly General Editorial Data Variations"
 GEN_EDITORIAL_TASK_LOCATION = "Task Scheduler Library"
 GEN_EDITORIAL_SCHEDULE_DAYS = "MON"
-GEN_EDITORIAL_SCHEDULE_TIME = "09:00"
-GEN_EDITORIAL_SCHEDULE_DESCRIPTION = "Every Monday at 9:00 AM"
+GEN_EDITORIAL_SCHEDULE_TIME = "09:30"
+GEN_EDITORIAL_SCHEDULE_DESCRIPTION = "Every Monday at 9:30 AM"
 
 
 def amazon_sql_upload_output_file(for_date: datetime | None = None) -> Path:

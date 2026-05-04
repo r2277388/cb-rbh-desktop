@@ -12,6 +12,8 @@ if str(ROOT_DIR) not in sys.path:
 
 from paths import process_paths
 
+LEGACY_TASK_NAMES = ("Chronicle Daily General Editorial Data Variations",)
+
 
 def default_report_file() -> Path:
     date_prefix = datetime.now().strftime("%Y_%m_%d")
@@ -44,12 +46,16 @@ def parse_schtasks_list_output(output: str) -> dict[str, str]:
 
 
 def query_task_status() -> tuple[bool, dict[str, str]]:
+    return query_named_task_status(process_paths.GEN_EDITORIAL_TASK_NAME)
+
+
+def query_named_task_status(task_name: str) -> tuple[bool, dict[str, str]]:
     result = subprocess.run(
         [
             "schtasks",
             "/Query",
             "/TN",
-            process_paths.GEN_EDITORIAL_TASK_NAME,
+            task_name,
             "/FO",
             "LIST",
             "/V",
@@ -93,6 +99,22 @@ def print_status() -> int:
 
 
 def register_task() -> int:
+    for legacy_task_name in LEGACY_TASK_NAMES:
+        exists, _ = query_named_task_status(legacy_task_name)
+        if exists:
+            subprocess.run(
+                [
+                    "schtasks",
+                    "/Change",
+                    "/TN",
+                    legacy_task_name,
+                    "/Disable",
+                ],
+                capture_output=True,
+                check=False,
+                text=True,
+            )
+
     result = subprocess.run(
         [
             "schtasks",

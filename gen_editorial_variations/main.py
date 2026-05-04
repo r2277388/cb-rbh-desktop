@@ -17,10 +17,20 @@ except ImportError:
 
 SOURCE_SHEET = "Schedule by Publ Group"
 PUBLISHER_FILTER = "Chronicle"
-SOURCE_COLUMNS = ["ISBN", "Title", "Sea", "Task Name", "Due Date", "Release Date", "Price"]
+SOURCE_COLUMNS = ["ISBN", "Title", "Sea", "Pub Grp", "Task Name", "Due Date", "Release Date", "Price"]
 CACHE_COLUMNS = ["CacheDate", *SOURCE_COLUMNS]
 ISBN_FIELDS = ["Sea", "Release Date", "Price"]
 TASK_FIELDS = ["Due Date"]
+PUB_GROUP_FILTERS = ("ENT", "ART", "GAM", "FWN", "LIF", "CPA")
+TASK_INTERVAL_WEEKS = {
+    "Cover Due": 4,
+    "Title memo to DES": 4,
+    "1st galley due": 2,
+    "MS to DES": 2,
+    "Print files out": 2,
+    "On Sale Date": 1,
+}
+INTERVAL_ANCHOR_DATE = pd.Timestamp("2026-05-04")
 
 
 def default_report_file() -> Path:
@@ -68,8 +78,31 @@ def today_cache_date() -> pd.Timestamp:
     return pd.Timestamp.today().normalize()
 
 
+def future_seasons(reference_date: pd.Timestamp | None = None) -> list[str]:
+    reference_date = pd.Timestamp(reference_date or today_cache_date()).normalize()
+    year = reference_date.year
+    season = "Spring" if reference_date.month <= 6 else "Fall"
+    seasons: list[str] = []
+    if season == "Spring":
+        year_season = (year, "Fall")
+    else:
+        year_season = (year + 1, "Spring")
+    for _ in range(3):
+        season_year, season_name = year_season
+        seasons.append(f"{season_year}-{season_name}")
+        if season_name == "Spring":
+            year_season = (season_year, "Fall")
+        else:
+            year_season = (season_year + 1, "Spring")
+    return seasons
+
+
 def is_business_day(value: pd.Timestamp) -> bool:
     return value.weekday() < 5
+
+
+def is_archive_day(value: pd.Timestamp) -> bool:
+    return value.weekday() == 0
 
 
 def load_source_snapshot(cache_date: pd.Timestamp | None = None) -> pd.DataFrame:
@@ -87,6 +120,7 @@ def load_source_snapshot(cache_date: pd.Timestamp | None = None) -> pd.DataFrame
     snapshot["ISBN"] = snapshot["ISBN"].map(normalize_isbn)
     snapshot["Title"] = snapshot["Title"].map(normalize_text)
     snapshot["Sea"] = snapshot["Sea"].map(normalize_text)
+    snapshot["Pub Grp"] = snapshot["Pub Grp"].map(normalize_text)
     snapshot["Task Name"] = snapshot["Task Name"].map(normalize_text)
     snapshot["Due Date"] = snapshot["Due Date"].map(normalize_date)
     snapshot["Release Date"] = snapshot["Release Date"].map(normalize_date)
@@ -109,6 +143,7 @@ def load_cache() -> pd.DataFrame:
     cache["ISBN"] = cache["ISBN"].map(normalize_isbn)
     cache["Title"] = cache["Title"].map(normalize_text)
     cache["Sea"] = cache["Sea"].map(normalize_text)
+    cache["Pub Grp"] = cache["Pub Grp"].map(normalize_text)
     cache["Task Name"] = cache["Task Name"].map(normalize_text)
     cache["Due Date"] = cache["Due Date"].map(normalize_date)
     cache["Release Date"] = cache["Release Date"].map(normalize_date)
@@ -127,6 +162,9 @@ def archive_snapshot(cache_date: pd.Timestamp | None = None, allow_weekend: bool
     cache_date = pd.Timestamp(cache_date).normalize()
     if not allow_weekend and not is_business_day(cache_date):
         print(f"{cache_date:%Y-%m-%d} is not a business day. No snapshot archived.")
+        return load_cache()
+    if not allow_weekend and not is_archive_day(cache_date):
+        print(f"{cache_date:%Y-%m-%d} is not a Monday archive day. No snapshot archived.")
         return load_cache()
 
     snapshot = load_source_snapshot(cache_date)
@@ -182,97 +220,111 @@ def last_non_blank(series: pd.Series):
     return values.iloc[-1]
 
 
+def variation_columns() -> list[str]:
+    return [
+        "ISBN",
+        "Title",
+        "Sea",
+        "Pub Grp",
+        "Variation Type",
+        "Task Name",
+        "Previous Cache Date",
+        "Previous Value",
+        "Current Cache Date",
+        "Current Value",
+    ]
+
+
+def filtered_activity_cache(cache: pd.DataFrame, reference_date: pd.Timestamp | None = None) -> pd.DataFrame:
+    seasons = future_seasons(reference_date)
+    return cache[
+        cache["Sea"].isin(seasons)
+        & cache["Pub Grp"].isin(PUB_GROUP_FILTERS)
+        & cache["Task Name"].isin(TASK_INTERVAL_WEEKS)
+    ].copy()
+
+
+def is_interval_date(cache_date: pd.Timestamp, interval_weeks: int) -> bool:
+    cache_date = pd.Timestamp(cache_date).normalize()
+    days_since_anchor = (cache_date - INTERVAL_ANCHOR_DATE).days
+    interval_days = interval_weeks * 7
+    return days_since_anchor >= interval_days and days_since_anchor % interval_days == 0
+
+
+def interval_label(interval_weeks: int) -> str:
+    if interval_weeks == 1:
+        return "Every 1 Week - a weekly comparison"
+    return f"Every {interval_weeks} Weeks - a {interval_weeks} week comparison"
+
+
+def build_stipulations(reference_date: pd.Timestamp | None = None) -> pd.DataFrame:
+    rows: list[dict[str, str]] = []
+    rows.extend({"Stipulation": "Pub Grp", "Value": value, "Update Variation Interval": ""} for value in PUB_GROUP_FILTERS)
+    rows.extend({"Stipulation": "Sea", "Value": value, "Update Variation Interval": ""} for value in future_seasons(reference_date))
+    rows.extend(
+        {
+            "Stipulation": "Task Name",
+            "Value": task_name,
+            "Update Variation Interval": interval_label(interval_weeks),
+        }
+        for task_name, interval_weeks in TASK_INTERVAL_WEEKS.items()
+    )
+    return pd.DataFrame(rows)
+
+
 def build_variation_rows(cache: pd.DataFrame) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
     if cache.empty:
-        return pd.DataFrame()
+        return pd.DataFrame(columns=variation_columns())
 
-    isbn_level = (
-        cache[["CacheDate", "ISBN", "Title", *ISBN_FIELDS]]
-        .sort_values(["CacheDate", "ISBN"])
-        .groupby(["CacheDate", "ISBN"], as_index=False)
-        .agg({"Title": last_non_blank, "Sea": last_non_blank, "Release Date": last_non_blank, "Price": last_non_blank})
-    )
-    for (isbn, field), group in isbn_level.melt(
-        id_vars=["CacheDate", "ISBN", "Title"],
-        value_vars=ISBN_FIELDS,
-        var_name="Field",
-        value_name="Value",
-    ).groupby(["ISBN", "Field"], dropna=False):
-        group = group.sort_values("CacheDate")
-        previous_key = None
-        previous_value = None
-        previous_date = None
-        for row in group.itertuples(index=False):
-            current_key = comparable_value(row.Value, field)
-            if previous_key is not None and current_key != previous_key:
-                rows.append(
-                    {
-                        "ISBN": isbn,
-                        "Title": latest_title(group),
-                        "Variation Type": field,
-                        "Task Name": "",
-                        "Previous Cache Date": previous_date,
-                        "Previous Value": display_value(previous_value, field),
-                        "Current Cache Date": row.CacheDate,
-                        "Current Value": display_value(row.Value, field),
-                    }
-                )
-            previous_key = current_key
-            previous_value = row.Value
-            previous_date = row.CacheDate
+    cache = filtered_activity_cache(cache)
+    if cache.empty:
+        return pd.DataFrame(columns=variation_columns())
 
     task_level = (
-        cache[["CacheDate", "ISBN", "Title", "Task Name", *TASK_FIELDS]]
+        cache[["CacheDate", "ISBN", "Title", "Sea", "Pub Grp", "Task Name", *TASK_FIELDS]]
         .sort_values(["CacheDate", "ISBN", "Task Name"])
         .groupby(["CacheDate", "ISBN", "Task Name"], as_index=False)
-        .agg({"Title": last_non_blank, "Due Date": last_non_blank})
+        .agg({"Title": last_non_blank, "Sea": last_non_blank, "Pub Grp": last_non_blank, "Due Date": last_non_blank})
     )
-    for (isbn, task_name, field), group in task_level.melt(
-        id_vars=["CacheDate", "ISBN", "Title", "Task Name"],
-        value_vars=TASK_FIELDS,
-        var_name="Field",
-        value_name="Value",
-    ).groupby(["ISBN", "Task Name", "Field"], dropna=False):
+
+    for (isbn, task_name), group in task_level.groupby(["ISBN", "Task Name"], dropna=False):
         group = group.sort_values("CacheDate")
-        previous_key = None
-        previous_value = None
-        previous_date = None
-        for row in group.itertuples(index=False):
-            current_key = comparable_value(row.Value, field)
-            if previous_key is not None and current_key != previous_key:
+        interval_weeks = TASK_INTERVAL_WEEKS.get(task_name)
+        if interval_weeks is None:
+            continue
+        interval_days = interval_weeks * 7
+        for _, row in group.iterrows():
+            current_date = pd.Timestamp(row["CacheDate"]).normalize()
+            if not is_interval_date(current_date, interval_weeks):
+                continue
+            previous_group = group[group["CacheDate"].le(current_date - pd.Timedelta(days=interval_days))]
+            if previous_group.empty:
+                continue
+            previous_row = previous_group.iloc[-1]
+            previous_key = comparable_value(previous_row["Due Date"], "Due Date")
+            current_key = comparable_value(row["Due Date"], "Due Date")
+            if current_key != previous_key:
                 rows.append(
                     {
                         "ISBN": isbn,
-                        "Title": latest_title(group),
-                        "Variation Type": field,
+                        "Title": row["Title"],
+                        "Sea": row["Sea"],
+                        "Pub Grp": row["Pub Grp"],
+                        "Variation Type": "Due Date",
                         "Task Name": task_name,
-                        "Previous Cache Date": previous_date,
-                        "Previous Value": display_value(previous_value, field),
-                        "Current Cache Date": row.CacheDate,
-                        "Current Value": display_value(row.Value, field),
+                        "Previous Cache Date": previous_row["CacheDate"],
+                        "Previous Value": display_value(previous_row["Due Date"], "Due Date"),
+                        "Current Cache Date": current_date,
+                        "Current Value": display_value(row["Due Date"], "Due Date"),
                     }
                 )
-            previous_key = current_key
-            previous_value = row.Value
-            previous_date = row.CacheDate
 
     if not rows:
-        return pd.DataFrame(
-            columns=[
-                "ISBN",
-                "Title",
-                "Variation Type",
-                "Task Name",
-                "Previous Cache Date",
-                "Previous Value",
-                "Current Cache Date",
-                "Current Value",
-            ]
-        )
+        return pd.DataFrame(columns=variation_columns())
     variations = pd.DataFrame(rows)
-    variations = variations.sort_values(["Current Cache Date", "ISBN", "Variation Type", "Task Name"])
-    return variations
+    variations = variations.sort_values(["Current Cache Date", "ISBN", "Task Name"])
+    return variations[variation_columns()]
 
 
 def build_current_snapshot(cache: pd.DataFrame) -> pd.DataFrame:
@@ -288,9 +340,11 @@ def save_variation_report(output_file: Path | None = None) -> Path:
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
     variations = build_variation_rows(cache)
+    stipulations = build_stipulations()
 
     with pd.ExcelWriter(output_file, engine="xlsxwriter", datetime_format="m/d/yyyy", date_format="m/d/yyyy") as writer:
         variations.to_excel(writer, sheet_name="Variations", index=False)
+        stipulations.to_excel(writer, sheet_name="Stipulations", index=False)
 
         workbook = writer.book
         date_format = workbook.add_format({"num_format": "m/d/yyyy"})
@@ -302,12 +356,19 @@ def save_variation_report(output_file: Path | None = None) -> Path:
             worksheet = writer.sheets["Variations"]
             worksheet.set_column("A:A", 15)
             worksheet.set_column("B:B", 42)
-            worksheet.set_column("C:C", 16)
-            worksheet.set_column("D:D", 28)
-            worksheet.set_column("E:E", 18, date_format)
-            worksheet.set_column("F:F", 18)
+            worksheet.set_column("C:C", 14)
+            worksheet.set_column("D:D", 10)
+            worksheet.set_column("E:E", 16)
+            worksheet.set_column("F:F", 28)
             worksheet.set_column("G:G", 18, date_format)
             worksheet.set_column("H:H", 18)
+            worksheet.set_column("I:I", 18, date_format)
+            worksheet.set_column("J:J", 18)
+        if "Stipulations" in writer.sheets:
+            worksheet = writer.sheets["Stipulations"]
+            worksheet.set_column("A:A", 16)
+            worksheet.set_column("B:B", 28)
+            worksheet.set_column("C:C", 38)
 
     print(f"Saved General Editorial Data Variations report: {output_file}")
     print(f"  Cache dates:       {cache['CacheDate'].nunique() if not cache.empty else 0:,}")
@@ -359,11 +420,11 @@ def print_process_description() -> None:
     print("Source:")
     print(f"  Workbook: {process_paths.GEN_EDITORIAL_SOURCE_WORKBOOK}")
     print("  Filter:   Publisher = Chronicle")
-    print("  Fields:   ISBN, Title, Sea, Task Name, Due Date, Release Date, Price")
+    print("  Fields:   ISBN, Title, Sea, Pub Grp, Task Name, Due Date, Release Date, Price")
     print()
     print("Schedule:")
     print(f"  Automatic archive/report run: {process_paths.GEN_EDITORIAL_SCHEDULE_DESCRIPTION}")
-    print("  Manual archive: available from this menu when an extra comparison point is needed.")
+    print("  Manual archive: available from this menu when an extra Monday comparison point is needed.")
     print()
     print("Cache:")
     print(f"  File: {process_paths.GEN_EDITORIAL_CACHE_FILE}")
@@ -371,15 +432,16 @@ def print_process_description() -> None:
     print()
     print("Report:")
     print(f"  File: {default_report_file()}")
-    print("  The Variations sheet shows changes over time by ISBN.")
-    print("  ISBN-level changes tracked: Sea, Release Date, Price.")
-    print("  Task-level changes tracked: Due Date by ISBN and Task Name.")
+    print("  The Variations sheet shows task due date changes over time by ISBN.")
+    print(f"  Pub Grp filter: {', '.join(PUB_GROUP_FILTERS)}")
+    print(f"  Sea filter: {', '.join(future_seasons())}")
+    print(f"  Task Name filter: {', '.join(TASK_INTERVAL_WEEKS)}")
 
 
 def run_menu() -> None:
     while True:
         print("\nGeneral Editorial Data Variations")
-        print("    1. Run daily archive + variation report")
+        print("    1. Run Monday archive + variation report")
         print("    2. Manual archive today's snapshot only")
         print("    3. Build variation report from cache")
         print("    4. Show cache/source status")
