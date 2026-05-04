@@ -58,8 +58,13 @@
     },
     {
       "name": "Herve Tullet BB",
+      "isbns": ["9781797237817"],
       "ip_family_name": "Herve Tullet",
       "formats": ["BB"]
+    },
+    {
+      "name": "SW Dad Jokes",
+      "isbns": ["9781797227450", "9781797244037", "9781452182797"]
     }
   ]
 }
