@@ -6,7 +6,6 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from tkinter import Tk, messagebox
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
@@ -147,16 +146,6 @@ def log_warning(message: str) -> None:
     print(f"Warning: {message}", flush=True)
 
 
-def show_popup(title: str, message: str) -> None:
-    root = Tk()
-    root.withdraw()
-    root.attributes("-topmost", True)
-    try:
-        messagebox.showinfo(title, message, parent=root)
-    finally:
-        root.destroy()
-
-
 def format_display_date(output_date: str) -> str:
     return datetime.strptime(output_date, "%Y_%m_%d").strftime("%m/%d/%Y")
 
@@ -186,7 +175,7 @@ def open_notification_draft(
         subject=subject,
         body=body,
         display_before_send=True,
-        modal_display=True,
+        modal_display=False,
     )
 
 
@@ -578,22 +567,8 @@ def main() -> int:
             fl_count=fl_count,
         )
         print("Opened Outlook notification for review.")
-        show_popup(
-            "Reprint Indicator Complete",
-            (
-                "The Reprint Indicator process completed successfully.\n\n"
-                "The Outlook email review window has been closed."
-            ),
-        )
     except Exception as exc:
         log_warning(f"Could not open Outlook draft notification: {exc}")
-        show_popup(
-            "Reprint Indicator Complete",
-            (
-                "The Reprint Indicator process completed successfully.\n\n"
-                "The Outlook draft email could not be created."
-            ),
-        )
     return 0
 
 
