@@ -1653,10 +1653,10 @@ def run_ssr_daily_summary_menu():
     while True:
         print("\nSSR Daily Summary")
         print()
-        print("    1. Ebs.Sales Prior 5 Days")
-        print("    2. Run SSR Daily Reporting")
-        print("    3. Run SSR Aggregate Totals")
-        print("    4. Run SSR Visualization")
+        print("    1. Run SSR Daily Reporting")
+        print("    2. Run SSR Aggregate Totals")
+        print("    3. Run SSR Visualization")
+        print("    4. Ebs.Sales Prior 5 Days")
         print("    5. Back to main menu")
         print()
         try:
@@ -1665,7 +1665,7 @@ def run_ssr_daily_summary_menu():
             print("\nReturning to main menu.")
             return
 
-        if subchoice == "1":
+        if subchoice == "4":
             print("Running table-update SQL check... Please wait.")
             try:
                 subprocess.run(
@@ -1680,7 +1680,7 @@ def run_ssr_daily_summary_menu():
                 print("The table-update SQL check failed.")
             continue
 
-        if subchoice == "2":
+        if subchoice == "1":
             print("Running SSR Daily Reporting... Please wait.")
             try:
                 subprocess.run(
@@ -1692,7 +1692,7 @@ def run_ssr_daily_summary_menu():
                 print("An error occurred while running ssr_daily_summary/ssr_preparation.py.")
             continue
 
-        if subchoice == "3":
+        if subchoice == "2":
             print("Running SSR Aggregate Totals... Please wait.")
             try:
                 subprocess.run(
@@ -1704,7 +1704,7 @@ def run_ssr_daily_summary_menu():
                 print("An error occurred while running ssr_daily_summary/ssr_summary.py.")
             continue
 
-        if subchoice == "4":
+        if subchoice == "3":
             print("Running SSR Visualization... Please wait.")
             try:
                 subprocess.run(
