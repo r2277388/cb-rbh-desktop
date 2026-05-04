@@ -23,6 +23,13 @@ ISBN_FIELDS = ["Sea", "Release Date", "Price"]
 TASK_FIELDS = ["Due Date"]
 
 
+def default_report_file() -> Path:
+    date_prefix = datetime.now().strftime("%Y_%m_%d")
+    return process_paths.GEN_EDITORIAL_REPORT_FILE.with_name(
+        f"{date_prefix}_GenEd_Data_Deltas.xlsx"
+    )
+
+
 def normalize_isbn(value: object) -> str:
     if value is None or pd.isna(value):
         return ""
@@ -277,32 +284,16 @@ def build_current_snapshot(cache: pd.DataFrame) -> pd.DataFrame:
 
 def save_variation_report(output_file: Path | None = None) -> Path:
     cache = load_cache()
-    output_file = output_file or process_paths.GEN_EDITORIAL_REPORT_FILE
+    output_file = output_file or default_report_file()
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
     variations = build_variation_rows(cache)
-    current = build_current_snapshot(cache)
-    summary = pd.DataFrame(
-        [
-            {"Metric": "Cache dates", "Value": cache["CacheDate"].nunique() if not cache.empty else 0},
-            {"Metric": "Cache rows", "Value": len(cache)},
-            {"Metric": "Variation rows", "Value": len(variations)},
-            {
-                "Metric": "Latest cache date",
-                "Value": cache["CacheDate"].max() if not cache.empty else pd.NaT,
-            },
-            {"Metric": "Source workbook", "Value": str(process_paths.GEN_EDITORIAL_SOURCE_WORKBOOK)},
-        ]
-    )
 
     with pd.ExcelWriter(output_file, engine="xlsxwriter", datetime_format="m/d/yyyy", date_format="m/d/yyyy") as writer:
         variations.to_excel(writer, sheet_name="Variations", index=False)
-        current.to_excel(writer, sheet_name="Current Snapshot", index=False)
-        summary.to_excel(writer, sheet_name="Summary", index=False)
 
         workbook = writer.book
         date_format = workbook.add_format({"num_format": "m/d/yyyy"})
-        money_format = workbook.add_format({"num_format": "$#,##0.00"})
         for sheet_name in writer.sheets:
             worksheet = writer.sheets[sheet_name]
             worksheet.freeze_panes(1, 0)
@@ -317,19 +308,17 @@ def save_variation_report(output_file: Path | None = None) -> Path:
             worksheet.set_column("F:F", 18)
             worksheet.set_column("G:G", 18, date_format)
             worksheet.set_column("H:H", 18)
-        if "Current Snapshot" in writer.sheets:
-            worksheet = writer.sheets["Current Snapshot"]
-            worksheet.set_column("A:A", 12, date_format)
-            worksheet.set_column("B:B", 15)
-            worksheet.set_column("C:C", 42)
-            worksheet.set_column("D:D", 13)
-            worksheet.set_column("E:E", 28)
-            worksheet.set_column("F:G", 12, date_format)
-            worksheet.set_column("H:H", 10, money_format)
-        if "Summary" in writer.sheets:
-            writer.sheets["Summary"].set_column("A:B", 34)
 
     print(f"Saved General Editorial Data Variations report: {output_file}")
+    print(f"  Cache dates:       {cache['CacheDate'].nunique() if not cache.empty else 0:,}")
+    print(f"  Cache rows:        {len(cache):,}")
+    print(f"  Variation rows:    {len(variations):,}")
+    latest_cache_date = cache["CacheDate"].max() if not cache.empty else pd.NaT
+    if pd.isna(latest_cache_date):
+        print("  Latest cache date: none")
+    else:
+        print(f"  Latest cache date: {latest_cache_date:%Y-%m-%d}")
+    print(f"  Source workbook:   {process_paths.GEN_EDITORIAL_SOURCE_WORKBOOK}")
     return output_file
 
 
@@ -341,7 +330,7 @@ def run_process(allow_weekend: bool = False) -> Path:
 def print_status() -> None:
     source = process_paths.GEN_EDITORIAL_SOURCE_WORKBOOK
     cache_file = process_paths.GEN_EDITORIAL_CACHE_FILE
-    report_file = process_paths.GEN_EDITORIAL_REPORT_FILE
+    report_file = default_report_file()
     print("\nGeneral Editorial Data Variations")
     print(f"  Source workbook: {source}")
     if source.exists():
@@ -381,11 +370,10 @@ def print_process_description() -> None:
     print("  Each archived row includes CacheDate, which identifies the snapshot date.")
     print()
     print("Report:")
-    print(f"  File: {process_paths.GEN_EDITORIAL_REPORT_FILE}")
+    print(f"  File: {default_report_file()}")
     print("  The Variations sheet shows changes over time by ISBN.")
     print("  ISBN-level changes tracked: Sea, Release Date, Price.")
     print("  Task-level changes tracked: Due Date by ISBN and Task Name.")
-    print("  The Current Snapshot sheet shows the most recent archived schedule rows.")
 
 
 def run_menu() -> None:

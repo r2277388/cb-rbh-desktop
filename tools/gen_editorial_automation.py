@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -10,6 +11,13 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from paths import process_paths
+
+
+def default_report_file() -> Path:
+    date_prefix = datetime.now().strftime("%Y_%m_%d")
+    return process_paths.GEN_EDITORIAL_REPORT_FILE.with_name(
+        f"{date_prefix}_GenEd_Data_Deltas.xlsx"
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -69,7 +77,7 @@ def print_status() -> int:
     print(f"  Schedule:       {process_paths.GEN_EDITORIAL_SCHEDULE_DESCRIPTION}")
     print(f"  Source:         {process_paths.GEN_EDITORIAL_SOURCE_WORKBOOK}")
     print(f"  Cache:          {process_paths.GEN_EDITORIAL_CACHE_FILE}")
-    print(f"  Report:         {process_paths.GEN_EDITORIAL_REPORT_FILE}")
+    print(f"  Report:         {default_report_file()}")
     print(f"  Run command:    {build_run_command()}")
 
     if not exists:
