@@ -20,7 +20,7 @@ RAW_FOLDER_SUFFIX = "_raw_files"
 OUTPUT_PREFIX = "POS"
 SALES_PREFIX = "Sales"
 INVENTORY_PREFIX = "Inventory"
-REQUIRED_FILE_KEYWORDS = ("toy", "gift", "cal")
+REQUIRED_FILE_KEYWORDS = ("toy", "gift", "cal", "gc")
 REQUIRED_COLUMNS = [
     "EAN",
     "Imprint",
