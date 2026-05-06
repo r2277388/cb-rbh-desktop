@@ -11,6 +11,10 @@ def repo_path(*parts: str) -> Path:
 # Shared external locations
 DOWNLOADS_FOLDER = Path(r"G:\SALES\Amazon\RBH\DOWNLOADED_FILES")
 ORACLE_YPTICOD_FILE = Path(r"J:\Metadata Reports\Oracle YPTICOD.xlsx")
+DATAWAREHOUSE_SHAREPOINT_FOLDERS = {
+    "Sam": Path(r"C:\Users\sdm\OneDrive - chroniclebooks.com\Finance Department - Documents\DataWarehouse"),
+    "Barrett": Path(r"C:\Users\rbh\OneDrive - chroniclebooks.com\Finance Department - Documents\DataWarehouse"),
+}
 ATELIER_AMAZON_BASE_FOLDER = Path(r"F:\ANALYSIS\Finance\DataWarehouse\Atelier Amazon")
 ATELIER_AMAZON_CATALOG_FOLDER = ATELIER_AMAZON_BASE_FOLDER / "Catalog"
 ATELIER_AMAZON_INVENTORY_FOLDER = ATELIER_AMAZON_BASE_FOLDER / "Inventory"
