@@ -1,6 +1,12 @@
+import sys
 import time
+from pathlib import Path
 
 import pandas as pd
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from processor import run_full_rebuild
 
