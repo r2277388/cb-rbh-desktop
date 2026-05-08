@@ -79,6 +79,13 @@ ACTIONS: dict[str, Action] = {
         "Check the Amazon upload table for the last 10 weeks.",
         "Amazon Rolling Reports",
     ),
+    "amazon_monthly_customer_orders": Action(
+        "amazon_monthly_customer_orders",
+        "Amazon Monthly Customer Orders",
+        [str(VENV_PYTHON), "amazon_rolling_reports/monthly_customer_orders.py"],
+        "Compile monthly Amazon customer orders workbooks into a parquet file.",
+        "Amazon Rolling Reports",
+    ),
     "amazon_ams_manager": Action(
         "amazon_ams_manager",
         "Amazon AMS Manager",

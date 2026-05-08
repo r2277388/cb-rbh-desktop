@@ -441,6 +441,34 @@ def confirm_amazon_rolling_reports_run_files() -> bool:
         print("Invalid choice. Please select a valid option.")
 
 
+def confirm_amazon_monthly_customer_orders_files() -> bool:
+    script_path = process_paths.AMAZON_MONTHLY_CUSTOMER_ORDERS_SCRIPT
+    source_root = process_paths.AMAZON_MONTHLY_CUSTOMER_ORDERS_ROOT
+    output_file = process_paths.AMAZON_MONTHLY_CUSTOMER_ORDERS_PARQUET
+    current_year_folder = source_root / str(datetime.now().year)
+
+    while True:
+        print()
+        print("Amazon Monthly Customer Orders compile will use these files:")
+        print(f"  Script:              {script_path}")
+        print(f"  Source root:         {source_root}")
+        print(f"  Current year folder: {current_year_folder}")
+        print(f"  Output parquet:      {output_file}")
+        print()
+        print("    1. Continue")
+        print("    2. Return to previous menu")
+        print()
+        choice = input("Choose an option: ").strip().lower()
+
+        if choice in {"1", "c", "continue"}:
+            return True
+
+        if choice in {"2", "b", "back", "return", "menu"}:
+            return False
+
+        print("Invalid choice. Please select a valid option.")
+
+
 def load_module_from_path(module_name: str, file_path: Path):
     spec = importlib.util.spec_from_file_location(module_name, file_path)
     if spec is None or spec.loader is None:
@@ -1498,7 +1526,8 @@ def run_amazon_rolling_reports_menu():
         print("    3. Rebuild all reports from current pickles")
         print("    4. Full refresh + main two reports only")
         print("    5. Rebuild main two reports only from current pickles")
-        print("    6. Back to main menu")
+        print("    6. Compile monthly customer orders parquet")
+        print("    7. Back to main menu")
         print()
         try:
             subchoice = input("Choose an option: ").strip().lower()
@@ -1603,10 +1632,60 @@ def run_amazon_rolling_reports_menu():
                 print("An error occurred while running amazon_rolling_reports/main.py --main-only --report-only.")
             return
 
-        if subchoice in ["6", "back", "b", "exit", "quit", "q"]:
+        if subchoice == "6":
+            run_amazon_monthly_customer_orders_menu()
+            continue
+
+        if subchoice in ["7", "back", "b", "exit", "quit", "q"]:
             return
 
         print("Invalid choice. Please select a valid option.")
+
+
+def run_amazon_monthly_customer_orders_menu() -> None:
+    while True:
+        print("\nAmazon Monthly Customer Orders")
+        print()
+        print("    1. Compile monthly customer orders parquet")
+        print("    2. Show active monthly customer order periods")
+        print("    3. Include/add a period")
+        print("    4. Exclude/remove a period")
+        print("    5. Back to Amazon Rolling Reports")
+        print()
+        choice = input("Choose an option: ").strip().lower()
+
+        if choice == "1":
+            try:
+                if not confirm_amazon_monthly_customer_orders_files():
+                    continue
+            except FileNotFoundError as e:
+                print(f"Unable to locate the Amazon Monthly Customer Orders files: {e}")
+                continue
+            command = ["venv/Scripts/python", "amazon_rolling_reports/monthly_customer_orders.py"]
+            action_label = "Compiling Amazon monthly customer orders parquet"
+        elif choice == "2":
+            command = ["venv/Scripts/python", "amazon_rolling_reports/monthly_customer_orders.py", "status"]
+            action_label = "Showing Amazon monthly customer order periods"
+        elif choice == "3":
+            period = input("Period to include/add (yyyymm): ").strip()
+            command = ["venv/Scripts/python", "amazon_rolling_reports/monthly_customer_orders.py", "include", period]
+            action_label = f"Including Amazon monthly customer orders period {period}"
+        elif choice == "4":
+            period = input("Period to exclude/remove (yyyymm): ").strip()
+            command = ["venv/Scripts/python", "amazon_rolling_reports/monthly_customer_orders.py", "exclude", period]
+            action_label = f"Excluding Amazon monthly customer orders period {period}"
+        elif choice in {"5", "back", "b", "return", "menu"}:
+            return
+        else:
+            print("Invalid choice. Please select a valid option.")
+            continue
+
+        print(f"{action_label}... Please wait.")
+        try:
+            subprocess.run(command, check=True)
+        except subprocess.CalledProcessError:
+            print(f"An error occurred while running {' '.join(command)}.")
+        input("\nPress Enter to return to the Amazon Monthly Customer Orders menu...")
 
 
 def run_check_table_updates_menu():
