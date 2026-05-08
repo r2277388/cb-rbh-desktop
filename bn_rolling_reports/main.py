@@ -7,6 +7,7 @@ from tkinter import Tk, filedialog, messagebox
 from config import BASE_FOLDER
 from pos_combiner import (
     build_combined_pos,
+    collect_pos_source_files,
     get_candidate_raw_folders,
     resolve_raw_folder,
 )
@@ -36,6 +37,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--preview",
         action="store_true",
         help="Print the first 25 rows after building the combined file.",
+    )
+    parser.add_argument(
+        "--allow-missing-pos-files",
+        action="store_true",
+        help="Build the combined POS file even when one or more expected POS category files are missing.",
     )
     parser.add_argument(
         "--default-raw-folder",
@@ -128,6 +134,10 @@ def print_result_summary(result) -> None:
     print("Source files:")
     for file_path in result.source_files:
         print(f"  - {file_path.name}")
+    if result.missing_keywords:
+        print("Missing expected POS categories:")
+        for keyword in result.missing_keywords:
+            print(f"  - {keyword}")
     print(f"Rows before de-duplication: {result.rows_before_dedup:,}")
     print(f"Duplicate EAN rows removed: {result.duplicate_rows_removed:,}")
     print(f"Rows dropped for invalid/missing EAN: {result.rows_with_missing_ean:,}")
@@ -201,6 +211,37 @@ def confirm_build_report(latest_sql_week, latest_cache_week) -> bool:
         root.destroy()
 
 
+def confirm_partial_pos_build(raw_folder: Path) -> bool:
+    selection = collect_pos_source_files(raw_folder)
+    print()
+    print("Expected POS categories: toy, gift, cal, gc")
+    print("POS files found:")
+    if selection.source_files:
+        for file_path in selection.source_files:
+            print(f"  - {file_path.name}")
+    else:
+        print("  - None")
+
+    if not selection.missing_keywords:
+        return True
+
+    print("Missing expected POS categories:")
+    for keyword in selection.missing_keywords:
+        print(f"  - {keyword}")
+
+    if not selection.source_files:
+        print("No usable POS files were found, so the combined POS file cannot be built.")
+        return False
+
+    while True:
+        choice = input("Proceed with the available POS files only? [y/N]: ").strip().lower()
+        if choice in {"y", "yes"}:
+            return True
+        if choice in {"", "n", "no"}:
+            return False
+        print("Please enter y or n.")
+
+
 def run_menu(default_raw_folder: str | Path | None = None) -> None:
     raw_folder = resolve_raw_folder(default_raw_folder) if default_raw_folder else prompt_for_raw_folder()
 
@@ -221,7 +262,10 @@ def run_menu(default_raw_folder: str | Path | None = None) -> None:
 
         if choice == "1":
             print("\nRunning Step 1 of 3: Build Combined POS File...")
-            pos_result = build_combined_pos(raw_folder=raw_folder)
+            if not confirm_partial_pos_build(raw_folder):
+                print("Build All Three cancelled before creating the combined POS file.")
+                continue
+            pos_result = build_combined_pos(raw_folder=raw_folder, allow_missing_files=True)
             print_result_summary(pos_result)
 
             print("\nRunning Step 2 of 3: Build working Sales file...")
@@ -235,7 +279,10 @@ def run_menu(default_raw_folder: str | Path | None = None) -> None:
 
         if choice == "2":
             print("\nRunning Build Combined POS File...")
-            result = build_combined_pos(raw_folder=raw_folder)
+            if not confirm_partial_pos_build(raw_folder):
+                print("Combined POS build cancelled.")
+                continue
+            result = build_combined_pos(raw_folder=raw_folder, allow_missing_files=True)
             print_result_summary(result)
             continue
 
@@ -316,7 +363,11 @@ def main() -> None:
 
     if args.raw_folder or args.output_file or args.preview:
         print("\nRunning Build Combined POS File...")
-        result = build_combined_pos(raw_folder=args.raw_folder, output_file=args.output_file)
+        result = build_combined_pos(
+            raw_folder=args.raw_folder,
+            output_file=args.output_file,
+            allow_missing_files=args.allow_missing_pos_files,
+        )
         print_result_summary(result)
         return
 

@@ -30,10 +30,17 @@ class PosBuildResult:
     raw_folder: Path
     output_file: Path
     source_files: list[Path]
+    missing_keywords: list[str]
     rows_before_dedup: int
     rows_after_dedup: int
     duplicate_rows_removed: int
     rows_with_missing_ean: int
+
+
+@dataclass
+class PosSourceSelection:
+    source_files: list[Path]
+    missing_keywords: list[str]
 
 
 def parse_week_ending(folder_name: str) -> datetime:
@@ -73,8 +80,9 @@ def resolve_raw_folder(raw_folder: str | Path | None = None) -> Path:
     return folders[-1]
 
 
-def find_pos_source_files(raw_folder: Path) -> list[Path]:
+def collect_pos_source_files(raw_folder: Path) -> PosSourceSelection:
     files_by_keyword: list[Path] = []
+    missing_keywords: list[str] = []
     lower_name_to_path = {path.name.lower(): path for path in raw_folder.iterdir() if path.is_file()}
 
     for keyword in REQUIRED_FILE_KEYWORDS:
@@ -84,12 +92,25 @@ def find_pos_source_files(raw_folder: Path) -> list[Path]:
             if lower_name.endswith(".csv") and "pos" in lower_name and keyword in lower_name
         ]
         if not matches:
-            raise FileNotFoundError(
-                f"Could not find a POS CSV containing '{keyword}' in {raw_folder}"
-            )
+            missing_keywords.append(keyword)
+            continue
         files_by_keyword.append(sorted(matches, key=lambda path: path.name.lower())[0])
 
-    return files_by_keyword
+    return PosSourceSelection(
+        source_files=files_by_keyword,
+        missing_keywords=missing_keywords,
+    )
+
+
+def find_pos_source_files(raw_folder: Path) -> list[Path]:
+    selection = collect_pos_source_files(raw_folder)
+    if selection.missing_keywords:
+        missing = ", ".join(f"'{keyword}'" for keyword in selection.missing_keywords)
+        raise FileNotFoundError(
+            f"Could not find POS CSV(s) containing {missing} in {raw_folder}"
+        )
+
+    return selection.source_files
 
 
 def read_pos_csv(file_path: Path) -> pd.DataFrame:
@@ -124,13 +145,26 @@ def _first_non_blank(series: pd.Series):
     return series.iloc[0] if not series.empty else pd.NA
 
 
-def build_combined_pos(raw_folder: str | Path | None = None, output_file: str | Path | None = None) -> PosBuildResult:
+def build_combined_pos(
+    raw_folder: str | Path | None = None,
+    output_file: str | Path | None = None,
+    allow_missing_files: bool = False,
+) -> PosBuildResult:
     resolved_raw_folder = resolve_raw_folder(raw_folder)
     week_ending = parse_week_ending(resolved_raw_folder.name)
-    source_files = find_pos_source_files(resolved_raw_folder)
+    selection = collect_pos_source_files(resolved_raw_folder)
+    if selection.missing_keywords and not allow_missing_files:
+        missing = ", ".join(f"'{keyword}'" for keyword in selection.missing_keywords)
+        raise FileNotFoundError(
+            f"Could not find POS CSV(s) containing {missing} in {resolved_raw_folder}"
+        )
+    if not selection.source_files:
+        raise FileNotFoundError(
+            f"No POS CSV files matching the expected keywords were found in {resolved_raw_folder}"
+        )
 
     frames = []
-    for file_path in source_files:
+    for file_path in selection.source_files:
         df = read_pos_csv(file_path)
         df["_source_file"] = file_path.name
         frames.append(df)
@@ -168,7 +202,8 @@ def build_combined_pos(raw_folder: str | Path | None = None, output_file: str | 
         dataframe=combined,
         raw_folder=resolved_raw_folder,
         output_file=output_path,
-        source_files=source_files,
+        source_files=selection.source_files,
+        missing_keywords=selection.missing_keywords,
         rows_before_dedup=rows_before_dedup,
         rows_after_dedup=rows_after_dedup,
         duplicate_rows_removed=duplicate_rows_removed,
@@ -230,6 +265,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=25,
         help="Number of rows to print to the terminal after building the file.",
     )
+    parser.add_argument(
+        "--allow-missing-files",
+        action="store_true",
+        help="Build the combined POS file even when one or more expected POS category files are missing.",
+    )
     return parser
 
 
@@ -239,6 +279,10 @@ def print_result_summary(result: PosBuildResult, preview_rows: int = 25) -> None
     print("Source files:")
     for file_path in result.source_files:
         print(f"  - {file_path.name}")
+    if result.missing_keywords:
+        print("Missing expected POS categories:")
+        for keyword in result.missing_keywords:
+            print(f"  - {keyword}")
     print(f"DataFrame shape: {result.dataframe.shape}")
     print(f"Rows before de-duplication: {result.rows_before_dedup:,}")
     print(f"Duplicate EAN rows removed: {result.duplicate_rows_removed:,}")
@@ -253,7 +297,11 @@ def print_result_summary(result: PosBuildResult, preview_rows: int = 25) -> None
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
-    result = build_combined_pos(raw_folder=args.raw_folder, output_file=args.output_file)
+    result = build_combined_pos(
+        raw_folder=args.raw_folder,
+        output_file=args.output_file,
+        allow_missing_files=args.allow_missing_files,
+    )
     print_result_summary(result, preview_rows=args.preview_rows)
 
 
