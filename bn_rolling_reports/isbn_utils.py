@@ -9,7 +9,10 @@ import pandas as pd
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from rolling_paths import cache_dir
+try:
+    from .rolling_paths import cache_dir
+except ImportError:
+    from rolling_paths import cache_dir
 from shared.db.connection import get_connection
 from shared.db.query_runner import fetch_data_from_db
 
