@@ -67,6 +67,16 @@ def format_numeric_total(total: float) -> str:
     return f"{total:,.2f}"
 
 
+def confirm_save_totals() -> bool:
+    while True:
+        choice = input("Save/archive this file and totals summary? [y/N]: ").strip().lower()
+        if choice in {"y", "yes"}:
+            return True
+        if choice in {"", "n", "no"}:
+            return False
+        print("Please enter y or n.")
+
+
 def summarize_csv_contents(csv_path: pathlib.Path) -> str:
     df = pd.read_csv(csv_path, dtype="string", low_memory=False)
     lines = [f"CSV summary for {csv_path.name}", f"Rows: {len(df):,}"]
@@ -149,14 +159,12 @@ def main():
     ARCHIVE.mkdir(parents=True, exist_ok=True)
 
     dest = process_paths.AMAZON_PO_CURRENT_FILE
-    archive_target = unique_path(make_archive_name(src_path))
     try:
         shutil.copy2(str(src_path), str(dest))
-        shutil.copy2(str(src_path), str(archive_target))
     except Exception as e:
         messagebox.showerror(
             "Error",
-            f"Failed to copy new file into output folders:\n{e}",
+            f"Failed to copy new file into the current PO location:\n{e}",
         )
         return
 
@@ -167,9 +175,30 @@ def main():
 
     print("New file copied to:")
     print(f"  {dest}")
-    print(f"  {archive_target}")
     print()
     print(summary)
+
+    if not confirm_save_totals():
+        print("Totals summary was not saved, and no archive copy was created.")
+        print("Complete.")
+        return
+
+    archive_target = unique_path(make_archive_name(src_path))
+    summary_target = unique_path(archive_target.with_suffix(".summary.txt"))
+    try:
+        shutil.copy2(str(src_path), str(archive_target))
+        summary_target.write_text(summary + "\n", encoding="utf-8")
+    except Exception as e:
+        messagebox.showerror(
+            "Error",
+            f"Failed to save archive file or totals summary:\n{e}",
+        )
+        return
+
+    print()
+    print("Saved archive and totals summary to:")
+    print(f"  {archive_target}")
+    print(f"  {summary_target}")
     print("Complete.")
 
 

@@ -82,7 +82,8 @@ def display_info(choice):
         "5": "Admin / Utilities: Opens Desk Procedures, requirements installation, and the main venv shell.",
         "101": f"""Amazon (1) PO Archive Manager: Copies the selected Amazon Vendor Central PO CSV to:
         {process_paths.AMAZON_PO_CURRENT_FILE}
-        and also archives an unchanged copy in:
+        then prints row and cost-column totals. After reviewing the totals, you can choose whether to save an
+        unchanged archive copy and a totals summary in:
         {process_paths.AMAZON_PO_DATAWAREHOUSE_ARCHIVE_DIR}""",
         "102": f"""Amazon (2) PO Report: Generates a detailed report based on Amazon Purchase Orders.
         Before running, use Amazon (1) PO Archive Manager to save/archive the latest Vendor Central PO file.
