@@ -4,6 +4,7 @@ from copy import copy
 from datetime import datetime
 from pathlib import Path
 import re
+import shutil
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
 
@@ -232,6 +233,12 @@ def main():
     with pd.ExcelWriter(default_output) as writer:
         df.to_excel(writer, index=False, startrow=3)
     print(f"Saved Excel file: {default_output}")
+
+    weekly_summary_output = process_paths.amazon_sql_upload_weekly_summary_file(week_end_date)
+    weekly_summary_output.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(default_output, weekly_summary_output)
+    print(f"Saved weekly summary copy: {weekly_summary_output}")
+
     print_totals("Main Output Numeric Totals", main_output_totals, total_isbn_rows)
 
     print_totals("Weekly 6-Column Totals", weekly_output_totals, total_isbn_rows)

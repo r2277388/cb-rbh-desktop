@@ -21,11 +21,16 @@ amz_catalog = str(_shared.AMAZON_SQL_UPLOAD_SOURCE_FOLDERS["catalog"])
 ypticod = str(_shared.ORACLE_YPTICOD_FILE)
 
 AMAZON_SQL_UPLOAD_OUTPUT_DIR = _shared.AMAZON_SQL_UPLOAD_OUTPUT_DIR
+AMAZON_SQL_UPLOAD_WEEKLY_SUMMARIES_DIR = _shared.AMAZON_SQL_UPLOAD_WEEKLY_SUMMARIES_DIR
 AMAZON_WEEKLY_REPORTS_DIR = _shared.AMAZON_WEEKLY_REPORTS_DIR
 
 
 def amazon_sql_upload_output_file(for_date=None):
     return _shared.amazon_sql_upload_output_file(for_date)
+
+
+def amazon_sql_upload_weekly_summary_file(for_date=None):
+    return _shared.amazon_sql_upload_weekly_summary_file(for_date)
 
 
 def amazon_weekly_report_file(for_date):

@@ -114,6 +114,9 @@ AMAZON_CUSTOMER_ORDERS_OUTPUT_FILE = Path(
 AMAZON_SQL_UPLOAD_OUTPUT_DIR = Path(
     r"F:\ANALYSIS\Finance\DataWarehouse\Atelier Amazon\vc_weekly_summary"
 )
+AMAZON_SQL_UPLOAD_WEEKLY_SUMMARIES_DIR = (
+    DATAWAREHOUSE_SHAREPOINT_FOLDERS["Barrett"] / "Amazon" / "WeeklySummaries"
+)
 UK_ROLLING_SOURCE_FOLDER = Path(
     r"F:\ANALYSIS\Finance\DataWarehouse\Atelier UK\Script Files"
 )
@@ -307,6 +310,14 @@ def amazon_sql_upload_output_file(for_date: datetime | None = None) -> Path:
     date_value = for_date or datetime.now()
     return (
         AMAZON_SQL_UPLOAD_OUTPUT_DIR
+        / f"amazon_update__{date_value.strftime('%Y_%m_%d')}.xlsx"
+    )
+
+
+def amazon_sql_upload_weekly_summary_file(for_date: datetime | None = None) -> Path:
+    date_value = for_date or datetime.now()
+    return (
+        AMAZON_SQL_UPLOAD_WEEKLY_SUMMARIES_DIR
         / f"amazon_update__{date_value.strftime('%Y_%m_%d')}.xlsx"
     )
 

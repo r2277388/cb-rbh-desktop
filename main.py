@@ -297,6 +297,9 @@ def confirm_amazon_sql_upload_files() -> bool:
             f"  Output folder:     {process_paths.AMAZON_SQL_UPLOAD_OUTPUT_DIR}"
         )
         print(
+            f"  Weekly summary copy: {process_paths.amazon_sql_upload_weekly_summary_file(sales_week_end)}"
+        )
+        print(
             f"  Weekly workbook:   {process_paths.AMAZON_WEEKLY_REPORTS_DIR}\\w##_yyyy_mm_dd.xlsx"
         )
         print("  Weekly cbq upload workbook:   Auto-created from the cleaned six-column dataset")
