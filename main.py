@@ -93,8 +93,10 @@ def display_info(choice):
         "103": "Amazon (3) PreOrders: Generates a report for Amazon NYP PreOrders. Save the relevant data file to the appropriate location before running.",
         "104": "Amazon (4) Customer Orders: Generates a report for Amazon Customer Orders. Save the relevant data file to the appropriate location before running.",
         "105": "Amazon (5) Create SQL Sellthrough Upload (XLSX): Runs the amazon_sql_upload workflow to build the SQL upload workbook (ASIN/ISBN conversion, uploads, etc.).",
-        "106": "Amazon (6) Rolling Reports: Runs a 10-week SQL freshness check first, then asks whether to continue with the full process.",
-        "107": "Amazon AMS Manager (monthly): Manage/update AMS month configuration and run incremental or full AMS processing.",
+        "106": "Amazon Rolling Reports (2) Process Weekly Rolling Report: Builds the weekly Amazon rolling report workbooks.",
+        "107": "Amazon Rolling Reports (3) Add new Monthly file to Cache: Compiles monthly Amazon sales CSVs into the monthly cache parquet.",
+        "108": "Amazon Rolling Reports (4) Run Monthly Rolling Report: Builds the standalone monthly Amazon rolling report workbooks.",
+        "109": "Amazon AMS Manager (monthly): Manage/update AMS month configuration and run incremental or full AMS processing.",
         "94": "Check Table Updates: Runs SQL checks for table freshness and recent weeks for SSR/Amazon/Bookscan tables.",
         "95": "Install Main Venv Requirements: Runs `pip install -r requirements.txt` using the repo's main virtual environment.",
         "96": "Open Main Venv Shell: Opens a PowerShell window with the repo's main virtual environment activated.",
@@ -445,19 +447,25 @@ def confirm_amazon_rolling_reports_run_files() -> bool:
         print("Invalid choice. Please select a valid option.")
 
 
-def confirm_amazon_monthly_customer_orders_files() -> bool:
-    script_path = process_paths.AMAZON_MONTHLY_CUSTOMER_ORDERS_SCRIPT
-    source_root = process_paths.AMAZON_MONTHLY_CUSTOMER_ORDERS_ROOT
-    output_file = process_paths.AMAZON_MONTHLY_CUSTOMER_ORDERS_PARQUET
-    current_year_folder = source_root / str(datetime.now().year)
+def confirm_amazon_monthly_sales_files() -> bool:
+    script_path = process_paths.AMAZON_MONTHLY_SALES_SCRIPT
+    source_root = process_paths.AMAZON_MONTHLY_SALES_ROOT
+    fallback_root = process_paths.AMAZON_MONTHLY_SALES_FALLBACK_ROOT
+    active_root = source_root if source_root.exists() else fallback_root
+    output_file = active_root / "cache" / process_paths.AMAZON_MONTHLY_SALES_PARQUET_NAME
+
+    if not active_root.exists():
+        raise FileNotFoundError(f"Monthly sales folder not found: {source_root} or {fallback_root}")
 
     while True:
         print()
-        print("Amazon Monthly Customer Orders compile will use these files:")
-        print(f"  Script:              {script_path}")
-        print(f"  Source root:         {source_root}")
-        print(f"  Current year folder: {current_year_folder}")
-        print(f"  Output parquet:      {output_file}")
+        print("Amazon Monthly Sales compile will use these files:")
+        print(f"  Script:             {script_path}")
+        print(f"  Source folder:      {active_root}")
+        print(f"  Output parquet:     {output_file}")
+        print(f"  Oracle YPTICOD:     {process_paths.ORACLE_YPTICOD_FILE}")
+        print(f"  Latest catalog:     {process_paths.ATELIER_AMAZON_CATALOG_FOLDER}")
+        print("  SQL source:         sql-2-db / CBQ2 (EBS item ISBN key)")
         print()
         print("    1. Continue")
         print("    2. Return to previous menu")
@@ -1159,6 +1167,16 @@ def run_python_process(
         print(f"An error occurred while running {script_path}.")
 
 
+def confirm_refresh_all_amazon_rolling_caches() -> bool:
+    while True:
+        choice = input("Do you want to update all Amazon Rolling caches now? (y/n): ").strip().lower()
+        if choice in {"y", "yes"}:
+            return True
+        if choice in {"n", "no"}:
+            return False
+        print("Invalid choice. Please enter y or n.")
+
+
 def install_main_venv_requirements() -> None:
     print("Installing requirements into the main venv... Please wait.")
     try:
@@ -1198,13 +1216,15 @@ def run_retailer_rolling_reports_menu() -> None:
         print()
         print("Amazon Rolling Reports")
         print("    01. Create SQL Sellthrough Upload (XLSX)")
-        print("    02. Rolling Reports")
+        print("    02. Process Weekly Rolling Report")
+        print("    03. Add new Monthly file to Cache")
+        print("    04. Run Monthly Rolling Report")
         print()
         print("Other Retailer Rolling Reports")
-        print("    03. Barnes & Noble Rolling Reports")
-        print("    04. Bookscan Rolling Reports")
-        print("    05. Target NOC Rolling Reports")
-        print("    06. Abrams & Chronicle UK Rolling Reports")
+        print("    05. Barnes & Noble Rolling Reports")
+        print("    06. Bookscan Rolling Reports")
+        print("    07. Target NOC Rolling Reports")
+        print("    08. Abrams & Chronicle UK Rolling Reports")
         print()
         print("    99. Back to main menu")
         print()
@@ -1225,10 +1245,41 @@ def run_retailer_rolling_reports_menu() -> None:
             continue
 
         if choice == "2":
-            run_amazon_rolling_reports_menu()
+            try:
+                if not confirm_amazon_rolling_reports_run_files():
+                    continue
+            except FileNotFoundError as e:
+                print(f"Unable to locate the Amazon Rolling Reports source files: {e}")
+                continue
+            extra_args = ["--refresh-all-caches"] if confirm_refresh_all_amazon_rolling_caches() else None
+            run_python_process(
+                "Amazon Weekly Rolling Reports",
+                "amazon_rolling_reports/main.py",
+                extra_args=extra_args,
+            )
             continue
 
         if choice == "3":
+            try:
+                if not confirm_amazon_monthly_sales_files():
+                    continue
+            except FileNotFoundError as e:
+                print(f"Unable to locate the Amazon Monthly Sales files: {e}")
+                continue
+            run_python_process("Amazon Monthly Sales Cache", "amazon_rolling_reports/monthly_sales.py")
+            continue
+
+        if choice == "4":
+            try:
+                if not confirm_amazon_monthly_sales_files():
+                    continue
+            except FileNotFoundError as e:
+                print(f"Unable to locate the Amazon Monthly Sales files: {e}")
+                continue
+            run_python_process("Amazon Monthly Rolling Reports", "amazon_rolling_reports/monthly_rolling_reports.py")
+            continue
+
+        if choice == "5":
             try:
                 selected_bn_raw_folder = confirm_bn_rolling_reports_files()
                 if selected_bn_raw_folder is None:
@@ -1243,15 +1294,15 @@ def run_retailer_rolling_reports_menu() -> None:
             )
             continue
 
-        if choice == "4":
+        if choice == "6":
             run_python_process("Bookscan Rolling Reports", process_paths.BOOKSCAN_ROLLING_REPORTS_SCRIPT)
             continue
 
-        if choice == "5":
+        if choice == "7":
             run_python_process("Target NOC Rolling Reports", process_paths.repo_path("target_rolling_report", "main.py"))
             continue
 
-        if choice == "6":
+        if choice == "8":
             run_python_process(
                 "Abrams & Chronicle UK Rolling Reports",
                 process_paths.repo_path("Abrams_Chronicle_rollling_reports", "main.py"),
@@ -1530,8 +1581,9 @@ def run_amazon_rolling_reports_menu():
         print("    3. Rebuild all reports from current pickles")
         print("    4. Full refresh + main two reports only")
         print("    5. Rebuild main two reports only from current pickles")
-        print("    6. Compile monthly customer orders parquet")
-        print("    7. Back to main menu")
+        print("    6. Compile monthly sales parquet")
+        print("    7. Build monthly rolling reports")
+        print("    8. Back to main menu")
         print()
         try:
             subchoice = input("Choose an option: ").strip().lower()
@@ -1569,7 +1621,7 @@ def run_amazon_rolling_reports_menu():
             print("Running full refresh + all Amazon Rolling Reports... Please wait.")
             try:
                 subprocess.run(
-                    ["venv/Scripts/python", "amazon_rolling_reports/main.py"],
+                    ["venv/Scripts/python", "amazon_rolling_reports/main.py", "--refresh-all-caches"],
                     check=True,
                 )
                 print("The Amazon Rolling Reports are now ready.")
@@ -1605,7 +1657,12 @@ def run_amazon_rolling_reports_menu():
             print("Running full refresh + main-two Amazon Rolling Reports only... Please wait.")
             try:
                 subprocess.run(
-                    ["venv/Scripts/python", "amazon_rolling_reports/main.py", "--main-only"],
+                    [
+                        "venv/Scripts/python",
+                        "amazon_rolling_reports/main.py",
+                        "--main-only",
+                        "--refresh-all-caches",
+                    ],
                     check=True,
                 )
                 print("The main Amazon Rolling Reports are now ready.")
@@ -1637,59 +1694,45 @@ def run_amazon_rolling_reports_menu():
             return
 
         if subchoice == "6":
-            run_amazon_monthly_customer_orders_menu()
+            try:
+                if not confirm_amazon_monthly_sales_files():
+                    continue
+            except FileNotFoundError as e:
+                print(f"Unable to locate the Amazon Monthly Sales files: {e}")
+                continue
+            print("Compiling Amazon monthly sales parquet... Please wait.")
+            try:
+                subprocess.run(
+                    ["venv/Scripts/python", "amazon_rolling_reports/monthly_sales.py"],
+                    check=True,
+                )
+                print("The Amazon monthly sales parquet is now ready.")
+            except subprocess.CalledProcessError:
+                print("An error occurred while running amazon_rolling_reports/monthly_sales.py.")
             continue
 
-        if subchoice in ["7", "back", "b", "exit", "quit", "q"]:
+        if subchoice == "7":
+            try:
+                if not confirm_amazon_monthly_sales_files():
+                    continue
+            except FileNotFoundError as e:
+                print(f"Unable to locate the Amazon Monthly Sales files: {e}")
+                continue
+            print("Building standalone Amazon monthly rolling reports... Please wait.")
+            try:
+                subprocess.run(
+                    ["venv/Scripts/python", "amazon_rolling_reports/monthly_rolling_reports.py"],
+                    check=True,
+                )
+                print("The Amazon monthly rolling reports are now ready.")
+            except subprocess.CalledProcessError:
+                print("An error occurred while running amazon_rolling_reports/monthly_rolling_reports.py.")
+            continue
+
+        if subchoice in ["8", "back", "b", "exit", "quit", "q"]:
             return
 
         print("Invalid choice. Please select a valid option.")
-
-
-def run_amazon_monthly_customer_orders_menu() -> None:
-    while True:
-        print("\nAmazon Monthly Customer Orders")
-        print()
-        print("    1. Compile monthly customer orders parquet")
-        print("    2. Show active monthly customer order periods")
-        print("    3. Include/add a period")
-        print("    4. Exclude/remove a period")
-        print("    5. Back to Amazon Rolling Reports")
-        print()
-        choice = input("Choose an option: ").strip().lower()
-
-        if choice == "1":
-            try:
-                if not confirm_amazon_monthly_customer_orders_files():
-                    continue
-            except FileNotFoundError as e:
-                print(f"Unable to locate the Amazon Monthly Customer Orders files: {e}")
-                continue
-            command = ["venv/Scripts/python", "amazon_rolling_reports/monthly_customer_orders.py"]
-            action_label = "Compiling Amazon monthly customer orders parquet"
-        elif choice == "2":
-            command = ["venv/Scripts/python", "amazon_rolling_reports/monthly_customer_orders.py", "status"]
-            action_label = "Showing Amazon monthly customer order periods"
-        elif choice == "3":
-            period = input("Period to include/add (yyyymm): ").strip()
-            command = ["venv/Scripts/python", "amazon_rolling_reports/monthly_customer_orders.py", "include", period]
-            action_label = f"Including Amazon monthly customer orders period {period}"
-        elif choice == "4":
-            period = input("Period to exclude/remove (yyyymm): ").strip()
-            command = ["venv/Scripts/python", "amazon_rolling_reports/monthly_customer_orders.py", "exclude", period]
-            action_label = f"Excluding Amazon monthly customer orders period {period}"
-        elif choice in {"5", "back", "b", "return", "menu"}:
-            return
-        else:
-            print("Invalid choice. Please select a valid option.")
-            continue
-
-        print(f"{action_label}... Please wait.")
-        try:
-            subprocess.run(command, check=True)
-        except subprocess.CalledProcessError:
-            print(f"An error occurred while running {' '.join(command)}.")
-        input("\nPress Enter to return to the Amazon Monthly Customer Orders menu...")
 
 
 def run_check_table_updates_menu():

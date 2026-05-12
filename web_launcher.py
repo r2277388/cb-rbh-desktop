@@ -79,11 +79,18 @@ ACTIONS: dict[str, Action] = {
         "Check the Amazon upload table for the last 10 weeks.",
         "Amazon Rolling Reports",
     ),
-    "amazon_monthly_customer_orders": Action(
-        "amazon_monthly_customer_orders",
-        "Amazon Monthly Customer Orders",
-        [str(VENV_PYTHON), "amazon_rolling_reports/monthly_customer_orders.py"],
-        "Compile monthly Amazon customer orders workbooks into a parquet file.",
+    "amazon_monthly_sales": Action(
+        "amazon_monthly_sales",
+        "Amazon Monthly Sales",
+        [str(VENV_PYTHON), "amazon_rolling_reports/monthly_sales.py"],
+        "Compile monthly Amazon sales CSVs into a parquet file with ASIN-to-ISBN mapping.",
+        "Amazon Rolling Reports",
+    ),
+    "amazon_monthly_rolling_reports": Action(
+        "amazon_monthly_rolling_reports",
+        "Amazon Monthly Rolling Reports",
+        [str(VENV_PYTHON), "amazon_rolling_reports/monthly_rolling_reports.py"],
+        "Build standalone monthly Amazon rolling workbooks in the main Amazon folder.",
         "Amazon Rolling Reports",
     ),
     "amazon_ams_manager": Action(

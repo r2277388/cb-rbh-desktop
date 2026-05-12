@@ -4,6 +4,7 @@ import time
 from datetime import datetime
 
 import pandas as pd
+
 from file_creation import create_rolling_report
 from functions import build_column_totals, save_to_excel
 from load_amazon_open_po import save_latest_amazon_po_as_pickle
@@ -70,8 +71,8 @@ def build_title_block(report_type: str, date_formatted: str) -> dict[str, object
     return {
         "start_row": 1,
         "end_row": 2,
-        "start_col": 5,
-        "end_col": 5,
+        "start_col": 6,
+        "end_col": 6,
         "title": title_text,
         "subtitle": f"Week Ending: {subtitle_date}",
         "merge_cells": False,
@@ -113,6 +114,8 @@ def save_reports_by_pub(
                 format_cols=pub_format_cols,
                 decimal_cols=decimal_cols,
                 rolling_main_layout=True,
+                pre_date_column_count=19,
+                summary_label_col_idx=8,
                 integer_accounting_no_symbol=True,
                 title_block=build_title_block(report_type, date_formatted),
             )
@@ -142,6 +145,25 @@ def prompt_update(filename, update_func, *args):
         print(f"Using existing {filename}.\n")
 
 
+def update_all_caches(pickle_po_file):
+    print("Updating all Amazon rolling report caches...")
+    print("PO file status:")
+    lastdate_display()
+    save_latest_amazon_po_as_pickle(
+        amazon_po_folder,
+        pickle_po_file,
+    )
+    print(f"{pickle_po_file} updated.\n")
+
+    print("Customer Orders file status:")
+    run_query_and_save(sql_co, customer_orders_pickle_file, "Customer Orders")
+    print(f"{customer_orders_pickle_file} updated.\n")
+
+    print("Units Shipped file status:")
+    run_query_and_save(sql_us, units_shipped_pickle_file, "Units Shipped")
+    print(f"{units_shipped_pickle_file} updated.\n")
+
+
 def build_parser():
     parser = argparse.ArgumentParser(description="Build Amazon rolling reports.")
     parser.add_argument(
@@ -153,6 +175,11 @@ def build_parser():
         "--report-only",
         action="store_true",
         help="Reuse the current local pickles and rebuild the reports without any SQL checks or refresh prompts.",
+    )
+    parser.add_argument(
+        "--refresh-all-caches",
+        action="store_true",
+        help="Refresh PO, Customer Orders, and Units Shipped caches without prompting for each one.",
     )
     return parser
 
@@ -174,6 +201,8 @@ def main():
                 "Report-only mode requires existing local pickle files. Missing: "
                 + ", ".join(str(filename) for filename in missing_files)
             )
+    elif args.refresh_all_caches:
+        update_all_caches(pickle_po_file)
     else:
         print("PO file status:")
         lastdate_display()
@@ -197,9 +226,6 @@ def main():
         prompt_update(
             pickle_file2, run_query_and_save, sql_us, pickle_file2, "Units Shipped"
         )
-
-        # Get the latest Amazon PO file and save as pickle
-        save_latest_amazon_po_as_pickle(amazon_po_folder, pickle_po_file)
 
     ###### CUSTOMER ORDERS ############################################
 
@@ -234,6 +260,8 @@ def main():
         format_cols=format_cols,
         decimal_cols=decimal_cols,
         rolling_main_layout=True,
+        pre_date_column_count=19,
+        summary_label_col_idx=8,
         integer_accounting_no_symbol=True,
         title_block=build_title_block(name1, date_formatted),
     )
@@ -288,6 +316,8 @@ def main():
         format_cols=format_cols,
         decimal_cols=decimal_cols,
         rolling_main_layout=True,
+        pre_date_column_count=19,
+        summary_label_col_idx=8,
         integer_accounting_no_symbol=True,
         title_block=build_title_block(name2, units_date_formatted),
     )

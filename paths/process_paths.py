@@ -229,15 +229,13 @@ AMAZON_ROLLING_SQL_FILE = repo_path(
     "shared", "sql", "amazon_rolling_reports", "last_10_weeks.sql"
 )
 AMAZON_ROLLING_REPORTS_SCRIPT = repo_path("amazon_rolling_reports", "main.py")
-AMAZON_MONTHLY_CUSTOMER_ORDERS_SCRIPT = repo_path(
-    "amazon_rolling_reports", "monthly_customer_orders.py"
+AMAZON_MONTHLY_ROLLING_REPORTS_SCRIPT = repo_path(
+    "amazon_rolling_reports", "monthly_rolling_reports.py"
 )
-AMAZON_MONTHLY_CUSTOMER_ORDERS_ROOT = Path(
-    r"G:\SALES\Amazon\ARA REPORTS\Amazon Customer Orders Monthly"
-)
-AMAZON_MONTHLY_CUSTOMER_ORDERS_PARQUET = Path(
-    r"F:\ANALYSIS\Finance\DataWarehouse\Atelier AmazonRolling\cache\monthly_customer_orders.parquet"
-)
+AMAZON_MONTHLY_SALES_ROOT = ATELIER_AMAZON_BASE_FOLDER / "Sales_Monthly"
+AMAZON_MONTHLY_SALES_FALLBACK_ROOT = ATELIER_AMAZON_BASE_FOLDER / "Sales" / "sales_monthly"
+AMAZON_MONTHLY_SALES_SCRIPT = repo_path("amazon_rolling_reports", "monthly_sales.py")
+AMAZON_MONTHLY_SALES_PARQUET_NAME = "amazon_monthly_sales.parquet"
 CONSOLIDATED_INVENTORY_VERTICALIZATION_SCRIPT = repo_path(
     "consolidate_inventory_verticalization", "main.py"
 )

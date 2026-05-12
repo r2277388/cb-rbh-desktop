@@ -49,6 +49,10 @@ def _parse_history_date(value):
         parsed = pd.to_datetime(value, format=date_format, errors="coerce")
         if not pd.isna(parsed):
             return parsed
+    if len(value) == 6 and value.isdigit():
+        parsed = pd.to_datetime(value + "01", format="%Y%m%d", errors="coerce")
+        if not pd.isna(parsed):
+            return parsed
     return None
 
 
@@ -71,6 +75,7 @@ def save_to_excel(
     show_weeknum_label=True,
     history_top_labels=None,
     weeknum_label_fill="#DDD9C4",
+    weeknum_label_text="WeekNum",
     column_format_overrides=None,
     integer_accounting_no_symbol=False,
 ):
@@ -224,7 +229,7 @@ def save_to_excel(
                     worksheet.write(
                         header_row - 1,
                         col_idx,
-                        history_date.isocalendar().week,
+                        history_date.month if len(str(col_name)) == 6 and str(col_name).isdigit() else history_date.isocalendar().week,
                         header_format,
                     )
                 elif rolling_main_layout and col_idx in group_ranges:
@@ -239,7 +244,7 @@ def save_to_excel(
                 worksheet.write(
                     header_row - 1,
                     pre_date_column_count - 1,
-                    'WeekNum',
+                    weeknum_label_text,
                     weeknum_label_format,
                 )
 

@@ -23,3 +23,8 @@ amazon_rolling_backup_dir = amazon_rolling_cache_dir / "backups"
 amazon_po_pickle_file = amazon_rolling_cache_dir / "latest_amazon_po.pkl"
 customer_orders_pickle_file = amazon_rolling_cache_dir / "rr_customer_orders.pkl"
 units_shipped_pickle_file = amazon_rolling_cache_dir / "rr_units_shipped.pkl"
+monthly_sales_parquet_file = (
+    _shared.AMAZON_MONTHLY_SALES_ROOT
+    / "cache"
+    / _shared.AMAZON_MONTHLY_SALES_PARQUET_NAME
+)
