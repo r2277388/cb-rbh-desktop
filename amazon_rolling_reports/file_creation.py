@@ -90,6 +90,7 @@ MONTHLY_BASE_COLUMNS = [
     "PubDate",
 ]
 MONTHLY_SUMMARY_COLUMNS = ["12M", "TYTD", "LYTD", "YTD Var", "LY_FY", "Total"]
+MIN_MONTHLY_REPORT_PERIOD = "202401"
 
 
 def _period_year(period: str) -> int:
@@ -125,11 +126,14 @@ def create_monthly_rolling_report(
     monthly_sales = monthly_sales[monthly_sales["ISBN"].astype(str).str.strip() != "NO_ISBN"]
     monthly_sales["ISBN"] = monthly_sales["ISBN"].astype(str).str.strip().str.zfill(13)
     monthly_sales["Period"] = monthly_sales["Period"].astype(str).str.strip()
+    monthly_sales = monthly_sales[monthly_sales["Period"] >= MIN_MONTHLY_REPORT_PERIOD]
     monthly_sales[units_column] = pd.to_numeric(monthly_sales[units_column], errors="coerce").fillna(0)
 
     periods = sorted(monthly_sales["Period"].dropna().unique(), reverse=True)
     if not periods:
-        raise ValueError(f"No monthly sales periods found in {monthly_sales_parquet}")
+        raise ValueError(
+            f"No monthly sales periods from {MIN_MONTHLY_REPORT_PERIOD} onward found in {monthly_sales_parquet}"
+        )
 
     monthly_units = (
         monthly_sales.groupby(["ISBN", "Period"], as_index=False)[units_column]
