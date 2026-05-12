@@ -18,6 +18,7 @@ desktop_path = str(_shared.USER_DESKTOP)
 amazon_rolling_folder = str(_shared.AMAZON_ROLLING_OUTPUT_FOLDER)
 amazon_po_folder = str(_shared.AMAZON_PO_FOLDER)
 dp_folders = {name: str(path) for name, path in _shared.AMAZON_ROLLING_DP_FOLDERS.items()}
+oracle_ypticod_file = _shared.ORACLE_YPTICOD_FILE
 amazon_rolling_cache_dir = Path(r"F:\ANALYSIS\Finance\DataWarehouse\Atelier AmazonRolling\cache")
 amazon_rolling_backup_dir = amazon_rolling_cache_dir / "backups"
 amazon_po_pickle_file = amazon_rolling_cache_dir / "latest_amazon_po.pkl"

@@ -4,7 +4,30 @@ from functools import lru_cache
 import pandas as pd
 pd.set_option('future.no_silent_downcasting', True)
 
-from paths import amazon_po_pickle_file, customer_orders_pickle_file, monthly_sales_parquet_file
+from paths import amazon_po_pickle_file, customer_orders_pickle_file, monthly_sales_parquet_file, oracle_ypticod_file
+
+
+def normalize_isbn(value) -> str:
+    if pd.isna(value):
+        return ""
+    text = str(value).strip().replace("-", "").replace(" ", "")
+    if text.endswith(".0"):
+        text = text[:-2]
+    digits = "".join(ch for ch in text if ch.isdigit())
+    if not digits:
+        return ""
+    return digits.zfill(13)[-13:]
+
+
+def normalize_asin(value) -> str:
+    if pd.isna(value):
+        return ""
+    text = str(value).strip()
+    if text.endswith(".0"):
+        text = text[:-2]
+    if not text or text.lower() == "nan":
+        return ""
+    return text.zfill(10)
 
 
 @lru_cache(maxsize=1)
@@ -16,11 +39,52 @@ def load_monthly_asin_map(monthly_sales_parquet: str | Path = monthly_sales_parq
     df = pd.read_parquet(parquet_path, columns=["Period", "ISBN", "ASIN"])
     df = df[df["ISBN"].notna() & df["ASIN"].notna()].copy()
     df = df[df["ISBN"].astype(str).str.strip() != "NO_ISBN"]
-    df["ISBN"] = df["ISBN"].astype(str).str.strip().str.zfill(13)
-    df["ASIN"] = df["ASIN"].astype(str).str.strip().str.zfill(10)
+    df["ISBN"] = df["ISBN"].map(normalize_isbn)
+    df["ASIN"] = df["ASIN"].map(normalize_asin)
     df["Period"] = df["Period"].astype(str).str.strip()
+    df = df[(df["ISBN"] != "") & (df["ASIN"] != "")]
     df = df.sort_values(["ISBN", "Period"], ascending=[True, False])
     return df.drop_duplicates(subset="ISBN", keep="first").set_index("ISBN")["ASIN"]
+
+
+@lru_cache(maxsize=1)
+def load_ypticod_asin_map(ypticod_file: str | Path = oracle_ypticod_file) -> pd.Series:
+    ypticod_path = Path(ypticod_file)
+    if not ypticod_path.exists():
+        return pd.Series(dtype="string")
+
+    df = pd.read_excel(ypticod_path, usecols=["ISBN", "ISBN10", "Publisher Name"])
+    publisher_delete_list = [
+        "Princeton Architectural Press",
+        "AFO LLC",
+        "Benefit",
+        "Driscolls",
+        "FareArts",
+        "Moleskine",
+        "No Publisher Name",
+        "PQ Blackwell",
+        "Sager",
+        "San Francisco Art Institute",
+        "Glam Media",
+    ]
+    if "Publisher Name" in df.columns:
+        df = df[~df["Publisher Name"].isin(publisher_delete_list)]
+    df["ISBN"] = df["ISBN"].map(normalize_isbn)
+    df["ASIN"] = df["ISBN10"].map(normalize_asin)
+    df = df[(df["ISBN"] != "") & (df["ASIN"] != "")]
+    df = df[~df["ISBN"].duplicated(keep=False)]
+    df = df[~df["ASIN"].duplicated(keep=False)]
+    return df.drop_duplicates(subset="ISBN", keep="first").set_index("ISBN")["ASIN"]
+
+
+def load_asin_map() -> pd.Series:
+    monthly_map = load_monthly_asin_map()
+    ypticod_map = load_ypticod_asin_map()
+    if monthly_map.empty:
+        return ypticod_map
+    if ypticod_map.empty:
+        return monthly_map
+    return monthly_map.combine_first(ypticod_map)
 
 
 def add_asin_before_isbn(df: pd.DataFrame) -> pd.DataFrame:
@@ -28,9 +92,12 @@ def add_asin_before_isbn(df: pd.DataFrame) -> pd.DataFrame:
         return df
 
     output = df.copy()
-    isbn_values = output["ISBN"].astype(str).str.replace(r"\.0$", "", regex=True).str.strip().str.zfill(13)
-    asin_map = load_monthly_asin_map()
+    isbn_values = output["ISBN"].map(normalize_isbn)
+    asin_map = load_asin_map()
     output["ASIN"] = isbn_values.map(asin_map).fillna("")
+    missing_asin_count = int(output["ASIN"].astype(str).str.strip().eq("").sum())
+    if missing_asin_count:
+        print(f"Warning: {missing_asin_count:,} Amazon rolling row(s) still have no ASIN mapping.")
 
     columns = list(output.columns)
     columns.remove("ASIN")
@@ -38,15 +105,48 @@ def add_asin_before_isbn(df: pd.DataFrame) -> pd.DataFrame:
     columns.insert(isbn_index, "ASIN")
     return output.loc[:, columns]
 
+
+def prepare_weekly_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    if "ISBN" not in df.columns:
+        return df
+
+    output = df.copy()
+    output["ISBN"] = output["ISBN"].map(normalize_isbn)
+    before = len(output)
+    output = output[output["ISBN"] != ""]
+    output = output.drop_duplicates(subset="ISBN", keep="first")
+    dropped = before - len(output)
+    if dropped:
+        print(f"Removed {dropped:,} duplicate/blank ISBN row(s) from weekly Amazon data before PO merge.")
+    return output
+
+
+def prepare_po_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    if "ISBN" not in df.columns:
+        return pd.DataFrame(columns=["ISBN", "PO_Qty"])
+
+    output = df.copy()
+    output["ISBN"] = output["ISBN"].map(normalize_isbn)
+    output = output[output["ISBN"] != ""]
+    if "PO_Qty" not in output.columns and "Accepted Quantity" in output.columns:
+        output = output.rename(columns={"Accepted Quantity": "PO_Qty"})
+    output["PO_Qty"] = pd.to_numeric(output.get("PO_Qty", 0), errors="coerce").fillna(0)
+    before = len(output)
+    output = output.groupby("ISBN", as_index=False)["PO_Qty"].sum()
+    combined = before - len(output)
+    if combined:
+        print(f"Combined {combined:,} duplicate Amazon PO row(s) by ISBN before weekly merge.")
+    return output
+
 def create_rolling_report(pickle_file,pickle_po):
-    df_co = pd.read_pickle(pickle_file)
-    df_po = pd.read_pickle(pickle_po)
+    df_co = prepare_weekly_dataframe(pd.read_pickle(pickle_file))
+    df_po = prepare_po_dataframe(pd.read_pickle(pickle_po))
     df_combined = pd.merge(df_co, df_po, how='left', left_on='ISBN', right_on='ISBN')
-    df_combined['PO_Qty'] = df_combined['PO_Qty'].fillna(0).astype(int)
+    df_combined['PO_Qty'] = pd.to_numeric(df_combined['PO_Qty'], errors='coerce').fillna(0).astype(int)
 
     if 'PO_Qty' in df_combined.columns and 'AvgLast6W' in df_combined.columns:
-        df_combined['AvgLast6W'] = pd.to_numeric(df_combined['AvgLast6W'], errors='coerce')
-        divisor = df_combined['AvgLast6W'].replace(0, pd.NA)
+        df_combined['AvgLast6W'] = pd.to_numeric(df_combined['AvgLast6W'], errors='coerce').fillna(0)
+        divisor = df_combined['AvgLast6W'].where(df_combined['AvgLast6W'].ne(0))
         df_combined['OH_Avg'] = (df_combined['PO_Qty'] / divisor).round(2)
         df_combined['OH_Avg'] = df_combined['OH_Avg'].fillna(0).infer_objects(copy=False)
     else:
