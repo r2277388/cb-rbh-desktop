@@ -14,6 +14,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from amazon_rolling_reports.functions import build_column_totals, save_to_excel
 from bn_rolling_reports.isbn_utils import normalize_isbn_series
+from shared.bookscan_calendar import bookscan_parts, bookscan_week
 try:
     from .rolling_paths import (
         bookscan_dp_folders,
@@ -237,7 +238,7 @@ def normalize_bookscan_isbn_series(series: pd.Series) -> pd.Series:
 
 def _format_bookscan_output_filename(week_ending: pd.Timestamp) -> str:
     return (
-        f"Week {week_ending.isocalendar().week:02d} - {week_ending:%Y} "
+        f"Week {bookscan_week(week_ending).week:02d} - {bookscan_week(week_ending).year} "
         f"Rolling Bookscan ({week_ending:%m%d%y}).xlsx"
     )
 
@@ -764,14 +765,15 @@ def build_report_dataframe(
         keep_yearly_columns = [f"12-31-{year}" for year in range(YEARLY_HISTORY_END, YEARLY_HISTORY_START - 1, -1)]
         yearly_df = yearly_wide.reindex(index=base_index, columns=keep_yearly_columns, fill_value=0)
 
-    latest_iso = latest_week.isocalendar()
-    iso_parts = weekly_sales["Week"].dt.isocalendar()
-    tytd = _series_by_isbn(weekly_sales, iso_parts.year == latest_iso.year)
+    latest_bookscan = bookscan_week(latest_week)
+    bookscan_dates = bookscan_parts(weekly_sales["Week"])
+    tytd = _series_by_isbn(weekly_sales, bookscan_dates["BookScanYear"] == latest_bookscan.year)
     lytd = _series_by_isbn(
         weekly_sales,
-        (iso_parts.year == latest_iso.year - 1) & (iso_parts.week <= latest_iso.week),
+        (bookscan_dates["BookScanYear"] == latest_bookscan.year - 1)
+        & (bookscan_dates["BookScanWeek"] <= latest_bookscan.week),
     )
-    ly_fy = _series_by_isbn(weekly_sales, weekly_sales["Week"].dt.year == latest_week.year - 1)
+    ly_fy = _series_by_isbn(weekly_sales, bookscan_dates["BookScanYear"] == latest_bookscan.year - 1)
     ltd = sales_df.groupby("ISBN")["qty"].sum()
     w52 = _series_by_isbn(weekly_sales, weekly_sales["Week"].between(latest_week - pd.Timedelta(weeks=51), latest_week))
     last6 = _series_by_isbn(weekly_sales, weekly_sales["Week"].between(latest_week - pd.Timedelta(weeks=5), latest_week))

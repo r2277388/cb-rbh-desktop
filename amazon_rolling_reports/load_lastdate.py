@@ -1,9 +1,17 @@
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.append(str(REPO_ROOT))
+
 from functions import get_connection, fetch_data_from_db
 from paths import customer_orders_pickle_file
 from query_datecheck import check_date
 import pandas as pd
 from datetime import datetime
 import os
+from shared.bookscan_calendar import bookscan_week
 
 def data_datecheck():
     engine = get_connection()
@@ -19,9 +27,8 @@ def lastdate_formats():
         if not isinstance(last_date, datetime):
             last_date = pd.to_datetime(last_date)
         formatted = last_date.strftime("%m_%d_%Y")
-        full_year = last_date.strftime("%Y")
-        week_number = last_date.isocalendar()[1]  # ISO week number
-        return formatted, week_number, full_year
+        bookscan = bookscan_week(last_date)
+        return formatted, bookscan.week, str(bookscan.year)
 
 def lastdate_display():
     df_date = data_datecheck()

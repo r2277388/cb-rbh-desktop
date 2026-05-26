@@ -1,5 +1,6 @@
 from datetime import datetime
 from pathlib import Path
+from shared.bookscan_calendar import bookscan_week
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -321,8 +322,8 @@ def amazon_sql_upload_weekly_summary_file(for_date: datetime | None = None) -> P
 
 
 def amazon_weekly_report_file(for_date: datetime) -> Path:
-    iso_week = for_date.isocalendar().week
+    week = bookscan_week(for_date).week
     return (
         AMAZON_WEEKLY_REPORTS_DIR
-        / f"w{iso_week:02d}__{for_date.strftime('%Y_%m_%d')}.xlsx"
+        / f"w{week:02d}__{for_date.strftime('%Y_%m_%d')}.xlsx"
     )

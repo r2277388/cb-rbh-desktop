@@ -92,10 +92,10 @@ def display_info(choice):
         A PO Report is saved off to: {process_paths.AMAZON_PO_ROOT_FOLDER} folder""",
         "103": "Amazon (3) PreOrders: Generates a report for Amazon NYP PreOrders. Save the relevant data file to the appropriate location before running.",
         "104": "Amazon (4) Customer Orders: Generates a report for Amazon Customer Orders. Save the relevant data file to the appropriate location before running.",
-        "105": "Amazon (5) Create SQL Sellthrough Upload (XLSX): Runs the amazon_sql_upload workflow to build the SQL upload workbook (ASIN/ISBN conversion, uploads, etc.).",
-        "106": "Amazon Rolling Reports (2) Process Weekly Rolling Report: Builds the weekly Amazon rolling report workbooks.",
-        "107": "Amazon Rolling Reports (3) Add new Monthly file to Cache: Compiles monthly Amazon sales CSVs into the monthly cache parquet.",
-        "108": "Amazon Rolling Reports (4) Run Monthly Rolling Report: Builds the standalone monthly Amazon rolling report workbooks.",
+        "105": "Amazon Rolling Reports Weekly Process step 1: Create SQL Sellthrough Upload (XLSX). Runs the amazon_sql_upload workflow to build the SQL upload workbook.",
+        "106": "Amazon Rolling Reports Weekly Process step 2: Process Weekly Rolling Report. Builds the weekly Amazon rolling report workbooks.",
+        "107": "Amazon Rolling Reports Monthly Process step 1: Add new Monthly file to Cache. Compiles monthly Amazon sales CSVs into the monthly cache parquet.",
+        "108": "Amazon Rolling Reports Monthly Process step 2: Run Monthly Rolling Report. Builds the standalone monthly Amazon rolling report workbooks.",
         "109": "Amazon AMS Manager (monthly): Manage/update AMS month configuration and run incremental or full AMS processing.",
         "94": "Check Table Updates: Runs SQL checks for table freshness and recent weeks for SSR/Amazon/Bookscan tables.",
         "95": "Install Main Venv Requirements: Runs `pip install -r requirements.txt` using the repo's main virtual environment.",
@@ -1214,11 +1214,13 @@ def run_retailer_rolling_reports_menu() -> None:
     while True:
         print("\nRetailer Rolling Reports")
         print()
-        print("Amazon Rolling Reports")
-        print("    01. Create SQL Sellthrough Upload (XLSX)")
-        print("    02. Process Weekly Rolling Report")
-        print("    03. Add new Monthly file to Cache")
-        print("    04. Run Monthly Rolling Report")
+        print("Amazon Rolling Reports (Weekly Process)")
+        print("    01. Create SQL Sellthrough Upload (XLSX) (step 1)")
+        print("    02. Process Weekly Rolling Report (step 2)")
+        print()
+        print("Amazon Rolling Reports (Monthly Process)")
+        print("    03. Add new Monthly file to Cache (monthly step 1)")
+        print("    04. Run Monthly Rolling Report (monthly step 2)")
         print()
         print("Other Retailer Rolling Reports")
         print("    05. Barnes & Noble Rolling Reports")
@@ -1576,13 +1578,16 @@ def run_amazon_rolling_reports_menu():
     while True:
         print("\nAmazon Rolling Reports")
         print()
+        print("Weekly Process")
         print("    1. Check Amazon upload table (last 10 weeks)")
-        print("    2. Full refresh + all reports")
-        print("    3. Rebuild all reports from current pickles")
-        print("    4. Full refresh + main two reports only")
-        print("    5. Rebuild main two reports only from current pickles")
-        print("    6. Compile monthly sales parquet")
-        print("    7. Build monthly rolling reports")
+        print("    2. Full refresh + all weekly reports")
+        print("    3. Rebuild all weekly reports from current pickles")
+        print("    4. Full refresh + main two weekly reports only")
+        print("    5. Rebuild main two weekly reports only from current pickles")
+        print()
+        print("Monthly Process")
+        print("    6. Add new Monthly file to Cache")
+        print("    7. Run Monthly Rolling Report")
         print("    8. Back to main menu")
         print()
         try:

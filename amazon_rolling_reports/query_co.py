@@ -6,7 +6,7 @@ def sql_co():
     DECLARE @last_date date;
     DECLARE @ty_year   int;
     DECLARE @ly_year   int;
-    DECLARE @iso_wk    int;
+    DECLARE @bs_wk     int;
 
     DECLARE @wk        date;
     DECLARE @cols      nvarchar(max);
@@ -17,31 +17,31 @@ def sql_co():
     SELECT @last_date = MAX(
         DATEADD(
             day,
-            6 - ((DATEPART(WEEKDAY, CAST([Week] AS date)) + @@DATEFIRST - 2) % 7 + 1),
+            6 - ((DATEPART(WEEKDAY, CAST([Week] AS date)) + @@DATEFIRST - 1) % 7),
             CAST([Week] AS date)
         )
     )
     FROM [CBQ2].[cb].[Sellthrough_Amazon];
     SET @ty_year = YEAR(@last_date);
+
+    -- BookScan weeks run Sunday-Saturday. Week 1 is the first full Sunday-Saturday week.
+    DECLARE @jan1_calendar date = DATEFROMPARTS(@ty_year, 1, 1);
+    DECLARE @dow_jan1_calendar int = (DATEPART(WEEKDAY, @jan1_calendar) + @@DATEFIRST - 1) % 7; -- Sunday=0
+    DECLARE @first_sunday_calendar date = DATEADD(day, (7 - @dow_jan1_calendar) % 7, @jan1_calendar);
+    IF @last_date < @first_sunday_calendar
+        SET @ty_year = @ty_year - 1;
+
     SET @ly_year = @ty_year - 1;
-    SET @iso_wk  = DATEPART(ISO_WEEK, @last_date);
 
-    -- Helper: derive Monday=1 weekday regardless of @@DATEFIRST
-    DECLARE @dow_last int = (DATEPART(WEEKDAY, @last_date) + @@DATEFIRST - 2) % 7 + 1; -- 1..7 with Monday=1
-    DECLARE @iso_monday_last date = DATEADD(day, 1-@dow_last, @last_date);
-
-    -- Monday of ISO week 1 (the week containing Jan 4) for TY and LY
-    DECLARE @jan4_ty date = DATEFROMPARTS(@ty_year, 1, 4);
-    DECLARE @jan4_ly date = DATEFROMPARTS(@ly_year, 1, 4);
-
-    DECLARE @dow_jan4_ty int = (DATEPART(WEEKDAY, @jan4_ty) + @@DATEFIRST - 2) % 7 + 1;
-    DECLARE @dow_jan4_ly int = (DATEPART(WEEKDAY, @jan4_ly) + @@DATEFIRST - 2) % 7 + 1;
-
-    DECLARE @iso_start_ty date = DATEADD(day, 1-@dow_jan4_ty, @jan4_ty);
-    DECLARE @iso_start_ly date = DATEADD(day, 1-@dow_jan4_ly, @jan4_ly);
-
-    -- LY end aligned to same ISO week number as @last_date (end = Sunday of that ISO week)
-    DECLARE @iso_end_ly date = DATEADD(day, 6, DATEADD(week, @iso_wk-1, @iso_start_ly)); -- ✅ use DATEADD(day,6,...)
+    DECLARE @jan1_ty date = DATEFROMPARTS(@ty_year, 1, 1);
+    DECLARE @jan1_ly date = DATEFROMPARTS(@ly_year, 1, 1);
+    DECLARE @dow_jan1_ty int = (DATEPART(WEEKDAY, @jan1_ty) + @@DATEFIRST - 1) % 7;
+    DECLARE @dow_jan1_ly int = (DATEPART(WEEKDAY, @jan1_ly) + @@DATEFIRST - 1) % 7;
+    DECLARE @bs_start_ty date = DATEADD(day, (7 - @dow_jan1_ty) % 7, @jan1_ty);
+    DECLARE @bs_start_ly date = DATEADD(day, (7 - @dow_jan1_ly) % 7, @jan1_ly);
+    DECLARE @bs_end_ly_fy date = DATEADD(day, -1, @bs_start_ty);
+    SET @bs_wk = (DATEDIFF(day, @bs_start_ty, @last_date) / 7) + 1;
+    DECLARE @bs_end_ly date = DATEADD(day, 6, DATEADD(week, @bs_wk - 1, @bs_start_ly));
 
     IF OBJECT_ID('tempdb..#items') IS NOT NULL DROP TABLE #items;
     SELECT
@@ -64,7 +64,7 @@ def sql_co():
             UPPER(RIGHT(REPLICATE('0',13) + REPLACE(REPLACE(CONVERT(varchar(32), sta.ISBN),'-',''),' ',''), 13)) AS ISBN13,
             DATEADD(
                 day,
-                6 - ((DATEPART(WEEKDAY, CAST(sta.[Week] AS date)) + @@DATEFIRST - 2) % 7 + 1),
+                6 - ((DATEPART(WEEKDAY, CAST(sta.[Week] AS date)) + @@DATEFIRST - 1) % 7),
                 CAST(sta.[Week] AS date)
             ) AS [Week],
             ISNULL(sta.CustomerOrders, 0) AS CustomerOrders,
@@ -72,7 +72,7 @@ def sql_co():
         FROM [CBQ2].[cb].[Sellthrough_Amazon] sta
         WHERE DATEADD(
             day,
-            6 - ((DATEPART(WEEKDAY, CAST(sta.[Week] AS date)) + @@DATEFIRST - 2) % 7 + 1),
+            6 - ((DATEPART(WEEKDAY, CAST(sta.[Week] AS date)) + @@DATEFIRST - 1) % 7),
             CAST(sta.[Week] AS date)
         ) BETWEEN @start_date_ltd AND @last_date
     )
@@ -83,15 +83,15 @@ def sql_co():
         SUM(CASE WHEN s.[Week] BETWEEN DATEADD(week,-51,@last_date) AND @last_date THEN s.CustomerOrders ELSE 0 END) AS W52,
         -- last 6 weeks (inclusive)
         SUM(CASE WHEN s.[Week] BETWEEN DATEADD(week,-5,@last_date)  AND @last_date THEN s.CustomerOrders ELSE 0 END) AS SumLast6W,
-        -- ISO TYTD: ISO start of TY through @last_date
-        SUM(CASE WHEN s.[Week] >= @iso_start_ty AND s.[Week] <= @last_date
+        -- BookScan TYTD: first full Sunday-Saturday week through @last_date
+        SUM(CASE WHEN s.[Week] >= @bs_start_ty AND s.[Week] <= @last_date
                  THEN s.CustomerOrders ELSE 0 END) AS TYTD,
-        -- ISO LYTD: ISO start of LY through end of same ISO week number as @last_date
-        SUM(CASE WHEN s.[Week] >= @iso_start_ly AND s.[Week] <= @iso_end_ly
+        -- BookScan LYTD: prior BookScan year through same BookScan week number
+        SUM(CASE WHEN s.[Week] >= @bs_start_ly AND s.[Week] <= @bs_end_ly
                  THEN s.CustomerOrders ELSE 0 END) AS LYTD,
-        -- Last calendar year total (keep if needed)
-        SUM(CASE WHEN s.[Week] >= DATEFROMPARTS(@ly_year,1,1)
-                      AND s.[Week] <  DATEFROMPARTS(@ty_year,1,1)
+        -- Last full BookScan year
+        SUM(CASE WHEN s.[Week] >= @bs_start_ly
+                      AND s.[Week] <= @bs_end_ly_fy
                  THEN s.CustomerOrders ELSE 0 END) AS LY_FY
         ,SUM(s.CustomerOrders) AS LTD
         ,SUM(CASE WHEN s.[Week] BETWEEN '2012-01-01' AND '2012-12-31'
@@ -155,7 +155,7 @@ def sql_co():
                 varchar(10),
                 DATEADD(
                     day,
-                    6 - ((DATEPART(WEEKDAY, CAST(sta.[Week] AS date)) + @@DATEFIRST - 2) % 7 + 1),
+                    6 - ((DATEPART(WEEKDAY, CAST(sta.[Week] AS date)) + @@DATEFIRST - 1) % 7),
                     CAST(sta.[Week] AS date)
                 ),
                 110
@@ -164,7 +164,7 @@ def sql_co():
         FROM [CBQ2].[cb].[Sellthrough_Amazon] sta
         WHERE DATEADD(
             day,
-            6 - ((DATEPART(WEEKDAY, CAST(sta.[Week] AS date)) + @@DATEFIRST - 2) % 7 + 1),
+            6 - ((DATEPART(WEEKDAY, CAST(sta.[Week] AS date)) + @@DATEFIRST - 1) % 7),
             CAST(sta.[Week] AS date)
         ) BETWEEN @start_date_weekly AND @last_date
     ),

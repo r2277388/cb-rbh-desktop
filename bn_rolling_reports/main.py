@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 from tkinter import Tk, filedialog, messagebox
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.append(str(REPO_ROOT))
+
 from config import BASE_FOLDER
+from shared.bookscan_calendar import bookscan_week
 from pos_combiner import (
     build_combined_pos,
     collect_pos_source_files,
@@ -171,7 +177,8 @@ def _format_week_status(week) -> str:
     if week is None:
         return "None found"
     saturday_note = "" if week.weekday() == 5 else " (not a Saturday)"
-    return f"Week {week.isocalendar().week}, {week.strftime('%A, %B')} {week.day}, {week.year}{saturday_note}"
+    bookscan = bookscan_week(week)
+    return f"Week {bookscan.week}, {week.strftime('%A, %B')} {week.day}, {bookscan.year}{saturday_note}"
 
 
 def confirm_refresh_cache(latest_sql_week, latest_cache_week) -> bool:

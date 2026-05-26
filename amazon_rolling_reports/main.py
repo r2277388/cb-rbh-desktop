@@ -1,10 +1,17 @@
 import argparse
 import os
+import sys
 import time
 from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.append(str(REPO_ROOT))
+
+from shared.bookscan_calendar import bookscan_week
 from file_creation import create_rolling_report
 from functions import build_column_totals, save_to_excel
 from load_amazon_open_po import save_latest_amazon_po_as_pickle
@@ -56,9 +63,8 @@ def get_report_period_from_df(df):
 
     latest_date = max(valid_dates)
     date_formatted = latest_date.strftime("%m_%d_%Y")
-    week_number = latest_date.isocalendar().week
-    full_year = latest_date.strftime("%Y")
-    return date_formatted, week_number, full_year
+    bookscan = bookscan_week(latest_date)
+    return date_formatted, bookscan.week, str(bookscan.year)
 
 
 def build_title_block(report_type: str, date_formatted: str) -> dict[str, object]:

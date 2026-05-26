@@ -1,6 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.append(str(REPO_ROOT))
+
+from shared.bookscan_calendar import bookscan_week
 
 try:
     from .rolling_customer_sales import (
@@ -50,9 +58,10 @@ def _format_week_status(week) -> str:
     if week is None:
         return "None found"
     saturday_note = "" if week.weekday() == 5 else " (not a Saturday)"
+    bookscan = bookscan_week(week)
     return (
-        f"Week {week.isocalendar().week}, "
-        f"{week.strftime('%A, %B')} {week.day}, {week.year}"
+        f"Week {bookscan.week}, "
+        f"{week.strftime('%A, %B')} {week.day}, {bookscan.year}"
         f"{saturday_note}"
     )
 

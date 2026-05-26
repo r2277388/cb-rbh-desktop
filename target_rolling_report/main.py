@@ -12,12 +12,14 @@ from xlsxwriter.utility import xl_rowcol_to_cell
 
 try:
     from paths import process_paths
+    from shared.bookscan_calendar import bookscan_parts, bookscan_week
     from shared.db import fetch_data_from_db, get_connection
 except ImportError:  # Allows direct execution from this folder.
     import sys
 
     sys.path.append(str(Path(__file__).resolve().parents[1]))
     from paths import process_paths
+    from shared.bookscan_calendar import bookscan_parts, bookscan_week
     from shared.db import fetch_data_from_db, get_connection
 
 
@@ -33,6 +35,15 @@ INVENTORY_CACHE = process_paths.TARGET_NOC_CACHE_DIR / "target_noc_inventory.par
 
 METADATA_COLUMNS = ["DPCI", "Pub", "PT", "FT", "PGRP", "ISBN", "Title", "Price", "PubDate"]
 REPORT_MIN_POSITIVE_SALES_DATE = pd.Timestamp("2023-01-01")
+
+
+def add_bookscan_week_columns(df: pd.DataFrame, week_column: str = "Week") -> pd.DataFrame:
+    result = df.copy()
+    result[week_column] = pd.to_datetime(result[week_column]).dt.normalize()
+    parts = bookscan_parts(result[week_column])
+    result["BookScanYear"] = parts["BookScanYear"]
+    result["WeekNum"] = parts["BookScanWeek"]
+    return result
 
 ELIGIBLE_TITLE_SQL_TEMPLATE = """
 SELECT
@@ -190,7 +201,7 @@ def bootstrap_from_skeleton(force: bool = False) -> None:
         label = header_row.iloc[col_idx]
         week = parse_date(label)
         if week is not None:
-            weeknum = int(parse_number(weeknum_row.iloc[col_idx])) or week.isocalendar().week
+            weeknum = bookscan_week(week).week
             values = data.iloc[:, col_idx].map(parse_number)
             for row_idx, units in values.items():
                 if units == 0:
@@ -313,32 +324,7 @@ def load_sales_file(path: Path, latest_week: pd.Timestamp) -> tuple[pd.Timestamp
 
 
 def assign_week_numbers(new_sales: pd.DataFrame, existing: pd.DataFrame) -> pd.DataFrame:
-    known = existing[["Week", "WeekNum"]].drop_duplicates() if not existing.empty else pd.DataFrame()
-    sales = new_sales.merge(known, on="Week", how="left")
-    missing_weeks = sorted(sales.loc[sales["WeekNum"].isna(), "Week"].drop_duplicates())
-    if not missing_weeks:
-        sales["WeekNum"] = sales["WeekNum"].astype(int)
-        return sales
-
-    known_by_year = known.copy()
-    if not known_by_year.empty:
-        known_by_year["Year"] = pd.to_datetime(known_by_year["Week"]).dt.year
-
-    for week in missing_weeks:
-        prior = known_by_year[
-            (known_by_year["Year"] == week.year) & (pd.to_datetime(known_by_year["Week"]) < week)
-        ]
-        if not prior.empty:
-            weeknum = int(prior.sort_values("Week").iloc[-1]["WeekNum"]) + 1
-        else:
-            weeknum = week.isocalendar().week
-        sales.loc[sales["Week"].eq(week), "WeekNum"] = weeknum
-        known_by_year = pd.concat(
-            [known_by_year, pd.DataFrame([{"Week": week, "WeekNum": weeknum, "Year": week.year}])],
-            ignore_index=True,
-        )
-    sales["WeekNum"] = sales["WeekNum"].astype(int)
-    return sales
+    return add_bookscan_week_columns(new_sales).drop(columns=["BookScanYear"])
 
 
 def apply_sales_dpci_mapping_to_cache(sales_mapping: pd.DataFrame) -> None:
@@ -357,7 +343,7 @@ def apply_sales_dpci_mapping_to_cache(sales_mapping: pd.DataFrame) -> None:
         weekly["DPCI"] = weekly.apply(
             lambda row: mapping_dict.get(row["ISBN"], row["DPCI"]), axis=1
         )
-        weekly["Week"] = pd.to_datetime(weekly["Week"]).dt.normalize()
+        weekly = add_bookscan_week_columns(weekly)
         weekly = (
             weekly.groupby(["DPCI", "ISBN", "Week"], as_index=False)
             .agg({"WeekNum": "max", "Units": "sum"})
@@ -437,6 +423,7 @@ def sync_eligible_metadata_from_sql(
     filtered_weekly = weekly[weekly["ISBN"].isin(eligible_isbns)].copy()
     removed = len(weekly) - len(filtered_weekly)
     if removed:
+        filtered_weekly = add_bookscan_week_columns(filtered_weekly).drop(columns=["BookScanYear"])
         filtered_weekly.to_parquet(SALES_CACHE, index=False)
         print(f"Removed {removed:,} cached weekly rows for Target ISBNs not in the eligible SQL title list.")
 
@@ -494,7 +481,7 @@ def refresh_cache(use_samples: bool = False, assume_yes: bool = False) -> pd.Tim
     weekly = pd.read_parquet(SALES_CACHE)
     weekly["Week"] = pd.to_datetime(weekly["Week"]).dt.normalize()
     combined_sales = pd.concat([weekly, sales], ignore_index=True)
-    combined_sales["Week"] = pd.to_datetime(combined_sales["Week"]).dt.normalize()
+    combined_sales = add_bookscan_week_columns(combined_sales).drop(columns=["BookScanYear"])
     combined_sales = combined_sales.sort_values(["DPCI", "ISBN", "Week"])
     combined_sales = combined_sales.drop_duplicates(subset=["DPCI", "ISBN", "Week"], keep="last")
     combined_sales.to_parquet(SALES_CACHE, index=False)
@@ -555,9 +542,10 @@ def safe_divide(numerator: pd.Series, denominator: pd.Series | float) -> pd.Seri
 
 
 def build_summary(metadata: pd.DataFrame, weekly: pd.DataFrame, yearly: pd.DataFrame, inventory: pd.DataFrame) -> tuple[pd.DataFrame, pd.Timestamp, int]:
-    weekly["Week"] = pd.to_datetime(weekly["Week"]).dt.normalize()
+    weekly = add_bookscan_week_columns(weekly)
     latest_week = weekly["Week"].max()
-    current_year = latest_week.year
+    latest_bookscan = bookscan_week(latest_week)
+    current_year = latest_bookscan.year
     prior_year = current_year - 1
 
     latest_inventory_week = inventory["Week"].max() if not inventory.empty else latest_week
@@ -567,18 +555,32 @@ def build_summary(metadata: pd.DataFrame, weekly: pd.DataFrame, yearly: pd.DataF
     keys["DPCI"] = keys["DPCI"].astype(str).str.strip()
     keys["ISBN"] = keys["ISBN"].map(normalize_isbn)
 
-    grouped = weekly.groupby(["DPCI", "ISBN", "Week"], as_index=False).agg({"Units": "sum", "WeekNum": "max"})
+    grouped = weekly.groupby(["DPCI", "ISBN", "Week"], as_index=False).agg({"Units": "sum", "WeekNum": "max", "BookScanYear": "max"})
     pivot = grouped.pivot_table(index=["DPCI", "ISBN"], columns="Week", values="Units", aggfunc="sum", fill_value=0)
 
     def sum_between(start: pd.Timestamp, end: pd.Timestamp) -> pd.Series:
         cols = [col for col in pivot.columns if start <= col <= end]
         return pivot[cols].sum(axis=1) if cols else pd.Series(0, index=pivot.index)
 
-    current_weeks = sorted([col for col in pivot.columns if col.year == current_year and col <= latest_week])
-    prior_weeks = sorted([col for col in pivot.columns if col.year == prior_year])[: len(current_weeks)]
+    week_parts = bookscan_parts(pd.Series(pivot.columns, index=pivot.columns)) if len(pivot.columns) else pd.DataFrame()
+    current_weeks = sorted(
+        [
+            col for col in pivot.columns
+            if int(week_parts.loc[col, "BookScanYear"]) == current_year
+            and int(week_parts.loc[col, "BookScanWeek"]) <= latest_bookscan.week
+            and col <= latest_week
+        ]
+    )
+    prior_weeks = sorted(
+        [
+            col for col in pivot.columns
+            if int(week_parts.loc[col, "BookScanYear"]) == prior_year
+            and int(week_parts.loc[col, "BookScanWeek"]) <= latest_bookscan.week
+        ]
+    )
     last_52 = sorted([col for col in pivot.columns if col <= latest_week])[-52:]
     last_26 = sorted([col for col in pivot.columns if col <= latest_week])[-26:]
-    fyly_cols = [col for col in pivot.columns if col.year == prior_year]
+    fyly_cols = [col for col in pivot.columns if int(week_parts.loc[col, "BookScanYear"]) == prior_year]
 
     summary = pd.DataFrame(index=pivot.index)
     summary["52 WK"] = pivot[last_52].sum(axis=1) if last_52 else 0
@@ -607,7 +609,7 @@ def build_summary(metadata: pd.DataFrame, weekly: pd.DataFrame, yearly: pd.DataF
     report["WOS"] = safe_divide(report["Store Ct"], report["26 AvgWks"] * 26)
     report["UPSPW 52WK"] = safe_divide(report["52 WK"], report["Store Ct"] * 52)
     report["$PSPW 52WK"] = safe_divide(report["52 WK"] * report["Price"], report["Store Ct"] * 52)
-    weeks_so_far = max(len(current_weeks), 1)
+    weeks_so_far = max(latest_bookscan.week, 1)
     report["UPSPW YTD"] = safe_divide(report["YTD"], report["Store Ct"] * weeks_so_far)
     report["YTD Ret$"] = report["YTD"] * report["Price"]
     report["LYTD Ret$"] = report["LYTD"] * report["Price"]
@@ -619,7 +621,7 @@ def build_summary(metadata: pd.DataFrame, weekly: pd.DataFrame, yearly: pd.DataF
     report["_LatestWeekSort"] = report["_LatestWeekSort"].fillna(0)
 
     weeknum_lookup = grouped[["Week", "WeekNum"]].drop_duplicates().sort_values("Week")
-    latest_weeknum = int(weeknum_lookup[weeknum_lookup["Week"].eq(latest_week)]["WeekNum"].max())
+    latest_weeknum = latest_bookscan.week
     report = report.sort_values(["_LatestWeekSort", "YTD", "52 WK", "Title"], ascending=[False, False, False, True])
     report = report.drop(columns=["_LatestWeekSort"])
     return report, latest_week, latest_weeknum
@@ -627,7 +629,7 @@ def build_summary(metadata: pd.DataFrame, weekly: pd.DataFrame, yearly: pd.DataF
 
 def output_path_for(latest_week: pd.Timestamp, weeknum: int, output_folder: Path | None = None) -> Path:
     folder = output_folder or process_paths.TARGET_NOC_OUTPUT_FOLDER
-    filename = f"Week {weeknum:02d} - {latest_week.year} Rolling Target NOC ({latest_week:%m%d%y}).xlsx"
+    filename = f"Week {weeknum:02d} - {bookscan_week(latest_week).year} Rolling Target NOC ({latest_week:%m%d%y}).xlsx"
     return folder / filename
 
 
@@ -684,10 +686,13 @@ def build_report(
     output_path = output_path_for(latest_week, weeknum, output_folder)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    weekly["Week"] = pd.to_datetime(weekly["Week"]).dt.normalize()
-    grouped = weekly.groupby(["DPCI", "ISBN", "Week"], as_index=False).agg({"Units": "sum", "WeekNum": "max"})
+    weekly = add_bookscan_week_columns(weekly)
+    grouped = weekly.groupby(["DPCI", "ISBN", "Week"], as_index=False).agg({"Units": "sum", "WeekNum": "max", "BookScanYear": "max"})
     weekly_cols = sorted(
-        [week for week in grouped["Week"].drop_duplicates() if week.year >= 2023 and week <= latest_week],
+        [
+            week for week in grouped["Week"].drop_duplicates()
+            if bookscan_week(week).year >= 2023 and week <= latest_week
+        ],
         reverse=True,
     )
     weekly_pivot = grouped.pivot_table(index=["DPCI", "ISBN"], columns="Week", values="Units", aggfunc="sum", fill_value=0)
@@ -695,13 +700,13 @@ def build_report(
 
     historical_years = sorted(
         set(yearly["Year"].dropna().astype(int).tolist())
-        | {week.year for week in grouped["Week"].drop_duplicates() if week.year < 2023},
+        | {bookscan_week(week).year for week in grouped["Week"].drop_duplicates() if bookscan_week(week).year < 2023},
         reverse=True,
     )
     yearly_totals = yearly.groupby(["DPCI", "ISBN", "Year"], as_index=False)["Units"].sum() if not yearly.empty else pd.DataFrame()
-    old_weekly = grouped[grouped["Week"].dt.year < 2023].copy()
+    old_weekly = grouped[grouped["BookScanYear"] < 2023].copy()
     if not old_weekly.empty:
-        old_weekly["Year"] = old_weekly["Week"].dt.year
+        old_weekly["Year"] = old_weekly["BookScanYear"]
         old_weekly = old_weekly.groupby(["DPCI", "ISBN", "Year"], as_index=False)["Units"].sum()
         yearly_totals = pd.concat([yearly_totals, old_weekly], ignore_index=True)
     yearly_pivot = (
@@ -816,7 +821,7 @@ def build_report(
                 parsed = parse_date(column)
                 if parsed is not None:
                     month_format = green_week_format if parsed.month % 2 == 1 else pink_week_format
-                    worksheet.write(3, col_idx, int(weeknum_lookup.get(parsed, parsed.isocalendar().week)), month_format)
+                    worksheet.write(3, col_idx, int(weeknum_lookup.get(parsed, bookscan_week(parsed).week)), month_format)
                     header = parsed
                 else:
                     worksheet.write(3, col_idx, "YEAR", group_format)
@@ -903,12 +908,12 @@ def build_report(
                 wk52_range = f"{xl_rowcol_to_cell(5, col_index['52 WK'])}:{xl_rowcol_to_cell(last_data_row, col_index['52 WK'])}"
                 write_summary_formula(row, "$PSPW 52WK", f'=IFERROR(SUMPRODUCT({price_range},{wk52_range})/{store_ct}/52,0)', summary_decimal_format)
             if "UPSPW YTD" in col_index:
-                write_summary_formula(row, "UPSPW YTD", f'=IFERROR({ytd}/{store_ct}/{max(len([week for week in weekly_cols if week.year == latest_week.year]), 1)},0)', summary_decimal_format)
+                write_summary_formula(row, "UPSPW YTD", f'=IFERROR({ytd}/{store_ct}/{max(len([week for week in weekly_cols if bookscan_week(week).year == bookscan_week(latest_week).year]), 1)},0)', summary_decimal_format)
             if "$PSPW YTD" in col_index:
                 write_summary_formula(
                     row,
                     "$PSPW YTD",
-                    f'=IFERROR({ytd_dollars}/{store_ct}/{max(len([week for week in weekly_cols if week.year == latest_week.year]), 1)},0)',
+                    f'=IFERROR({ytd_dollars}/{store_ct}/{max(len([week for week in weekly_cols if bookscan_week(week).year == bookscan_week(latest_week).year]), 1)},0)',
                     summary_decimal_format,
                 )
 

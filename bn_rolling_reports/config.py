@@ -1,6 +1,13 @@
 from pathlib import Path
 from importlib.util import module_from_spec, spec_from_file_location
 from datetime import datetime
+import sys
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.append(str(REPO_ROOT))
+
+from shared.bookscan_calendar import bookscan_week
 
 
 def _load_shared_paths():
@@ -43,13 +50,13 @@ NUMERIC_COLUMNS = [
 
 
 def format_legacy_bn_output_filename(label: str, week_ending: datetime) -> str:
-    iso_week = week_ending.isocalendar().week
-    return f"{iso_week:02d} {week_ending:%m%d%Y} Barnes & Noble - {label}.xlsx"
+    bookscan = bookscan_week(week_ending)
+    return f"{bookscan.week:02d} {week_ending:%m%d%Y} Barnes & Noble - {label}.xlsx"
 
 
 def format_legacy_bn_removed_isbns_filename(label: str, week_ending: datetime) -> str:
-    iso_week = week_ending.isocalendar().week
-    return f"{iso_week:02d} {week_ending:%m%d%Y} Barnes & Noble - {label} Removed ISBNs.xlsx"
+    bookscan = bookscan_week(week_ending)
+    return f"{bookscan.week:02d} {week_ending:%m%d%Y} Barnes & Noble - {label} Removed ISBNs.xlsx"
 OUTPUT_COLUMN_RENAMES = {
     "EAN": "ISBN",
     "OH": "OH_Stores",

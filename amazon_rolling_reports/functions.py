@@ -1,6 +1,15 @@
+import sys
+from pathlib import Path
+
 from sqlalchemy import create_engine
 import pandas as pd
 from xlsxwriter.utility import xl_rowcol_to_cell
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.append(str(REPO_ROOT))
+
+from shared.bookscan_calendar import bookscan_week
 
 def get_connection() -> create_engine:
     """Establish a connection to the database and return the engine."""
@@ -229,7 +238,7 @@ def save_to_excel(
                     worksheet.write(
                         header_row - 1,
                         col_idx,
-                        history_date.month if len(str(col_name)) == 6 and str(col_name).isdigit() else history_date.isocalendar().week,
+                        history_date.month if len(str(col_name)) == 6 and str(col_name).isdigit() else bookscan_week(history_date).week,
                         header_format,
                     )
                 elif rolling_main_layout and col_idx in group_ranges:
