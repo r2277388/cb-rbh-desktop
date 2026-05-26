@@ -22,7 +22,7 @@ CACHE_COLUMNS = ["CacheDate", *SOURCE_COLUMNS]
 ISBN_FIELDS = ["Sea", "Release Date", "Price"]
 TASK_FIELDS = ["Due Date"]
 PUB_GROUP_FILTERS = ("ENT", "ART", "GAM", "FWN", "LIF", "CPA")
-TASK_INTERVAL_WEEKS = {
+TASK_CHANGE_THRESHOLD_WEEKS = {
     "Cover Due": 4,
     "Title memo to DES": 4,
     "1st galley due": 2,
@@ -30,7 +30,6 @@ TASK_INTERVAL_WEEKS = {
     "Print files out": 2,
     "On Sale Date": 1,
 }
-INTERVAL_ANCHOR_DATE = pd.Timestamp("2026-05-04")
 
 
 def default_report_file() -> Path:
@@ -232,6 +231,7 @@ def variation_columns() -> list[str]:
         "Previous Value",
         "Current Cache Date",
         "Current Value",
+        "Schedule Movement",
     ]
 
 
@@ -240,34 +240,47 @@ def filtered_activity_cache(cache: pd.DataFrame, reference_date: pd.Timestamp | 
     return cache[
         cache["Sea"].isin(seasons)
         & cache["Pub Grp"].isin(PUB_GROUP_FILTERS)
-        & cache["Task Name"].isin(TASK_INTERVAL_WEEKS)
+        & cache["Task Name"].isin(TASK_CHANGE_THRESHOLD_WEEKS)
     ].copy()
 
 
-def is_interval_date(cache_date: pd.Timestamp, interval_weeks: int) -> bool:
-    cache_date = pd.Timestamp(cache_date).normalize()
-    days_since_anchor = (cache_date - INTERVAL_ANCHOR_DATE).days
-    interval_days = interval_weeks * 7
-    return days_since_anchor >= interval_days and days_since_anchor % interval_days == 0
+def threshold_label(threshold_weeks: int) -> str:
+    if threshold_weeks == 1:
+        return "Weekly comparison; show if change is greater than 1 week"
+    return f"Weekly comparison; show if change is greater than {threshold_weeks} weeks"
 
 
-def interval_label(interval_weeks: int) -> str:
-    if interval_weeks == 1:
-        return "Every 1 Week - a weekly comparison"
-    return f"Every {interval_weeks} Weeks - a {interval_weeks} week comparison"
+def schedule_movement_label(previous_value: object, current_value: object) -> tuple[int, str] | None:
+    previous_date = pd.to_datetime(previous_value, errors="coerce")
+    current_date = pd.to_datetime(current_value, errors="coerce")
+    if pd.isna(previous_date) or pd.isna(current_date):
+        return None
+
+    delta_days = int((pd.Timestamp(current_date).normalize() - pd.Timestamp(previous_date).normalize()).days)
+    if delta_days == 0:
+        return None
+
+    direction = "Added" if delta_days > 0 else "Removed"
+    absolute_days = abs(delta_days)
+    weeks, days = divmod(absolute_days, 7)
+    if days:
+        label = f"{weeks:02d} Weeks {days:02d} Days {direction}"
+    else:
+        label = f"{weeks:02d} Weeks {direction}"
+    return absolute_days, label
 
 
 def build_stipulations(reference_date: pd.Timestamp | None = None) -> pd.DataFrame:
     rows: list[dict[str, str]] = []
-    rows.extend({"Stipulation": "Pub Grp", "Value": value, "Update Variation Interval": ""} for value in PUB_GROUP_FILTERS)
-    rows.extend({"Stipulation": "Sea", "Value": value, "Update Variation Interval": ""} for value in future_seasons(reference_date))
+    rows.extend({"Stipulation": "Pub Grp", "Value": value, "Update Variation Threshold": ""} for value in PUB_GROUP_FILTERS)
+    rows.extend({"Stipulation": "Sea", "Value": value, "Update Variation Threshold": ""} for value in future_seasons(reference_date))
     rows.extend(
         {
             "Stipulation": "Task Name",
             "Value": task_name,
-            "Update Variation Interval": interval_label(interval_weeks),
+            "Update Variation Threshold": threshold_label(threshold_weeks),
         }
-        for task_name, interval_weeks in TASK_INTERVAL_WEEKS.items()
+        for task_name, threshold_weeks in TASK_CHANGE_THRESHOLD_WEEKS.items()
     )
     return pd.DataFrame(rows)
 
@@ -290,21 +303,19 @@ def build_variation_rows(cache: pd.DataFrame) -> pd.DataFrame:
 
     for (isbn, task_name), group in task_level.groupby(["ISBN", "Task Name"], dropna=False):
         group = group.sort_values("CacheDate")
-        interval_weeks = TASK_INTERVAL_WEEKS.get(task_name)
-        if interval_weeks is None:
+        threshold_weeks = TASK_CHANGE_THRESHOLD_WEEKS.get(task_name)
+        if threshold_weeks is None:
             continue
-        interval_days = interval_weeks * 7
-        for _, row in group.iterrows():
+        threshold_days = threshold_weeks * 7
+        for index, (_, row) in enumerate(group.iterrows()):
+            if index == 0:
+                continue
             current_date = pd.Timestamp(row["CacheDate"]).normalize()
-            if not is_interval_date(current_date, interval_weeks):
-                continue
-            previous_group = group[group["CacheDate"].le(current_date - pd.Timedelta(days=interval_days))]
-            if previous_group.empty:
-                continue
-            previous_row = previous_group.iloc[-1]
+            previous_row = group.iloc[index - 1]
             previous_key = comparable_value(previous_row["Due Date"], "Due Date")
             current_key = comparable_value(row["Due Date"], "Due Date")
-            if current_key != previous_key:
+            movement = schedule_movement_label(previous_row["Due Date"], row["Due Date"])
+            if current_key != previous_key and movement is not None and movement[0] > threshold_days:
                 rows.append(
                     {
                         "ISBN": isbn,
@@ -317,6 +328,7 @@ def build_variation_rows(cache: pd.DataFrame) -> pd.DataFrame:
                         "Previous Value": display_value(previous_row["Due Date"], "Due Date"),
                         "Current Cache Date": current_date,
                         "Current Value": display_value(row["Due Date"], "Due Date"),
+                        "Schedule Movement": movement[1],
                     }
                 )
 
@@ -364,6 +376,7 @@ def save_variation_report(output_file: Path | None = None) -> Path:
             worksheet.set_column("H:H", 18)
             worksheet.set_column("I:I", 18, date_format)
             worksheet.set_column("J:J", 18)
+            worksheet.set_column("K:K", 22)
         if "Stipulations" in writer.sheets:
             worksheet = writer.sheets["Stipulations"]
             worksheet.set_column("A:A", 16)
@@ -426,10 +439,10 @@ def print_process_description() -> None:
     print("Schedule:")
     print(f"  Automatic archive/report run: {process_paths.GEN_EDITORIAL_SCHEDULE_DESCRIPTION}")
     print("  Manual archive: available from this menu when an extra Monday comparison point is needed.")
-    print("  Interval anchor date: 2026-05-04.")
-    print("  On Sale Date: every 1 week, comparing to the prior Monday snapshot.")
-    print("  1st galley due, MS to DES, Print files out: every 2 weeks, comparing to the snapshot from 2 weeks prior.")
-    print("  Cover Due, Title memo to DES: every 4 weeks, comparing to the snapshot from 4 weeks prior.")
+    print("  Every tracked task is compared to the prior weekly snapshot.")
+    print("  On Sale Date: show only if the date changes by more than 1 week.")
+    print("  1st galley due, MS to DES, Print files out: show only if the date changes by more than 2 weeks.")
+    print("  Cover Due, Title memo to DES: show only if the date changes by more than 4 weeks.")
     print()
     print("Cache:")
     print(f"  File: {process_paths.GEN_EDITORIAL_CACHE_FILE}")
@@ -440,7 +453,7 @@ def print_process_description() -> None:
     print("  The Variations sheet shows task due date changes over time by ISBN.")
     print(f"  Pub Grp filter: {', '.join(PUB_GROUP_FILTERS)}")
     print(f"  Sea filter: {', '.join(future_seasons())}")
-    print(f"  Task Name filter: {', '.join(TASK_INTERVAL_WEEKS)}")
+    print(f"  Task Name filter: {', '.join(TASK_CHANGE_THRESHOLD_WEEKS)}")
 
 
 def run_menu() -> None:
