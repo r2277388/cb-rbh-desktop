@@ -106,7 +106,7 @@ def save_reports_by_pub(
             pub_summary = build_column_totals(df_pub, history_cols + summary_cols)
             pub_format_cols = history_cols + [col for col in summary_cols if col in df_pub.columns]
 
-            filename = f"Week {week_number}-{full_year} Rolling Amazon ({date_formatted}) - {report_type}.xlsx"
+            filename = f"Week {week_number:02d}-{full_year} Rolling Amazon ({date_formatted}) - {report_type}.xlsx"
             filepath = os.path.join(folder, filename)
             os.makedirs(folder, exist_ok=True)
             print(f"{'':#<40}")
@@ -260,7 +260,7 @@ def main():
         df_customer,
         os.path.join(
             amazon_rolling_folder,
-            f"Week {week_number}-{full_year} Rolling Amazon ({date_formatted}) - {name1}.xlsx",
+            f"Week {week_number:02d}-{full_year} Rolling Amazon ({date_formatted}) - {name1}.xlsx",
         ),
         summary=totals_co,
         format_cols=format_cols,
@@ -316,7 +316,7 @@ def main():
         df_units,
         os.path.join(
             amazon_rolling_folder,
-            f"Week {units_week_number}-{units_full_year} Rolling Amazon ({units_date_formatted}) - {name2}.xlsx",
+            f"Week {units_week_number:02d}-{units_full_year} Rolling Amazon ({units_date_formatted}) - {name2}.xlsx",
         ),
         summary=totals_us,
         format_cols=format_cols,
