@@ -279,6 +279,7 @@ CROSS_GAP_CONFIG_FILE = repo_path("cross_gap", "title_groups.json")
 CROSS_GAP_OUTPUT_DIR = Path(
     r"\\sfx\sfny-files\SF\Groups\Sales\2026 Sales Reports\Reports\Cross Gap"
 )
+CROSS_GAP_CACHE_DIR = CROSS_GAP_OUTPUT_DIR / "cache"
 CROSS_GAP_TASK_NAME = "Chronicle Weekly Cross Gap Report"
 CROSS_GAP_TASK_LOCATION = "Task Scheduler Library"
 CROSS_GAP_SCHEDULE_DAY = "SUN"

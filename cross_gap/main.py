@@ -27,11 +27,39 @@ INVALID_SHEET_CHARS = re.compile(r"[\[\]:*?/\\]")
 
 
 @dataclass(frozen=True)
+class SupplementalSalesColumn:
+    label: str
+    ip_family_name: str
+    start_period: str
+    end_period: str
+    formats: tuple[str, ...] = ()
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> "SupplementalSalesColumn":
+        return cls(
+            label=str(raw["label"]).strip(),
+            ip_family_name=str(raw["ip_family_name"]).strip(),
+            start_period=str(raw["start_period"]).strip(),
+            end_period=str(raw["end_period"]).strip(),
+            formats=tuple(str(value).strip() for value in raw.get("formats", []) if str(value).strip()),
+        )
+
+    def validate(self, group_name: str) -> None:
+        if not self.label:
+            raise ValueError(f"{group_name} has a supplemental sales column without a label.")
+        if not self.ip_family_name:
+            raise ValueError(f"{group_name} supplemental column {self.label} needs ip_family_name.")
+        if not self.start_period or not self.end_period:
+            raise ValueError(f"{group_name} supplemental column {self.label} needs start_period and end_period.")
+
+
+@dataclass(frozen=True)
 class TitleGroup:
     name: str
     isbns: tuple[str, ...] = ()
     ip_family_name: str | None = None
     formats: tuple[str, ...] = ()
+    supplemental_sales_columns: tuple[SupplementalSalesColumn, ...] = ()
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> "TitleGroup":
@@ -44,11 +72,17 @@ class TitleGroup:
             isbns=tuple(str(value).strip() for value in raw.get("isbns", []) if str(value).strip()),
             ip_family_name=raw.get("ip_family_name"),
             formats=tuple(str(value).strip() for value in raw.get("formats", []) if str(value).strip()),
+            supplemental_sales_columns=tuple(
+                SupplementalSalesColumn.from_dict(value)
+                for value in raw.get("supplemental_sales_columns", [])
+            ),
         )
 
     def validate(self) -> None:
         if not self.isbns and not self.ip_family_name:
             raise ValueError(f"{self.name} needs either isbns or ip_family_name.")
+        for column in self.supplemental_sales_columns:
+            column.validate(self.name)
 
 
 def sql_string(value: str) -> str:
@@ -85,6 +119,17 @@ def group_to_dict(group: TitleGroup) -> dict[str, Any]:
         raw["ip_family_name"] = group.ip_family_name
     if group.formats:
         raw["formats"] = list(group.formats)
+    if group.supplemental_sales_columns:
+        raw["supplemental_sales_columns"] = [
+            {
+                "label": column.label,
+                "ip_family_name": column.ip_family_name,
+                "start_period": column.start_period,
+                "end_period": column.end_period,
+                **({"formats": list(column.formats)} if column.formats else {}),
+            }
+            for column in group.supplemental_sales_columns
+        ]
     return raw
 
 
@@ -108,7 +153,22 @@ def group_condition(group: TitleGroup, item_alias: str = "i") -> str:
     return "(" + " OR ".join(pieces) + ")"
 
 
-def family_case_sql(groups: list[TitleGroup], item_alias: str = "i") -> str:
+def supplemental_sales_condition(
+    column: SupplementalSalesColumn,
+    item_alias: str = "i",
+    sales_alias: str = "sd",
+) -> str:
+    pieces = [f"{item_alias}.IP_FAMILY_NAME = {sql_string(column.ip_family_name)}"]
+    if column.formats:
+        pieces.append(f"{item_alias}.FORMAT IN ({sql_in(column.formats)})")
+    pieces.append(f"{sales_alias}.PERIOD BETWEEN {sql_string(column.start_period)} AND {sql_string(column.end_period)}")
+    return "(" + " AND ".join(pieces) + ")"
+
+
+def family_case_sql(
+    groups: list[TitleGroup],
+    item_alias: str = "i",
+) -> str:
     lines = ["CASE"]
     for group in groups:
         lines.append(f"        WHEN {group_condition(group, item_alias)} THEN {sql_string(group.name)}")
@@ -144,7 +204,8 @@ SELECT
     i.ISBN,
     i.SHORT_TITLE AS Title,
     SUM(sd.salesqty) AS SalesQty,
-    {family_case} AS Family
+    {family_case} AS Family,
+    'Sales + OO' AS ValueHeader
 FROM summary.CustomerTitleMonthlySales sd
 INNER JOIN ebs.Item i
     ON sd.ITEM_ID = i.ITEM_ID
@@ -176,6 +237,43 @@ GROUP BY
 """.strip()
 
 
+def build_supplemental_sales_query(group: TitleGroup, column: SupplementalSalesColumn) -> str:
+    condition = supplemental_sales_condition(column)
+    return f"""
+SELECT
+    LEFT(billto.PARTYSITENUMBER, 8) AS HBG_Num,
+    billto.PARTYSITENAME AS HBG,
+    sr.SALESREP_NUMBER AS Rep_Num,
+    sr.NAME AS Rep,
+    CAST(NULL AS date) AS OSD,
+    {sql_string(column.label)} AS ISBN,
+    {sql_string(column.label)} AS Title,
+    SUM(sd.salesqty) AS SalesQty,
+    {sql_string(group.name)} AS Family,
+    'Sales' AS ValueHeader
+FROM summary.CustomerTitleMonthlySales sd
+INNER JOIN ebs.Item i
+    ON sd.ITEM_ID = i.ITEM_ID
+INNER JOIN ebs.Customer shipto
+    ON shipto.SITE_USE_ID = sd.SHIP_TO_SITE_USE_ID
+LEFT JOIN ebs.Customer billto
+    ON billto.SITE_USE_ID = shipto.BILL_TO_SITE_USE_ID
+INNER JOIN ebs.SalesRep sr
+    ON sr.SALESREP_ID = billto.PRIMARY_SALESREP_ID
+WHERE
+    sd.SALETYPECODE = 'N'
+    AND sd.DISTRIBUTION_DIRECT = 'N'
+    AND i.PRODUCT_TYPE IN ('BK', 'FT')
+    AND {condition}
+    AND sr.SALESREP_NUMBER <> '1061'
+GROUP BY
+    LEFT(billto.PARTYSITENUMBER, 8),
+    billto.PARTYSITENAME,
+    sr.SALESREP_NUMBER,
+    sr.NAME;
+""".strip()
+
+
 def build_orders_query(groups: list[TitleGroup]) -> str:
     family_case = family_case_sql(groups)
     where_conditions = all_group_conditions(groups)
@@ -199,7 +297,8 @@ SELECT
     i.ISBN,
     i.short_title AS Title,
     SUM(ho.quantity) AS OrderUnits,
-    {family_case} AS Family
+    {family_case} AS Family,
+    'Sales + OO' AS ValueHeader
 FROM Hachette.HachetteOrders ho
 INNER JOIN (
     SELECT DISTINCT
@@ -237,9 +336,82 @@ GROUP BY
 """.strip()
 
 
+def safe_cache_stem(value: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", value).strip("_")
+    return cleaned or "cache"
+
+
+def supplemental_cache_path(
+    group: TitleGroup,
+    column: SupplementalSalesColumn,
+    cache_dir: Path = process_paths.CROSS_GAP_CACHE_DIR,
+) -> Path:
+    filename = f"{safe_cache_stem(group.name)}__{safe_cache_stem(column.label)}.csv"
+    return cache_dir / filename
+
+
+def supplemental_cache_columns() -> list[str]:
+    return [*METADATA_COLUMNS, "OSD", "ISBN", "Title", "SalesQty", "Family", "ValueHeader"]
+
+
+def normalize_supplemental_cache_frame(df: pd.DataFrame) -> pd.DataFrame:
+    output = df.reindex(columns=supplemental_cache_columns()).copy()
+    output["OSD"] = pd.to_datetime(output["OSD"], errors="coerce")
+    output["SalesQty"] = pd.to_numeric(output["SalesQty"], errors="coerce").fillna(0)
+    for column in METADATA_COLUMNS + ["ISBN", "Title", "Family", "ValueHeader"]:
+        output[column] = output[column].fillna("").astype(str)
+    return output
+
+
+def load_or_create_supplemental_cache(
+    engine: Any,
+    group: TitleGroup,
+    column: SupplementalSalesColumn,
+    cache_dir: Path = process_paths.CROSS_GAP_CACHE_DIR,
+) -> pd.DataFrame:
+    cache_file = supplemental_cache_path(group, column, cache_dir)
+
+    if cache_file.exists():
+        print(f"Loading cached Cross Gap column: {cache_file}")
+        return normalize_supplemental_cache_frame(pd.read_csv(cache_file))
+
+    print(f"Creating cached Cross Gap column: {cache_file}")
+    df = fetch_data_from_db(engine, build_supplemental_sales_query(group, column))
+    cache_file.parent.mkdir(parents=True, exist_ok=True)
+    df = normalize_supplemental_cache_frame(df)
+    df.to_csv(cache_file, index=False)
+    return df
+
+
+def fetch_supplemental_sales_data(
+    engine: Any,
+    groups: list[TitleGroup],
+    cache_dir: Path = process_paths.CROSS_GAP_CACHE_DIR,
+) -> pd.DataFrame:
+    frames = [
+        load_or_create_supplemental_cache(engine, group, column, cache_dir)
+        for group in groups
+        for column in group.supplemental_sales_columns
+    ]
+    if not frames:
+        return pd.DataFrame(columns=supplemental_cache_columns())
+    return pd.concat(frames, ignore_index=True)
+
+
+def supplemental_sales_queries(groups: list[TitleGroup]) -> list[tuple[str, str]]:
+    return [
+        (f"Cached Supplemental Sales Query - {group.name} - {column.label}", build_supplemental_sales_query(group, column))
+        for group in groups
+        for column in group.supplemental_sales_columns
+    ]
+
+
 def fetch_cross_gap_data(groups: list[TitleGroup]) -> tuple[pd.DataFrame, pd.DataFrame]:
     engine = get_connection()
     sales_df = fetch_data_from_db(engine, build_sales_query(groups))
+    supplemental_sales_df = fetch_supplemental_sales_data(engine, groups)
+    if not supplemental_sales_df.empty:
+        sales_df = pd.concat([sales_df, supplemental_sales_df], ignore_index=True)
     orders_df = fetch_data_from_db(engine, build_orders_query(groups))
     return sales_df, orders_df
 
@@ -400,13 +572,13 @@ def run_cross_gap_menu(config_path: Path = process_paths.CROSS_GAP_CONFIG_FILE) 
 
 def normalize_source_frame(df: pd.DataFrame, quantity_column: str) -> pd.DataFrame:
     if df.empty:
-        return pd.DataFrame(columns=[*METADATA_COLUMNS, "OSD", "ISBN", "Title", "Family", quantity_column])
+        return pd.DataFrame(columns=[*METADATA_COLUMNS, "OSD", "ISBN", "Title", "Family", "ValueHeader", quantity_column])
 
     output = df.copy()
     output["ISBN"] = output["ISBN"].astype(str)
     output[quantity_column] = pd.to_numeric(output[quantity_column], errors="coerce").fillna(0)
     output["OSD"] = pd.to_datetime(output["OSD"], errors="coerce")
-    for column in METADATA_COLUMNS + ["Title", "Family"]:
+    for column in METADATA_COLUMNS + ["Title", "Family", "ValueHeader"]:
         output[column] = output[column].fillna("").astype(str)
     return output
 
@@ -415,7 +587,7 @@ def combine_sales_and_orders(sales_df: pd.DataFrame, orders_df: pd.DataFrame) ->
     sales = normalize_source_frame(sales_df, "SalesQty")
     orders = normalize_source_frame(orders_df, "OrderUnits")
 
-    keys = [*METADATA_COLUMNS, "OSD", "ISBN", "Title", "Family"]
+    keys = [*METADATA_COLUMNS, "OSD", "ISBN", "Title", "Family", "ValueHeader"]
     combined = sales.merge(orders, on=keys, how="outer")
     combined["SalesQty"] = pd.to_numeric(combined["SalesQty"], errors="coerce").fillna(0)
     combined["OrderUnits"] = pd.to_numeric(combined["OrderUnits"], errors="coerce").fillna(0)
@@ -437,13 +609,26 @@ def sheet_name(name: str, used_names: set[str]) -> str:
     return candidate
 
 
-def family_metadata(group_df: pd.DataFrame) -> pd.DataFrame:
+def family_metadata(group: TitleGroup, group_df: pd.DataFrame) -> pd.DataFrame:
     metadata = (
-        group_df[["ISBN", "Title", "OSD"]]
+        group_df[["ISBN", "Title", "OSD", "ValueHeader"]]
         .drop_duplicates(subset=["ISBN"])
         .sort_values(["OSD", "Title", "ISBN"], na_position="last")
     )
-    return metadata
+    configured_order = [*group.isbns, *(column.label for column in group.supplemental_sales_columns)]
+    if not configured_order:
+        return metadata
+
+    order_lookup = {column_name: index for index, column_name in enumerate(configured_order)}
+    metadata["_ConfiguredOrder"] = metadata["ISBN"].map(order_lookup)
+    return (
+        metadata.sort_values(
+            ["_ConfiguredOrder", "OSD", "Title", "ISBN"],
+            na_position="last",
+        )
+        .drop(columns=["_ConfiguredOrder"])
+        .reset_index(drop=True)
+    )
 
 
 def family_matrix(group_df: pd.DataFrame, isbn_order: list[str]) -> pd.DataFrame:
@@ -516,7 +701,7 @@ def write_group_sheet(
         worksheet.write("A1", f"No data found for {group.name}", title_format)
         return
 
-    metadata = family_metadata(group_df)
+    metadata = family_metadata(group, group_df)
     isbn_order = metadata["ISBN"].tolist()
     matrix = family_matrix(group_df, isbn_order)
 
@@ -539,7 +724,7 @@ def write_group_sheet(
         else:
             worksheet.write_datetime(2, offset, row.OSD.to_pydatetime(), date_format)
         worksheet.write(3, offset, row.ISBN, isbn_format)
-        worksheet.write(4, offset, "Sales + OO", header_format)
+        worksheet.write(4, offset, row.ValueHeader, header_format)
 
     for row_idx, row in enumerate(matrix.itertuples(index=False), start=5):
         for col_idx, value in enumerate(row):
@@ -572,14 +757,24 @@ def xl_col(col_idx: int) -> str:
     return name
 
 
-def write_sql_sheet(workbook: Any, sales_query: str, orders_query: str) -> None:
+def write_sql_sheet(
+    workbook: Any,
+    sales_query: str,
+    orders_query: str,
+    cached_sales_queries: list[tuple[str, str]],
+) -> None:
     worksheet = workbook.add_worksheet("SQL")
     header_format = workbook.add_format({"bold": True, "bg_color": "#D9EAD3"})
     body_format = workbook.add_format({"font_name": "Consolas", "font_size": 9})
     worksheet.set_column("A:A", 140)
 
     row_idx = 0
-    for title, query in [("Sales Query", sales_query), ("Hachette Orders Query", orders_query)]:
+    queries = [
+        ("Sales Query", sales_query),
+        ("Hachette Orders Query", orders_query),
+        *cached_sales_queries,
+    ]
+    for title, query in queries:
         worksheet.write(row_idx, 0, title, header_format)
         row_idx += 1
         for line in query.splitlines():
@@ -600,6 +795,7 @@ def write_workbook(
     output_path: Path,
     sales_query: str,
     orders_query: str,
+    cached_sales_queries: list[tuple[str, str]],
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with pd.ExcelWriter(output_path, engine="xlsxwriter", datetime_format="m/d/yyyy") as writer:
@@ -608,19 +804,23 @@ def write_workbook(
         for group in groups:
             group_df = combined_df[combined_df["Family"] == group.name].copy()
             write_group_sheet(writer, workbook, group, group_df, used_sheet_names)
-        write_sql_sheet(workbook, sales_query, orders_query)
+        write_sql_sheet(workbook, sales_query, orders_query, cached_sales_queries)
 
 
 def run(config_path: Path, output_path: Path | None = None, dry_run: bool = False) -> Path | None:
     groups = load_title_groups(config_path)
     sales_query = build_sales_query(groups)
     orders_query = build_orders_query(groups)
+    cached_sales_queries = supplemental_sales_queries(groups)
 
     if dry_run:
         print("Sales query:")
         print(sales_query)
         print("\nHachette orders query:")
         print(orders_query)
+        for title, query in cached_sales_queries:
+            print(f"\n{title}:")
+            print(query)
         return None
 
     print("Fetching Cross Gap sales data...")
@@ -630,7 +830,7 @@ def run(config_path: Path, output_path: Path | None = None, dry_run: bool = Fals
 
     combined_df = combine_sales_and_orders(sales_df, orders_df)
     selected_output_path = output_path or default_output_path()
-    write_workbook(combined_df, groups, selected_output_path, sales_query, orders_query)
+    write_workbook(combined_df, groups, selected_output_path, sales_query, orders_query, cached_sales_queries)
     print(f"Saved Cross Gap workbook: {selected_output_path}")
     return selected_output_path
 
