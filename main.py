@@ -1328,6 +1328,7 @@ def run_sales_operational_reports_menu() -> None:
         print("    05. Reprint Indicator Report Updater")
         print("    06. SSR Daily Summary")
         print("    07. General Editorial Data Variations")
+        print("    08. Monthly Top Customers")
         print()
         print("    99. Back to main menu")
         print()
@@ -1375,6 +1376,13 @@ def run_sales_operational_reports_menu() -> None:
             run_python_process(
                 "General Editorial Data Variations",
                 process_paths.GEN_EDITORIAL_VARIATIONS_SCRIPT,
+            )
+            continue
+
+        if choice == "8":
+            run_python_process(
+                "Monthly Top Customers",
+                process_paths.repo_path("Monthly_Top_Customers", "main.py"),
             )
             continue
 
