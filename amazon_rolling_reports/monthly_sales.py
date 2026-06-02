@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 from importlib.util import module_from_spec, spec_from_file_location
 import re
 import sys
@@ -148,16 +149,22 @@ def discover_monthly_sales_files(source_root: Path) -> list[MonthlySalesFile]:
 
 
 def detect_csv_header_row(file_path: Path, max_rows: int = 12) -> int:
-    preview = pd.read_csv(file_path, header=None, nrows=max_rows, dtype=object, encoding="utf-8-sig")
     expected = {column.lower() for column in SALES_COLUMNS}
     best_row = 0
     best_score = 0
-    for row_idx, row in preview.iterrows():
-        values = {str(value).strip().lower() for value in row.dropna()}
-        score = len(values & expected)
-        if score > best_score:
-            best_score = score
-            best_row = int(row_idx)
+
+    with file_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.reader(handle)
+        for row_idx, row in enumerate(reader):
+            if row_idx >= max_rows:
+                break
+            values = {str(value).strip().lower() for value in row if str(value).strip()}
+            score = len(values & expected)
+            if score > best_score:
+                best_score = score
+                best_row = int(row_idx)
+            if score == len(expected):
+                break
     return best_row
 
 
