@@ -30,6 +30,9 @@ TASK_CHANGE_THRESHOLD_WEEKS = {
     "Print files out": 2,
     "On Sale Date": 1,
 }
+RECENT_VARIATION_WEEK_COUNT = 6
+HEADER_FILL_COLOR = "#BFBFBF"
+ISBN_GROUP_FILL_COLORS = ("#DCE6F1", "#E4DFEC")
 
 
 def default_report_file() -> Path:
@@ -257,17 +260,15 @@ def schedule_movement_label(previous_value: object, current_value: object) -> tu
         return None
 
     delta_days = int((pd.Timestamp(current_date).normalize() - pd.Timestamp(previous_date).normalize()).days)
-    if delta_days == 0:
+    if delta_days <= 0:
         return None
 
-    direction = "Added" if delta_days > 0 else "Removed"
-    absolute_days = abs(delta_days)
-    weeks, days = divmod(absolute_days, 7)
+    weeks, days = divmod(delta_days, 7)
     if days:
-        label = f"{weeks:02d} Weeks {days:02d} Days {direction}"
+        label = f"{weeks:02d} Weeks {days:02d} Days Added"
     else:
-        label = f"{weeks:02d} Weeks {direction}"
-    return absolute_days, label
+        label = f"{weeks:02d} Weeks Added"
+    return delta_days, label
 
 
 def build_stipulations(reference_date: pd.Timestamp | None = None) -> pd.DataFrame:
@@ -335,8 +336,91 @@ def build_variation_rows(cache: pd.DataFrame) -> pd.DataFrame:
     if not rows:
         return pd.DataFrame(columns=variation_columns())
     variations = pd.DataFrame(rows)
-    variations = variations.sort_values(["Current Cache Date", "ISBN", "Task Name"])
+    variations = variations.sort_values(["Title", "ISBN", "Current Cache Date", "Task Name"], kind="stable")
     return variations[variation_columns()]
+
+
+def recent_cache_date_pairs(cache: pd.DataFrame, week_count: int = RECENT_VARIATION_WEEK_COUNT) -> list[tuple[pd.Timestamp, pd.Timestamp]]:
+    if cache.empty:
+        return []
+    dates = (
+        pd.to_datetime(cache["CacheDate"], errors="coerce")
+        .dropna()
+        .dt.normalize()
+        .drop_duplicates()
+        .sort_values()
+        .tolist()
+    )
+    pairs = [(pd.Timestamp(dates[index - 1]), pd.Timestamp(dates[index])) for index in range(1, len(dates))]
+    return pairs[-week_count:]
+
+
+def variations_for_cache_pairs(
+    variations: pd.DataFrame,
+    cache_date_pairs: list[tuple[pd.Timestamp, pd.Timestamp]],
+) -> pd.DataFrame:
+    if variations.empty or not cache_date_pairs:
+        return pd.DataFrame(columns=variation_columns())
+
+    normalized = variations.copy()
+    normalized["Previous Cache Date"] = pd.to_datetime(
+        normalized["Previous Cache Date"], errors="coerce"
+    ).dt.normalize()
+    normalized["Current Cache Date"] = pd.to_datetime(
+        normalized["Current Cache Date"], errors="coerce"
+    ).dt.normalize()
+
+    mask = pd.Series(False, index=normalized.index)
+    for previous_date, current_date in cache_date_pairs:
+        mask = mask | (
+            normalized["Previous Cache Date"].eq(previous_date)
+            & normalized["Current Cache Date"].eq(current_date)
+        )
+    filtered = normalized[mask].copy()
+    if filtered.empty:
+        return pd.DataFrame(columns=variation_columns())
+    filtered = filtered.sort_values(["Title", "ISBN", "Current Cache Date", "Task Name"], kind="stable")
+    return filtered[variation_columns()]
+
+
+def week_sheet_name(cache_date: pd.Timestamp) -> str:
+    return f"week_{cache_date:%m_%d_%Y}"
+
+
+def write_report_table(writer: pd.ExcelWriter, df: pd.DataFrame, sheet_name: str) -> None:
+    df.to_excel(writer, sheet_name=sheet_name, index=False)
+
+
+def apply_report_table_format(
+    worksheet,
+    df: pd.DataFrame,
+    header_format,
+    isbn_group_formats: tuple[object, object],
+) -> None:
+    for col_idx, column_name in enumerate(df.columns):
+        worksheet.write(0, col_idx, column_name, header_format)
+
+    if df.empty or "ISBN" not in df.columns:
+        return
+
+    last_col = len(df.columns) - 1
+    group_index = -1
+    previous_isbn = object()
+    for row_idx, isbn in enumerate(df["ISBN"].astype(str), start=1):
+        if isbn != previous_isbn:
+            group_index += 1
+            previous_isbn = isbn
+        worksheet.conditional_format(
+            row_idx,
+            0,
+            row_idx,
+            last_col,
+            {
+                "type": "formula",
+                "criteria": "=TRUE",
+                "format": isbn_group_formats[group_index % len(isbn_group_formats)],
+            },
+        )
 
 
 def build_current_snapshot(cache: pd.DataFrame) -> pd.DataFrame:
@@ -351,21 +435,34 @@ def save_variation_report(output_file: Path | None = None) -> Path:
     output_file = output_file or default_report_file()
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
-    variations = build_variation_rows(cache)
-    stipulations = build_stipulations()
+    all_variations = build_variation_rows(cache)
+    cache_date_pairs = recent_cache_date_pairs(cache)
+    variations = variations_for_cache_pairs(all_variations, cache_date_pairs)
+    weekly_variations = [
+        (current_date, variations_for_cache_pairs(all_variations, [(previous_date, current_date)]))
+        for previous_date, current_date in reversed(cache_date_pairs)
+    ]
+    criteria = build_stipulations()
 
     with pd.ExcelWriter(output_file, engine="xlsxwriter", datetime_format="m/d/yyyy", date_format="m/d/yyyy") as writer:
-        variations.to_excel(writer, sheet_name="Variations", index=False)
-        stipulations.to_excel(writer, sheet_name="Stipulations", index=False)
+        write_report_table(writer, variations, "Variations")
+        for current_date, weekly_df in weekly_variations:
+            write_report_table(writer, weekly_df, week_sheet_name(current_date))
+        write_report_table(writer, criteria, "Criteria")
 
         workbook = writer.book
         date_format = workbook.add_format({"num_format": "m/d/yyyy"})
+        header_format = workbook.add_format({"bold": True, "bg_color": HEADER_FILL_COLOR})
+        isbn_group_formats = tuple(
+            workbook.add_format({"bg_color": color}) for color in ISBN_GROUP_FILL_COLORS
+        )
         for sheet_name in writer.sheets:
             worksheet = writer.sheets[sheet_name]
             worksheet.freeze_panes(1, 0)
             worksheet.autofilter(0, 0, worksheet.dim_rowmax or 0, worksheet.dim_colmax or 0)
         if "Variations" in writer.sheets:
             worksheet = writer.sheets["Variations"]
+            apply_report_table_format(worksheet, variations, header_format, isbn_group_formats)
             worksheet.set_column("A:A", 15)
             worksheet.set_column("B:B", 42)
             worksheet.set_column("C:C", 14)
@@ -377,16 +474,32 @@ def save_variation_report(output_file: Path | None = None) -> Path:
             worksheet.set_column("I:I", 18, date_format)
             worksheet.set_column("J:J", 18)
             worksheet.set_column("K:K", 22)
-        if "Stipulations" in writer.sheets:
-            worksheet = writer.sheets["Stipulations"]
+        if "Criteria" in writer.sheets:
+            worksheet = writer.sheets["Criteria"]
+            apply_report_table_format(worksheet, criteria, header_format, isbn_group_formats)
             worksheet.set_column("A:A", 16)
             worksheet.set_column("B:B", 28)
             worksheet.set_column("C:C", 38)
+        for current_date, weekly_df in weekly_variations:
+            worksheet = writer.sheets[week_sheet_name(current_date)]
+            apply_report_table_format(worksheet, weekly_df, header_format, isbn_group_formats)
+            worksheet.set_column("A:A", 15)
+            worksheet.set_column("B:B", 42)
+            worksheet.set_column("C:C", 14)
+            worksheet.set_column("D:D", 10)
+            worksheet.set_column("E:E", 16)
+            worksheet.set_column("F:F", 28)
+            worksheet.set_column("G:G", 18, date_format)
+            worksheet.set_column("H:H", 18)
+            worksheet.set_column("I:I", 18, date_format)
+            worksheet.set_column("J:J", 18)
+            worksheet.set_column("K:K", 22)
 
     print(f"Saved General Editorial Data Variations report: {output_file}")
     print(f"  Cache dates:       {cache['CacheDate'].nunique() if not cache.empty else 0:,}")
     print(f"  Cache rows:        {len(cache):,}")
     print(f"  Variation rows:    {len(variations):,}")
+    print(f"  Weekly tabs:       {len(weekly_variations):,}")
     latest_cache_date = cache["CacheDate"].max() if not cache.empty else pd.NaT
     if pd.isna(latest_cache_date):
         print("  Latest cache date: none")
