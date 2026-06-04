@@ -17,7 +17,24 @@ except ImportError:
 
 SOURCE_SHEET = "Schedule by Publ Group"
 PUBLISHER_FILTER = "Chronicle"
-SOURCE_COLUMNS = ["ISBN", "Title", "Sea", "Pub Grp", "Task Name", "Due Date", "Release Date", "Price"]
+EDITORIAL_DETAIL_COLUMNS = [
+    "Managing Editor",
+    "Project Editor",
+    "Designer",
+    "Prod Developer",
+    "Prod Designer",
+]
+SOURCE_COLUMNS = [
+    "ISBN",
+    "Title",
+    *EDITORIAL_DETAIL_COLUMNS,
+    "Sea",
+    "Pub Grp",
+    "Task Name",
+    "Due Date",
+    "Release Date",
+    "Price",
+]
 CACHE_COLUMNS = ["CacheDate", *SOURCE_COLUMNS]
 ISBN_FIELDS = ["Sea", "Release Date", "Price"]
 TASK_FIELDS = ["Due Date"]
@@ -121,6 +138,8 @@ def load_source_snapshot(cache_date: pd.Timestamp | None = None) -> pd.DataFrame
     snapshot = filtered[SOURCE_COLUMNS].copy()
     snapshot["ISBN"] = snapshot["ISBN"].map(normalize_isbn)
     snapshot["Title"] = snapshot["Title"].map(normalize_text)
+    for column in EDITORIAL_DETAIL_COLUMNS:
+        snapshot[column] = snapshot[column].map(normalize_text)
     snapshot["Sea"] = snapshot["Sea"].map(normalize_text)
     snapshot["Pub Grp"] = snapshot["Pub Grp"].map(normalize_text)
     snapshot["Task Name"] = snapshot["Task Name"].map(normalize_text)
@@ -144,6 +163,8 @@ def load_cache() -> pd.DataFrame:
     cache["CacheDate"] = pd.to_datetime(cache["CacheDate"], errors="coerce").dt.normalize()
     cache["ISBN"] = cache["ISBN"].map(normalize_isbn)
     cache["Title"] = cache["Title"].map(normalize_text)
+    for column in EDITORIAL_DETAIL_COLUMNS:
+        cache[column] = cache[column].map(normalize_text)
     cache["Sea"] = cache["Sea"].map(normalize_text)
     cache["Pub Grp"] = cache["Pub Grp"].map(normalize_text)
     cache["Task Name"] = cache["Task Name"].map(normalize_text)
@@ -231,10 +252,11 @@ def variation_columns() -> list[str]:
         "Variation Type",
         "Task Name",
         "Previous Cache Date",
-        "Previous Value",
         "Current Cache Date",
+        "Previous Value",
         "Current Value",
         "Schedule Movement",
+        *EDITORIAL_DETAIL_COLUMNS,
     ]
 
 
@@ -265,10 +287,25 @@ def schedule_movement_label(previous_value: object, current_value: object) -> tu
 
     weeks, days = divmod(delta_days, 7)
     if days:
-        label = f"{weeks:02d} Weeks {days:02d} Days Added"
+        label = f"{weeks:02d} Weeks {days:02d} Days"
     else:
-        label = f"{weeks:02d} Weeks Added"
+        label = f"{weeks:02d} Weeks"
     return delta_days, label
+
+
+def sort_variations(variations: pd.DataFrame) -> pd.DataFrame:
+    if variations.empty:
+        return variations
+    sorted_variations = variations.copy()
+    sorted_variations["_CurrentValueSort"] = pd.to_datetime(
+        sorted_variations["Current Value"], errors="coerce"
+    )
+    sorted_variations = sorted_variations.sort_values(
+        ["ISBN", "_CurrentValueSort", "Current Value", "Task Name"],
+        kind="stable",
+        na_position="last",
+    )
+    return sorted_variations.drop(columns="_CurrentValueSort")
 
 
 def build_stipulations(reference_date: pd.Timestamp | None = None) -> pd.DataFrame:
@@ -296,10 +333,18 @@ def build_variation_rows(cache: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame(columns=variation_columns())
 
     task_level = (
-        cache[["CacheDate", "ISBN", "Title", "Sea", "Pub Grp", "Task Name", *TASK_FIELDS]]
+        cache[["CacheDate", "ISBN", "Title", *EDITORIAL_DETAIL_COLUMNS, "Sea", "Pub Grp", "Task Name", *TASK_FIELDS]]
         .sort_values(["CacheDate", "ISBN", "Task Name"])
         .groupby(["CacheDate", "ISBN", "Task Name"], as_index=False)
-        .agg({"Title": last_non_blank, "Sea": last_non_blank, "Pub Grp": last_non_blank, "Due Date": last_non_blank})
+        .agg(
+            {
+                "Title": last_non_blank,
+                **{column: last_non_blank for column in EDITORIAL_DETAIL_COLUMNS},
+                "Sea": last_non_blank,
+                "Pub Grp": last_non_blank,
+                "Due Date": last_non_blank,
+            }
+        )
     )
 
     for (isbn, task_name), group in task_level.groupby(["ISBN", "Task Name"], dropna=False):
@@ -321,13 +366,14 @@ def build_variation_rows(cache: pd.DataFrame) -> pd.DataFrame:
                     {
                         "ISBN": isbn,
                         "Title": row["Title"],
+                        **{column: row[column] for column in EDITORIAL_DETAIL_COLUMNS},
                         "Sea": row["Sea"],
                         "Pub Grp": row["Pub Grp"],
                         "Variation Type": "Due Date",
                         "Task Name": task_name,
                         "Previous Cache Date": previous_row["CacheDate"],
-                        "Previous Value": display_value(previous_row["Due Date"], "Due Date"),
                         "Current Cache Date": current_date,
+                        "Previous Value": display_value(previous_row["Due Date"], "Due Date"),
                         "Current Value": display_value(row["Due Date"], "Due Date"),
                         "Schedule Movement": movement[1],
                     }
@@ -336,7 +382,7 @@ def build_variation_rows(cache: pd.DataFrame) -> pd.DataFrame:
     if not rows:
         return pd.DataFrame(columns=variation_columns())
     variations = pd.DataFrame(rows)
-    variations = variations.sort_values(["Title", "ISBN", "Current Cache Date", "Task Name"], kind="stable")
+    variations = sort_variations(variations)
     return variations[variation_columns()]
 
 
@@ -379,8 +425,37 @@ def variations_for_cache_pairs(
     filtered = normalized[mask].copy()
     if filtered.empty:
         return pd.DataFrame(columns=variation_columns())
-    filtered = filtered.sort_values(["Title", "ISBN", "Current Cache Date", "Task Name"], kind="stable")
+    filtered = sort_variations(filtered)
     return filtered[variation_columns()]
+
+
+def source_editorial_details() -> pd.DataFrame:
+    details = load_source_snapshot()[["ISBN", *EDITORIAL_DETAIL_COLUMNS]].copy()
+    if details.empty:
+        return details
+    return (
+        details.sort_values("ISBN")
+        .groupby("ISBN", as_index=False)
+        .agg({column: last_non_blank for column in EDITORIAL_DETAIL_COLUMNS})
+    )
+
+
+def enrich_variation_details(variations: pd.DataFrame) -> pd.DataFrame:
+    if variations.empty:
+        return variations[variation_columns()]
+    details = source_editorial_details()
+    if details.empty:
+        return variations[variation_columns()]
+
+    enriched = variations.merge(details, on="ISBN", how="left", suffixes=("", "_Source"))
+    for column in EDITORIAL_DETAIL_COLUMNS:
+        source_column = f"{column}_Source"
+        if source_column not in enriched.columns:
+            continue
+        current = enriched[column].astype("string").fillna("").str.strip()
+        enriched[column] = enriched[column].where(current.ne(""), enriched[source_column])
+        enriched = enriched.drop(columns=source_column)
+    return enriched[variation_columns()]
 
 
 def week_sheet_name(cache_date: pd.Timestamp) -> str:
@@ -423,6 +498,27 @@ def apply_report_table_format(
         )
 
 
+def set_variation_sheet_columns(worksheet, date_format) -> None:
+    widths = {
+        "A:A": (15, None),
+        "B:B": (42, None),
+        "C:C": (14, None),
+        "D:D": (10, None),
+        "E:E": (16, None),
+        "F:F": (28, None),
+        "G:H": (18, date_format),
+        "I:J": (18, date_format),
+        "K:K": (22, None),
+        "L:L": (20, None),
+        "M:M": (20, None),
+        "N:N": (18, None),
+        "O:O": (18, None),
+        "P:P": (18, None),
+    }
+    for column_range, (width, cell_format) in widths.items():
+        worksheet.set_column(column_range, width, cell_format)
+
+
 def build_current_snapshot(cache: pd.DataFrame) -> pd.DataFrame:
     if cache.empty:
         return pd.DataFrame(columns=CACHE_COLUMNS)
@@ -435,7 +531,7 @@ def save_variation_report(output_file: Path | None = None) -> Path:
     output_file = output_file or default_report_file()
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
-    all_variations = build_variation_rows(cache)
+    all_variations = enrich_variation_details(build_variation_rows(cache))
     cache_date_pairs = recent_cache_date_pairs(cache)
     variations = variations_for_cache_pairs(all_variations, cache_date_pairs)
     weekly_variations = [
@@ -463,17 +559,7 @@ def save_variation_report(output_file: Path | None = None) -> Path:
         if "Variations" in writer.sheets:
             worksheet = writer.sheets["Variations"]
             apply_report_table_format(worksheet, variations, header_format, isbn_group_formats)
-            worksheet.set_column("A:A", 15)
-            worksheet.set_column("B:B", 42)
-            worksheet.set_column("C:C", 14)
-            worksheet.set_column("D:D", 10)
-            worksheet.set_column("E:E", 16)
-            worksheet.set_column("F:F", 28)
-            worksheet.set_column("G:G", 18, date_format)
-            worksheet.set_column("H:H", 18)
-            worksheet.set_column("I:I", 18, date_format)
-            worksheet.set_column("J:J", 18)
-            worksheet.set_column("K:K", 22)
+            set_variation_sheet_columns(worksheet, date_format)
         if "Criteria" in writer.sheets:
             worksheet = writer.sheets["Criteria"]
             apply_report_table_format(worksheet, criteria, header_format, isbn_group_formats)
@@ -483,17 +569,7 @@ def save_variation_report(output_file: Path | None = None) -> Path:
         for current_date, weekly_df in weekly_variations:
             worksheet = writer.sheets[week_sheet_name(current_date)]
             apply_report_table_format(worksheet, weekly_df, header_format, isbn_group_formats)
-            worksheet.set_column("A:A", 15)
-            worksheet.set_column("B:B", 42)
-            worksheet.set_column("C:C", 14)
-            worksheet.set_column("D:D", 10)
-            worksheet.set_column("E:E", 16)
-            worksheet.set_column("F:F", 28)
-            worksheet.set_column("G:G", 18, date_format)
-            worksheet.set_column("H:H", 18)
-            worksheet.set_column("I:I", 18, date_format)
-            worksheet.set_column("J:J", 18)
-            worksheet.set_column("K:K", 22)
+            set_variation_sheet_columns(worksheet, date_format)
 
     print(f"Saved General Editorial Data Variations report: {output_file}")
     print(f"  Cache dates:       {cache['CacheDate'].nunique() if not cache.empty else 0:,}")
@@ -547,7 +623,10 @@ def print_process_description() -> None:
     print("Source:")
     print(f"  Workbook: {process_paths.GEN_EDITORIAL_SOURCE_WORKBOOK}")
     print("  Filter:   Publisher = Chronicle")
-    print("  Fields:   ISBN, Title, Sea, Pub Grp, Task Name, Due Date, Release Date, Price")
+    print(
+        "  Fields:   ISBN, Title, Managing Editor, Project Editor, Designer, "
+        "Prod Developer, Prod Designer, Sea, Pub Grp, Task Name, Due Date, Release Date, Price"
+    )
     print()
     print("Schedule:")
     print(f"  Automatic archive/report run: {process_paths.GEN_EDITORIAL_SCHEDULE_DESCRIPTION}")
