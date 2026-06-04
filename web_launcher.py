@@ -97,7 +97,7 @@ ACTIONS: dict[str, Action] = {
         "amazon_ams_manager",
         "Amazon AMS Manager",
         [str(VENV_PYTHON), "amazon_ams/manage_ams.py"],
-        "Run the Amazon AMS manager.",
+        "Run the Amazon AMS monthly campaign manager.",
         "Amazon",
     ),
     "title_lookup_refresh_weekly": Action(

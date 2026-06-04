@@ -255,6 +255,15 @@ AMAZON_ROLLING_DATE_CHECK_QUERY = repo_path(
 )
 AMAZON_AMS_MANAGER_SCRIPT = repo_path("amazon_ams", "manage_ams.py")
 AMAZON_AMS_PROCESS_SCRIPT = repo_path("amazon_ams", "main.py")
+AMAZON_AMS_MONTHLY_CAMPAIGN_FOLDER = Path(
+    r"F:\ANALYSIS\Finance\DataWarehouse\Atelier Amazon\AMS_Monthly_Campaign"
+)
+AMAZON_AMS_MONTHLY_CAMPAIGN_HISTORY_PARQUET = (
+    AMAZON_AMS_MONTHLY_CAMPAIGN_FOLDER / "cache" / "ams_monthly_campaigns.parquet"
+)
+AMAZON_AMS_FINAL_REPORTS_FOLDER = Path(
+    r"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2026"
+)
 AMAZON_AMS_CONFIG_FILE = repo_path("amazon_ams", "UPDATE_ams_config.py")
 AMAZON_AMS_OUTPUT_PICKLE = repo_path("amazon_ams", "combined_amazon_ads_by_asin.pkl")
 AMAZON_AMS_OUTPUT_EXCEL = Path(

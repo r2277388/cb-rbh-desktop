@@ -75,7 +75,7 @@ def display_options():
 
 def display_info(choice):
     info = {
-        "1": "Amazon: Opens Amazon PO, PreOrders, Customer Orders, and AMS Manager workflows.",
+        "1": "Amazon: Opens Amazon PO, PreOrders, Customer Orders, and AMS monthly campaign workflows.",
         "2": "Retailer Rolling Reports: Opens Amazon, Barnes & Noble, Bookscan, Target NOC, and UK rolling-report workflows.",
         "3": "Sales / Operational Reports: Opens Cross Gap, Frontlist, General Editorial variations, Hachette, Monthend, Reprint Indicator, and SSR workflows.",
         "4": "Data & Automation Tools: Opens Automation Processes, Check Table Updates, Inventory Obsolescence Manager, Power BI Reports, and XGBoost Model.",
@@ -96,7 +96,7 @@ def display_info(choice):
         "106": "Amazon Rolling Reports Weekly Process step 2: Process Weekly Rolling Report. Builds the weekly Amazon rolling report workbooks.",
         "107": "Amazon Rolling Reports Monthly Process step 1: Add new Monthly file to Cache. Compiles monthly Amazon sales CSVs into the monthly cache parquet.",
         "108": "Amazon Rolling Reports Monthly Process step 2: Run Monthly Rolling Report. Builds the standalone monthly Amazon rolling report workbooks.",
-        "109": "Amazon AMS Manager (monthly): Manage/update AMS month configuration and run incremental or full AMS processing.",
+        "109": "Amazon AMS Monthly Campaign Summary: Builds the monthly campaign summary workbook from a selected AMS CSV.",
         "94": "Check Table Updates: Runs SQL checks for table freshness and recent weeks for SSR/Amazon/Bookscan tables.",
         "95": "Install Main Venv Requirements: Runs `pip install -r requirements.txt` using the repo's main virtual environment.",
         "96": "Open Main Venv Shell: Opens a PowerShell window with the repo's main virtual environment activated.",
@@ -849,40 +849,23 @@ def run_automation_processes_menu() -> None:
 def confirm_amazon_ams_files() -> bool:
     manager_script = process_paths.AMAZON_AMS_MANAGER_SCRIPT
     process_script = process_paths.AMAZON_AMS_PROCESS_SCRIPT
-    config_path = process_paths.AMAZON_AMS_CONFIG_FILE
     mapping_file = process_paths.CHRONICLE_ASIN_MAPPING_FILE
-    output_pickle = process_paths.AMAZON_AMS_OUTPUT_PICKLE
-    output_excel = process_paths.AMAZON_AMS_OUTPUT_EXCEL
-    error_log = process_paths.AMAZON_AMS_ERROR_LOG
-
-    config_module = load_module_from_path("amazon_ams_config_preview", config_path)
-    tab_dict = getattr(config_module, "tab_dict", {})
-    month_list = sorted(getattr(config_module, "month_list", []))
-
-    latest_month = month_list[-1] if month_list else None
-    latest_month_file = None
-    latest_month_tab = None
-    if latest_month and latest_month in tab_dict:
-        latest_month_file = tab_dict[latest_month].get("file")
-        latest_month_tab = tab_dict[latest_month].get("tab")
+    campaign_folder = process_paths.AMAZON_AMS_MONTHLY_CAMPAIGN_FOLDER
+    latest_campaign_file = get_latest_matching_file(campaign_folder, "*.csv")
 
     while True:
         print()
         print("Amazon AMS Manager will use these files:")
         print(f"  Manager script:         {manager_script}")
-        print(f"  Full-process script:    {process_script}")
-        print(f"  Config file:            {config_path}")
+        print(f"  Report script:          {process_script}")
+        print(f"  Campaign folder:        {campaign_folder}")
+        print(f"  Latest CSV:             {latest_campaign_file}")
         print(f"  ASIN mapping file:      {mapping_file}")
-        if latest_month:
-            print(f"  Latest discovered month:{latest_month}")
-            print(f"  Latest month file:      {latest_month_file}")
-            print(f"  Latest month tab:       {latest_month_tab}")
-        else:
-            print("  Latest discovered month: none found")
-        print("  SQL source:             sql-2-db / CBQ2 (item metadata)")
-        print(f"  Output pickle:          {output_pickle}")
-        print(f"  Output workbook:        {output_excel}")
-        print(f"  Error log:              {error_log}")
+        print(f"  Oracle YPTICOD:         {process_paths.ORACLE_YPTICOD_FILE}")
+        print("  SQL source:             sql-2-db / CBQ2 (AMS item metadata)")
+        print(f"  History parquet:        {process_paths.AMAZON_AMS_MONTHLY_CAMPAIGN_HISTORY_PARQUET}")
+        print(f"  Final report folder:    {process_paths.AMAZON_AMS_FINAL_REPORTS_FOLDER}")
+        print("  Output workbooks:       yyyymm_AMS_Performance_by_ASIN_ALL/PWP.xlsx")
         print()
         print("    1. Continue")
         print("    2. Return to main menu")
@@ -1565,7 +1548,7 @@ def run_amazon_menu():
                     if not confirm_amazon_ams_files():
                         continue
                 except (FileNotFoundError, ImportError, AttributeError) as e:
-                    print(f"Unable to locate the Amazon AMS Manager (monthly) source files: {e}")
+                    print(f"Unable to locate the Amazon AMS Manager source files: {e}")
                     continue
 
             print(f"Running the {report_name}... Please wait.")
