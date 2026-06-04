@@ -154,8 +154,15 @@ def final_report_file(period: str, suffix: str = "ALL") -> Path:
     return FINAL_REPORTS_FOLDER / f"{period_compact(period)}_AMS_Performance_by_ASIN_{suffix}.xlsx"
 
 
+def campaign_file_sort_key(path: Path) -> tuple[int, str, float]:
+    try:
+        return (1, parse_period_from_filename(path), path.stat().st_mtime)
+    except ValueError:
+        return (0, "", path.stat().st_mtime)
+
+
 def choose_campaign_file(folder: Path = CAMPAIGN_FOLDER) -> Path:
-    files = sorted(folder.glob("*.csv"), key=lambda path: path.stat().st_mtime, reverse=True)
+    files = sorted(folder.glob("*.csv"), key=campaign_file_sort_key, reverse=True)
     if not files:
         raise FileNotFoundError(f"No CSV files found in {folder}")
 

@@ -129,6 +129,19 @@ def get_latest_matching_file_by_mtime(folder_path: str | Path, pattern: str) -> 
     return max(matches, key=lambda path: path.stat().st_mtime)
 
 
+def get_latest_ams_campaign_csv(folder_path: str | Path) -> Path:
+    folder = Path(folder_path)
+    matches = [path for path in folder.glob("*.csv") if not path.name.startswith("~$")]
+    if not matches:
+        raise FileNotFoundError(f"No CSV files found in {folder}")
+
+    def sort_key(path: Path) -> tuple[str, float]:
+        match = re.search(r"(20\d{4})", path.stem)
+        return (match.group(1) if match else "", path.stat().st_mtime)
+
+    return max(matches, key=sort_key)
+
+
 def parse_week_end_from_filename(file_path: str | Path) -> datetime | None:
     filename = Path(file_path).name
     match = re.search(r"_(\d{1,2}-\d{1,2}-\d{4})\.csv$", filename)
@@ -851,7 +864,7 @@ def confirm_amazon_ams_files() -> bool:
     process_script = process_paths.AMAZON_AMS_PROCESS_SCRIPT
     mapping_file = process_paths.CHRONICLE_ASIN_MAPPING_FILE
     campaign_folder = process_paths.AMAZON_AMS_MONTHLY_CAMPAIGN_FOLDER
-    latest_campaign_file = get_latest_matching_file(campaign_folder, "*.csv")
+    latest_campaign_file = get_latest_ams_campaign_csv(campaign_folder)
 
     while True:
         print()
