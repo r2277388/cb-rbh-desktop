@@ -68,7 +68,7 @@ def run_new_month() -> None:
         missing_asin_overrides=overrides,
         prior_input=prior_input,
         save_history=True,
-        write_pwp=True,
+        write_publisher_reports=True,
     )
     print()
     print(f"Finished {period}.")
@@ -94,7 +94,7 @@ def replace_month() -> None:
         missing_asin_overrides=overrides,
         prior_input=prior_input,
         save_history=True,
-        write_pwp=True,
+        write_publisher_reports=True,
     )
 
 
@@ -109,7 +109,7 @@ def run_report_only() -> None:
         missing_asin_overrides=overrides,
         prior_input=prior_input,
         save_history=False,
-        write_pwp=True,
+        write_publisher_reports=True,
     )
 
 

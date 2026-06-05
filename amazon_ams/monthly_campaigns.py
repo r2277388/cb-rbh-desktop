@@ -46,9 +46,18 @@ CAMPAIGN_NAMES = {
 PUBLISHER_DISPLAY_NAMES = {
     "Quadrille Publishing Limited": "Quadrille",
 }
+PUBLISHER_OVERRIDES = {
+    "Princeton": ("Chronicle", "CPA"),
+}
 PGRP_DISPLAY_NAMES = {
     "SC": "SIE",
     "TW": "TOU",
+}
+PUBLISHER_REPORTS = {
+    "PWP": ("Publisher", "Post Wave"),
+    "HG": ("Publisher", "Hardie Grant"),
+    "QD": ("Publisher", "Quadrille"),
+    "TW": ("pgrp", "TOU"),
 }
 SOURCE_NUMERIC_COLUMNS = [
     "Impressions",
@@ -97,6 +106,49 @@ COMPARISON_METRICS = [
     "Count of Campaigns",
 ]
 COMPARISON_VALUE_COLUMNS = ["Publisher", "pgrp", *COMPARISON_METRICS]
+CAMPAIGN_ANALYSIS_METRICS = [
+    "Impressions",
+    "Clicks",
+    "CTR",
+    "Units sold",
+    "CVR",
+    "Spend",
+    "Sales",
+    "ACOS",
+    "ROAS",
+    "ISBN Count",
+]
+CAMPAIGN_ANALYSIS_COLUMNS = [
+    "Publisher",
+    "Campaign ID",
+    "Campaign name",
+    *CAMPAIGN_ANALYSIS_METRICS,
+]
+DEFAULT_MISSING_ASIN_OVERRIDES = {
+    "TWL | BOOKS | Ultimate Series | SB | BRAND | KW": ["B08RC8VVDF", "B078X9MFG5", "2848019425"],
+    "TWL | BOOKS | Top Sellers | SB | BRAND | KW": ["2408012856", "B08CG7LM5B", "2848019425"],
+    "TWL | BOOKS | Top Sellers | SB | NON-BRAND | KW 1": ["2408012856", "B08CG7LM5B", "2848019425"],
+    "TWL | BOOKS | Ultimate Series | SB | NON-BRAND | KW": ["B08RC8VVDF", "B078X9MFG5", "2848019425"],
+    "CB | Books | Construction Site: Garbage Crew to the Rescue | 179722655X | Competitor | CAT | SBV": ["179722655X"],
+    "S: Ivy and Bean - B": ["0811864952", "B006P0AIMO", "1452117322"],
+    "C: Kids Valentine's - BI": ["1452139970", "1797204300", "1452184895"],
+    "S: Greek Myths - B": ["1452178917", "1797201867", "1797207075"],
+    "I: Desi Bakes - BV": ["1958417319"],
+    "S: Ultimate - B (D)": ["2848019425", "2848019840", "B00T3CV2VW"],
+    "C: This is Home, Still, Style - B": ["1743793456", "174379570X", "1743797974"],
+    "G: Relationships Birthday - M": [
+        "0811870545",
+        "1797212478",
+        "1452173184",
+        "1452154759",
+        "1452155380",
+        "1797215876",
+        "145214124X",
+        "1452183007",
+        "1797202812",
+        "1452177112",
+    ],
+}
 
 
 def normalize_asin(value: object) -> str:
@@ -198,7 +250,10 @@ def read_campaign_csv(source_file: Path) -> pd.DataFrame:
 
 
 def parse_missing_asin_overrides(values: list[str] | None) -> dict[str, list[str]]:
-    overrides: dict[str, list[str]] = {}
+    overrides: dict[str, list[str]] = {
+        campaign: [normalize_asin(asin) for asin in asins]
+        for campaign, asins in DEFAULT_MISSING_ASIN_OVERRIDES.items()
+    }
     for value in values or []:
         if "=" not in value:
             raise ValueError(
@@ -212,6 +267,14 @@ def parse_missing_asin_overrides(values: list[str] | None) -> dict[str, list[str
     return overrides
 
 
+def missing_asins_for_campaign(campaign_rows: pd.DataFrame, campaign_asins: list[str]) -> list[str]:
+    campaign_asins = list(dict.fromkeys(asin for asin in campaign_asins if asin))
+    represented_asins = set(campaign_rows["ASIN"].astype("string").fillna("").str.strip())
+    represented_asins.discard("")
+    missing_asins = [asin for asin in campaign_asins if asin not in represented_asins]
+    return missing_asins or campaign_asins
+
+
 def resolve_missing_asins(
     df: pd.DataFrame,
     *,
@@ -222,7 +285,12 @@ def resolve_missing_asins(
     if not missing_mask.any():
         return df
 
-    overrides = overrides or {}
+    merged_overrides = {
+        campaign: [normalize_asin(asin) for asin in asins]
+        for campaign, asins in DEFAULT_MISSING_ASIN_OVERRIDES.items()
+    }
+    merged_overrides.update(overrides or {})
+    overrides = merged_overrides
     resolved_rows: list[pd.DataFrame] = []
     rows_to_drop: list[int] = []
 
@@ -244,15 +312,18 @@ def resolve_missing_asins(
                     f'"{campaign_name}=ASIN1,ASIN2".'
                 )
             response = input(
-                "Enter the missing ASINs represented by the blank row, comma-separated: "
+                "Enter the campaign ASINs; already represented ASINs will be skipped, comma-separated: "
             ).strip()
             replacement_asins = [
                 normalize_asin(value) for value in response.split(",") if value.strip()
             ]
 
-        replacement_asins = [asin for asin in replacement_asins if asin]
+        replacement_asins = missing_asins_for_campaign(campaign_rows, replacement_asins)
         if not replacement_asins:
-            raise ValueError(f'No replacement ASINs supplied for campaign "{campaign_name}".')
+            raise ValueError(
+                f'No missing replacement ASINs remain for campaign "{campaign_name}" '
+                "after removing ASINs already represented in that campaign."
+            )
 
         split_count = len(replacement_asins)
         for asin in replacement_asins:
@@ -426,8 +497,48 @@ def build_summary(
     aggregated["ROAS"] = safe_divide(aggregated["Sales"], aggregated["Spend"])
 
     summary = aggregated.merge(metadata, on="ISBN", how="left")
+    summary = apply_publisher_overrides(summary)
     summary = summary[OUTPUT_COLUMNS].sort_values(["campaign", "Title", "ASIN"], kind="stable")
     return summary
+
+
+def build_campaign_detail(
+    df: pd.DataFrame,
+    mapping: pd.DataFrame | None = None,
+    metadata: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    mapping = load_asin_isbn_map() if mapping is None else mapping
+    metadata = load_item_metadata() if metadata is None else metadata
+
+    working = df.merge(mapping, on="ASIN", how="left")
+    working["ISBN"] = working.apply(
+        lambda row: asin_isbn_manual_key.get(row["ASIN"], row["ISBN"]),
+        axis=1,
+    )
+    working["ISBN"] = working["ISBN"].map(normalize_isbn)
+    working["ISBN"] = working["ISBN"].replace("", "NO ISBN")
+    working = working.merge(metadata, on="ISBN", how="left")
+    working = apply_publisher_overrides(working)
+    working["Spend"] = working["Total cost"]
+    for column in ["Campaign ID", "Campaign name", "Publisher", "pgrp"]:
+        if column not in working.columns:
+            working[column] = ""
+        working[column] = working[column].astype("string").fillna("").str.strip()
+    return working[
+        [
+            "ASIN",
+            "ISBN",
+            "Publisher",
+            "pgrp",
+            "Campaign ID",
+            "Campaign name",
+            "Impressions",
+            "Clicks",
+            "Units sold",
+            "Spend",
+            "Sales",
+        ]
+    ].copy()
 
 
 def clean_group_value(value: object) -> str:
@@ -436,11 +547,31 @@ def clean_group_value(value: object) -> str:
     return str(value).strip()
 
 
+def apply_publisher_overrides(summary: pd.DataFrame) -> pd.DataFrame:
+    output = summary.copy()
+    output["Publisher"] = output["Publisher"].map(
+        lambda value: PUBLISHER_DISPLAY_NAMES.get(clean_group_value(value), clean_group_value(value))
+    )
+    output["pgrp"] = output["pgrp"].map(
+        lambda value: PGRP_DISPLAY_NAMES.get(clean_group_value(value), clean_group_value(value))
+    )
+    for publisher_name, (replacement_publisher, replacement_pgrp) in PUBLISHER_OVERRIDES.items():
+        mask = output["Publisher"].astype("string").str.strip().eq(publisher_name)
+        output.loc[mask, "Publisher"] = replacement_publisher
+        output.loc[mask, "pgrp"] = replacement_pgrp
+    quadrille_mask = output["Publisher"].astype("string").str.strip().eq("Quadrille")
+    output.loc[quadrille_mask, "pgrp"] = "QD"
+    return output
+
+
 def normalize_publisher_group(publisher: object, pgrp: object) -> tuple[str, str]:
     publisher_text = clean_group_value(publisher)
     pgrp_text = clean_group_value(pgrp)
     publisher_text = PUBLISHER_DISPLAY_NAMES.get(publisher_text, publisher_text)
     pgrp_text = PGRP_DISPLAY_NAMES.get(pgrp_text, pgrp_text)
+    publisher_text, pgrp_text = PUBLISHER_OVERRIDES.get(
+        publisher_text, (publisher_text, pgrp_text)
+    )
     if publisher_text == "Quadrille":
         pgrp_text = "QD"
     return publisher_text, pgrp_text
@@ -529,6 +660,8 @@ def load_prior_month_summary(period: str, history_file: Path = AMS_HISTORY_PICKL
             "publisher": "Publisher",
         }
     )
+    if "Count of Campaigns" not in working.columns:
+        working["Count of Campaigns"] = 1
     for column in ["Impressions", "Clicks", "Units sold", "Spend", "Sales", "Count of Campaigns"]:
         renamed[column] = pd.to_numeric(renamed[column], errors="coerce").fillna(0)
     return summarize_for_comparison(renamed)
@@ -552,6 +685,105 @@ def build_monthly_comparison(
     prior = group_keys.merge(prior, on=["Publisher", "pgrp"], how="left").fillna(0)
     variance = current.copy()
     for column in COMPARISON_METRICS:
+        variance[column] = current[column] - prior[column]
+    return current, prior, variance, prior_period
+
+
+def summarize_for_campaign_analysis(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return pd.DataFrame(columns=CAMPAIGN_ANALYSIS_COLUMNS)
+
+    working = df.copy()
+    for column in ["Publisher", "pgrp", "Campaign ID", "Campaign name", "ISBN"]:
+        if column not in working.columns:
+            working[column] = ""
+    normalized_groups = working.apply(
+        lambda row: normalize_publisher_group(row["Publisher"], row["pgrp"]),
+        axis=1,
+        result_type="expand",
+    )
+    working["Publisher"] = normalized_groups[0]
+    working["Campaign ID"] = working["Campaign ID"].astype("string").fillna("").str.strip()
+    working["Campaign name"] = working["Campaign name"].astype("string").fillna("").str.strip()
+    if "Count of Campaigns" not in working.columns:
+        working["Count of Campaigns"] = 1
+    for column in ["Impressions", "Clicks", "Units sold", "Spend", "Sales", "Count of Campaigns"]:
+        working[column] = pd.to_numeric(working[column], errors="coerce").fillna(0)
+
+    grouped = (
+        working.groupby(["Publisher", "Campaign ID", "Campaign name"], dropna=False)
+        .agg(
+            {
+                "Impressions": "sum",
+                "Clicks": "sum",
+                "Units sold": "sum",
+                "Spend": "sum",
+                "Sales": "sum",
+                "Count of Campaigns": "sum",
+                "ISBN": lambda values: values[values.astype(str).ne("NO ISBN")].nunique(),
+            }
+        )
+        .rename(columns={"ISBN": "ISBN Count"})
+        .reset_index()
+    )
+    grouped["CTR"] = safe_divide(grouped["Clicks"], grouped["Impressions"])
+    grouped["CVR"] = safe_divide(grouped["Units sold"], grouped["Clicks"])
+    grouped["ACOS"] = safe_divide(grouped["Spend"], grouped["Sales"])
+    grouped["ROAS"] = safe_divide(grouped["Sales"], grouped["Spend"])
+    return grouped[CAMPAIGN_ANALYSIS_COLUMNS].sort_values(
+        ["Publisher", "Spend"], ascending=[True, False], kind="stable"
+    )
+
+
+def load_prior_campaign_analysis_summary(period: str) -> pd.DataFrame:
+    source_file = CAMPAIGN_FOLDER / f"{period_compact(period)}_MonthlyCampaigns.csv"
+    if not source_file.exists():
+        return pd.DataFrame(columns=CAMPAIGN_ANALYSIS_COLUMNS)
+    df = read_campaign_csv(source_file)
+    df = resolve_missing_asins(df, prompt=False)
+    detail = build_campaign_detail(df)
+    return summarize_for_campaign_analysis(detail)
+
+
+def build_campaign_analysis(
+    summary: pd.DataFrame,
+    current_period: str,
+    prior_summary: pd.DataFrame | None = None,
+    prior_period: str | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, str]:
+    prior_period = prior_period or previous_period(current_period)
+    current = summarize_for_campaign_analysis(summary)
+    prior = (
+        summarize_for_campaign_analysis(prior_summary)
+        if prior_summary is not None
+        else load_prior_campaign_analysis_summary(prior_period)
+    )
+    group_keys = (
+        pd.concat(
+            [
+                current[["Publisher", "Campaign ID", "Campaign name", "Spend"]],
+                prior[["Publisher", "Campaign ID", "Campaign name", "Spend"]],
+            ],
+            ignore_index=True,
+        )
+        .drop_duplicates(subset=["Publisher", "Campaign ID", "Campaign name"], keep="first")
+    )
+    current_spend = current[["Publisher", "Campaign ID", "Campaign name", "Spend"]].rename(
+        columns={"Spend": "_CurrentSpendSort"}
+    )
+    group_keys = group_keys.drop(columns="Spend").merge(
+        current_spend,
+        on=["Publisher", "Campaign ID", "Campaign name"],
+        how="left",
+    )
+    group_keys["_CurrentSpendSort"] = group_keys["_CurrentSpendSort"].fillna(0)
+    group_keys = group_keys.sort_values(
+        ["Publisher", "_CurrentSpendSort"], ascending=[True, False], kind="stable"
+    ).drop(columns="_CurrentSpendSort")
+    current = group_keys.merge(current, on=["Publisher", "Campaign ID", "Campaign name"], how="left").fillna(0)
+    prior = group_keys.merge(prior, on=["Publisher", "Campaign ID", "Campaign name"], how="left").fillna(0)
+    variance = current.copy()
+    for column in CAMPAIGN_ANALYSIS_METRICS:
         variance[column] = current[column] - prior[column]
     return current, prior, variance, prior_period
 
@@ -729,8 +961,159 @@ def write_monthly_comparison_sheet(
         worksheet.set_column(col + 1, col + len(COMPARISON_METRICS), 10)
 
 
-def filter_summary_for_pwp(summary: pd.DataFrame) -> pd.DataFrame:
-    return summary[summary["Publisher"].astype("string").str.strip().eq("Post Wave")].copy()
+def campaign_analysis_display_rows(section_df: pd.DataFrame) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    if section_df.empty:
+        return rows
+
+    for publisher_index, (publisher, publisher_df) in enumerate(section_df.groupby("Publisher", sort=False, dropna=False)):
+        if publisher_index:
+            rows.append({"Campaign ID": "", "Campaign name": "", "RowType": "spacer"})
+        publisher_df = publisher_df.copy()
+        total_row: dict[str, object] = {
+            "Campaign ID": "",
+            "Campaign name": f"{publisher} Total",
+            "RowType": "publisher",
+        }
+        for metric in CAMPAIGN_ANALYSIS_METRICS:
+            if metric in {"CTR", "CVR", "ACOS", "ROAS"}:
+                continue
+            total_row[metric] = publisher_df[metric].sum()
+        total_row["CTR"] = total_row["Clicks"] / total_row["Impressions"] if total_row["Impressions"] else 0
+        total_row["CVR"] = total_row["Units sold"] / total_row["Clicks"] if total_row["Clicks"] else 0
+        total_row["ACOS"] = total_row["Spend"] / total_row["Sales"] if total_row["Sales"] else 0
+        total_row["ROAS"] = total_row["Sales"] / total_row["Spend"] if total_row["Spend"] else 0
+        rows.append(total_row)
+
+        for _, row in publisher_df.iterrows():
+            detail_row: dict[str, object] = {
+                "Campaign ID": row["Campaign ID"],
+                "Campaign name": row["Campaign name"],
+                "RowType": "campaign",
+            }
+            for metric in CAMPAIGN_ANALYSIS_METRICS:
+                detail_row[metric] = row[metric]
+            rows.append(detail_row)
+    return rows
+
+
+def write_campaign_analysis_section(
+    worksheet,
+    section_df: pd.DataFrame,
+    *,
+    start_row: int,
+    start_col: int,
+    title: str,
+    formats: dict[str, object],
+    section_style: str,
+) -> None:
+    total_row = start_row
+    title_row = start_row + 2
+    header_row = start_row + 3
+    data_start_row = start_row + 4
+    headers = ["Campaign ID", "Campaign name", *CAMPAIGN_ANALYSIS_METRICS]
+    last_section_col = start_col + len(headers) - 1
+    display_rows = campaign_analysis_display_rows(section_df)
+
+    worksheet.write_blank(total_row, start_col, None, formats[f"{section_style}_publisher_row"])
+    worksheet.write(total_row, start_col + 1, "GRAND TOTALS", formats[f"{section_style}_publisher_row"])
+    worksheet.write(title_row, start_col, title, formats["section_title_center"])
+    for col in range(start_col + 1, last_section_col + 1):
+        worksheet.write_blank(title_row, col, None, formats["section_title_center"])
+
+    for offset, header in enumerate(headers):
+        worksheet.write(header_row, start_col + offset, header, formats["header"])
+
+    publisher_rows: list[int] = []
+    for row_offset, row in enumerate(display_rows):
+        excel_row = data_start_row + row_offset
+        if row["RowType"] == "spacer":
+            for offset in range(len(headers)):
+                worksheet.write_blank(excel_row, start_col + offset, None)
+            continue
+
+        row_type = "publisher" if row["RowType"] == "publisher" else "pgrp"
+        row_format = (
+            formats[f"{section_style}_publisher_row"]
+            if row_type == "publisher"
+            else formats[f"{section_style}_detail_row"]
+        )
+        if row_type == "publisher":
+            publisher_rows.append(excel_row)
+        for offset, dimension in enumerate(["Campaign ID", "Campaign name"]):
+            worksheet.write(excel_row, start_col + offset, row[dimension], row_format)
+        for metric_offset, metric in enumerate(CAMPAIGN_ANALYSIS_METRICS, start=2):
+            cell_format = metric_format(metric, formats, row_type=row_type, section_style=section_style)
+            worksheet.write(excel_row, start_col + metric_offset, row[metric], cell_format)
+
+    for metric_offset, metric in enumerate(CAMPAIGN_ANALYSIS_METRICS, start=2):
+        col = start_col + metric_offset
+        col_letter = xl_col(col)
+        cell_format = metric_format(metric, formats, row_type="publisher", section_style=section_style)
+        if metric in {"CTR", "CVR", "ACOS", "ROAS"}:
+            formula = campaign_analysis_ratio_formula(metric, total_row + 1, start_col)
+            worksheet.write_formula(total_row, col, formula, cell_format)
+        else:
+            publisher_refs = ",".join(f"{col_letter}{row_idx + 1}" for row_idx in publisher_rows)
+            total_formula = f"=SUM({publisher_refs})" if publisher_refs else "=0"
+            worksheet.write_formula(total_row, col, total_formula, cell_format)
+
+
+def campaign_analysis_ratio_formula(metric: str, excel_row: int, start_col: int) -> str:
+    positions = {
+        metric_name: start_col + 2 + idx
+        for idx, metric_name in enumerate(CAMPAIGN_ANALYSIS_METRICS)
+    }
+    if metric == "CTR":
+        numerator, denominator = "Clicks", "Impressions"
+    elif metric == "CVR":
+        numerator, denominator = "Units sold", "Clicks"
+    elif metric == "ACOS":
+        numerator, denominator = "Spend", "Sales"
+    elif metric == "ROAS":
+        numerator, denominator = "Sales", "Spend"
+    else:
+        return ""
+    return f"=IFERROR({xl_col(positions[numerator])}{excel_row}/{xl_col(positions[denominator])}{excel_row},0)"
+
+
+def write_campaign_analysis_sheet(
+    writer: pd.ExcelWriter,
+    summary: pd.DataFrame,
+    current_period: str,
+    formats: dict[str, object],
+    prior_summary: pd.DataFrame | None = None,
+    prior_period: str | None = None,
+) -> None:
+    current = summarize_for_campaign_analysis(summary)
+    worksheet = writer.book.add_worksheet("Campaign Analysis")
+    writer.sheets["Campaign Analysis"] = worksheet
+    write_campaign_analysis_section(
+        worksheet,
+        current,
+        start_row=0,
+        start_col=0,
+        title=pd.Period(current_period, freq="M").strftime("%B %Y"),
+        formats=formats,
+        section_style="current",
+    )
+    worksheet.set_column(0, 0, 18)
+    worksheet.set_column(1, 1, 42)
+    worksheet.set_column(2, len(CAMPAIGN_ANALYSIS_METRICS) + 1, 10)
+    worksheet.freeze_panes(4, 2)
+
+
+def filter_summary_for_publisher_report(summary: pd.DataFrame, report_suffix: str) -> pd.DataFrame:
+    column, value = PUBLISHER_REPORTS[report_suffix]
+    normalized = summary.copy()
+    normalized_groups = normalized.apply(
+        lambda row: normalize_publisher_group(row["Publisher"], row["pgrp"]),
+        axis=1,
+        result_type="expand",
+    )
+    normalized["Publisher"] = normalized_groups[0]
+    normalized["pgrp"] = normalized_groups[1]
+    return normalized[normalized[column].astype("string").str.strip().eq(value)].copy()
 
 
 def write_summary_excel(
@@ -739,6 +1122,9 @@ def write_summary_excel(
     current_period: str,
     prior_summary: pd.DataFrame | None = None,
     prior_period: str | None = None,
+    include_campaign_analysis: bool = True,
+    campaign_detail: pd.DataFrame | None = None,
+    prior_campaign_detail: pd.DataFrame | None = None,
 ) -> None:
     output_file.parent.mkdir(parents=True, exist_ok=True)
     with pd.ExcelWriter(output_file, engine="xlsxwriter", datetime_format="m/d/yyyy") as writer:
@@ -752,23 +1138,39 @@ def write_summary_excel(
             prior_summary=prior_summary,
             prior_period=prior_period,
         )
+        if include_campaign_analysis and campaign_detail is not None:
+            write_campaign_analysis_sheet(
+                writer,
+                campaign_detail,
+                current_period,
+                formats,
+                prior_summary=prior_campaign_detail,
+                prior_period=prior_period,
+            )
 
-        summary.to_excel(writer, sheet_name="USE_main", index=False, startrow=1)
+        summary.to_excel(writer, sheet_name="USE_main", index=False, startrow=3)
         worksheet = writer.sheets["USE_main"]
 
         date_format = workbook.add_format({"num_format": "m/d/yyyy"})
 
         for col_idx, column in enumerate(summary.columns):
-            worksheet.write(1, col_idx, column, formats["header"])
+            worksheet.write(3, col_idx, column, formats["header"])
 
-        last_row = len(summary) + 2
+        first_data_row = 5
+        last_row = len(summary) + 4
         column_positions = {column: idx for idx, column in enumerate(summary.columns)}
+        worksheet.write(0, 5, "Total", formats["section_title"])
+        worksheet.write(1, 5, "Subtotal", formats["section_title"])
         for column in ["Impressions", "Clicks", "Units sold", "Count of Campaigns"]:
             col = column_positions[column]
-            worksheet.write_formula(0, col, f"=SUM({xl_col(col)}3:{xl_col(col)}{last_row})", formats["integer"])
+            total_range = f"{xl_col(col)}{first_data_row}:{xl_col(col)}{last_row}"
+            worksheet.write_formula(0, col, f"=SUM({total_range})", formats["integer"])
+            worksheet.write_formula(1, col, f"=SUBTOTAL(109,{total_range})", formats["integer"])
         for column in ["Spend", "Sales"]:
             col = column_positions[column]
-            worksheet.write_formula(0, col, f"=SUM({xl_col(col)}3:{xl_col(col)}{last_row})", formats["money"])
+            total_range = f"{xl_col(col)}{first_data_row}:{xl_col(col)}{last_row}"
+            worksheet.write_formula(0, col, f"=SUM({total_range})", formats["money"])
+            worksheet.write_formula(1, col, f"=SUBTOTAL(109,{total_range})", formats["money"])
 
         formulas = {
             "CTR": ("Clicks", "Impressions", formats["percent"]),
@@ -780,15 +1182,16 @@ def write_summary_excel(
             target_col = column_positions[target]
             numerator_col = column_positions[numerator]
             denominator_col = column_positions[denominator]
-            worksheet.write_formula(
-                0,
-                target_col,
-                f"=IFERROR({xl_col(numerator_col)}1/{xl_col(denominator_col)}1,0)",
-                cell_format,
-            )
+            for row_idx, excel_row in [(0, 1), (1, 2)]:
+                worksheet.write_formula(
+                    row_idx,
+                    target_col,
+                    f"=IFERROR({xl_col(numerator_col)}{excel_row}/{xl_col(denominator_col)}{excel_row},0)",
+                    cell_format,
+                )
 
-        worksheet.freeze_panes(2, 0)
-        worksheet.autofilter(1, 0, max(1, last_row - 1), len(summary.columns) - 1)
+        worksheet.freeze_panes(4, 0)
+        worksheet.autofilter(3, 0, max(3, last_row - 1), len(summary.columns) - 1)
         worksheet.set_column("A:A", 13)
         worksheet.set_column("B:B", 15)
         worksheet.set_column("C:C", 34)
@@ -889,7 +1292,7 @@ def run(
     missing_asin_overrides: dict[str, list[str]] | None = None,
     prior_input: Path | None = None,
     save_history: bool = True,
-    write_pwp: bool = True,
+    write_publisher_reports: bool = True,
 ) -> Path:
     current_period = parse_period_from_filename(source_file)
     mapping = load_asin_isbn_map()
@@ -902,7 +1305,9 @@ def run(
         input("Press Enter to continue and create the ISBN summary workbook...")
 
     summary = build_summary(df, mapping=mapping, metadata=metadata)
+    campaign_detail = build_campaign_detail(df, mapping=mapping, metadata=metadata)
     prior_summary = None
+    prior_campaign_detail = None
     prior_period = None
     if prior_input is not None:
         prior_period = parse_period_from_filename(prior_input)
@@ -913,7 +1318,19 @@ def run(
             overrides=missing_asin_overrides,
         )
         prior_summary = build_summary(prior_df, mapping=mapping, metadata=metadata)
+        prior_campaign_detail = build_campaign_detail(prior_df, mapping=mapping, metadata=metadata)
         print(f"Using prior month CSV for comparison: {prior_input}")
+    else:
+        prior_period = previous_period(current_period)
+        prior_source_file = CAMPAIGN_FOLDER / f"{period_compact(prior_period)}_MonthlyCampaigns.csv"
+        if prior_source_file.exists():
+            prior_df = read_campaign_csv(prior_source_file)
+            prior_df = resolve_missing_asins(
+                prior_df,
+                prompt=False,
+                overrides=missing_asin_overrides,
+            )
+            prior_campaign_detail = build_campaign_detail(prior_df, mapping=mapping, metadata=metadata)
 
     if save_history:
         history = upsert_history_month(summary, current_period, source_file)
@@ -927,24 +1344,31 @@ def run(
         current_period,
         prior_summary=prior_summary,
         prior_period=prior_period,
+        include_campaign_analysis=True,
+        campaign_detail=campaign_detail,
+        prior_campaign_detail=prior_campaign_detail,
     )
-    if write_pwp:
-        pwp_summary = filter_summary_for_pwp(summary)
-        pwp_output = final_report_file(current_period, "PWP")
-        if prior_summary is not None:
-            pwp_prior_summary = filter_summary_for_pwp(prior_summary)
-        else:
-            pwp_prior_summary = filter_summary_for_pwp(
-                history_month_summary(prior_period or previous_period(current_period))
-            )
-        write_summary_excel(
-            pwp_summary,
-            pwp_output,
-            current_period,
-            prior_summary=pwp_prior_summary,
-            prior_period=prior_period,
+    if write_publisher_reports:
+        base_prior_summary = (
+            prior_summary
+            if prior_summary is not None
+            else history_month_summary(prior_period or previous_period(current_period))
         )
-        print(f"Saved AMS PWP report: {pwp_output}")
+        for report_suffix in PUBLISHER_REPORTS:
+            report_summary = filter_summary_for_publisher_report(summary, report_suffix)
+            report_prior_summary = filter_summary_for_publisher_report(
+                base_prior_summary, report_suffix
+            )
+            report_output = final_report_file(current_period, report_suffix)
+            write_summary_excel(
+                report_summary,
+                report_output,
+                current_period,
+                prior_summary=report_prior_summary,
+                prior_period=prior_period,
+                include_campaign_analysis=False,
+            )
+            print(f"Saved AMS {report_suffix} report: {report_output}")
 
     no_isbn_count = int(summary["ISBN"].eq("NO ISBN").sum())
     print(f"Saved AMS monthly campaign summary: {output}")
@@ -959,7 +1383,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", type=Path, help="Output workbook path.")
     parser.add_argument("--prior-input", type=Path, help="Optional prior month campaign CSV for Monthly Comparisons.")
     parser.add_argument("--no-history", action="store_true", help="Do not save this month to the AMS history parquet.")
-    parser.add_argument("--no-pwp", action="store_true", help="Do not write the PWP-only workbook.")
+    parser.add_argument("--no-pwp", action="store_true", help="Do not write publisher-specific workbooks.")
     parser.add_argument("--no-prompt", action="store_true", help="Do not pause after advertiser summary.")
     parser.add_argument(
         "--missing-asin",
@@ -979,7 +1403,7 @@ def main() -> None:
         missing_asin_overrides=parse_missing_asin_overrides(args.missing_asin),
         prior_input=args.prior_input,
         save_history=not args.no_history,
-        write_pwp=not args.no_pwp,
+        write_publisher_reports=not args.no_pwp,
     )
 
 
