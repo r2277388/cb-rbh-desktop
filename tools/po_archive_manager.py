@@ -140,9 +140,10 @@ def main():
     # GUI: pick the new vendor file first
     root = tk.Tk()
     root.withdraw()
+    initial_dir = process_paths.DOWNLOADS_FOLDER if process_paths.DOWNLOADS_FOLDER.exists() else PO_ANALYSIS
     src_file = filedialog.askopenfilename(
         title="Select new Amazon Vendor Central PO Report (CSV)",
-        initialdir=str(PO_ANALYSIS) if PO_ANALYSIS.exists() else None,
+        initialdir=str(initial_dir) if initial_dir.exists() else None,
         filetypes=[("CSV Files", "*.csv"), ("All files", "*.*")],
     )
     if not src_file:
@@ -159,6 +160,18 @@ def main():
     ARCHIVE.mkdir(parents=True, exist_ok=True)
 
     dest = process_paths.AMAZON_PO_CURRENT_FILE
+    try:
+        if src_path.samefile(dest):
+            messagebox.showerror(
+                "Error",
+                "You selected the current PO working file, not a new Vendor Central export.\n\n"
+                f"Current working file:\n{dest}\n\n"
+                "Please select the newly downloaded PO CSV instead.",
+            )
+            return
+    except FileNotFoundError:
+        pass
+
     try:
         shutil.copy2(str(src_path), str(dest))
     except Exception as e:
