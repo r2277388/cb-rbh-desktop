@@ -374,12 +374,45 @@ def write_customer_workbook(df: pd.DataFrame, period: str, customer: str, output
                 "border_color": GROUP_BORDER_COLOR,
             }
         )
+        alt_group_fmt = workbook.add_format(
+            {
+                "align": "center_across",
+                "valign": "vcenter",
+                "bg_color": CB_GROUP_FILL,
+                "font_color": WHITE,
+                "border": 1,
+                "border_color": GROUP_BORDER_COLOR,
+                "font_size": DEFAULT_FONT_SIZE,
+            }
+        )
+        alt_sub_group_fmt = workbook.add_format(
+            {
+                "align": "center_across",
+                "valign": "vcenter",
+                "bg_color": CB_GROUP_FILL,
+                "font_color": WHITE,
+                "border": 1,
+                "border_color": GROUP_BORDER_COLOR,
+            }
+        )
         header_fmt = workbook.add_format(
             {
                 "bold": True,
                 "align": "center",
                 "valign": "vcenter",
                 "bg_color": HEADER_BLUE,
+                "font_color": WHITE,
+                "border": 1,
+                "border_color": GROUP_BORDER_COLOR,
+                "font_size": DEFAULT_FONT_SIZE,
+            }
+        )
+        alt_header_fmt = workbook.add_format(
+            {
+                "bold": True,
+                "align": "center",
+                "valign": "vcenter",
+                "bg_color": CB_GROUP_FILL,
                 "font_color": WHITE,
                 "border": 1,
                 "border_color": GROUP_BORDER_COLOR,
@@ -417,7 +450,7 @@ def write_customer_workbook(df: pd.DataFrame, period: str, customer: str, output
                 worksheet.write_blank(row, col, None, title_fmt)
 
         worksheet.write(0, 8, "Total", total_label_fmt)
-        worksheet.write(1, 8, "subtotal", subtotal_label_fmt)
+        worksheet.write(1, 8, "Subtotal", subtotal_label_fmt)
 
         group_labels = [
             month_label(period),
@@ -427,19 +460,27 @@ def write_customer_workbook(df: pd.DataFrame, period: str, customer: str, output
             fy_label(period, -1),
             fy_label(period, -2),
         ]
-        for (start_col, end_col, _), label in zip(GROUPS, group_labels):
-            worksheet.write(2, start_col, label, group_fmt)
-            for col in range(start_col + 1, end_col + 1):
-                worksheet.write_blank(2, col, None, group_fmt)
+        for group_idx, ((start_col, end_col, _), label) in enumerate(zip(GROUPS, group_labels)):
+            period_group_fmt = group_fmt if group_idx % 2 == 0 else alt_group_fmt
+            period_sub_group_fmt = sub_group_fmt if group_idx % 2 == 0 else alt_sub_group_fmt
 
-            worksheet.write(3, start_col, "Sales", sub_group_fmt)
+            worksheet.write(2, start_col, label, period_group_fmt)
+            for col in range(start_col + 1, end_col + 1):
+                worksheet.write_blank(2, col, None, period_group_fmt)
+
+            worksheet.write(3, start_col, "Sales", period_sub_group_fmt)
             for col in range(start_col + 1, start_col + 4):
-                worksheet.write_blank(3, col, None, sub_group_fmt)
-            worksheet.write(3, start_col + 4, "Returns", sub_group_fmt)
-            worksheet.write_blank(3, start_col + 5, None, sub_group_fmt)
+                worksheet.write_blank(3, col, None, period_sub_group_fmt)
+            worksheet.write(3, start_col + 4, "Returns", period_sub_group_fmt)
+            worksheet.write_blank(3, start_col + 5, None, period_sub_group_fmt)
 
         for col_idx, column_name in enumerate(report_df.columns):
-            worksheet.write(header_row, col_idx, column_name, header_fmt)
+            column_group_idx = next(
+                (group_idx for group_idx, (start_col, end_col, _) in enumerate(GROUPS) if start_col <= col_idx <= end_col),
+                None,
+            )
+            column_header_fmt = alt_header_fmt if column_group_idx is not None and column_group_idx % 2 else header_fmt
+            worksheet.write(header_row, col_idx, column_name, column_header_fmt)
 
         for col_idx in SUMMARY_COLS:
             col_letter = xl_col(col_idx)
@@ -609,7 +650,7 @@ def write_generic_workbook(
                 worksheet.write_blank(row, col, None, title_fmt)
 
         worksheet.write(0, summary_label_col, "Total", total_label_fmt)
-        worksheet.write(1, summary_label_col, "subtotal", subtotal_label_fmt)
+        worksheet.write(1, summary_label_col, "Subtotal", subtotal_label_fmt)
         is_x_gap_report = "X Gap" in report_name
         is_national_specialty_report = report_name == "National Specialty Reps"
         rep_name_by_code = rep_lookup_map(rep_lookup) if is_rep_code_report else {}
