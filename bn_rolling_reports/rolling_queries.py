@@ -7,7 +7,7 @@ def build_customer_sales_query(start_date: str) -> str:
         CAST(sbn.[WEEK] AS date) AS [Week],
         sbn.[ISBN13] AS ISBN,
         i.SHORT_TITLE AS Title,
-        CAST(i.AMORTIZATION_DATE AS date) AS PubDate,
+        CAST(COALESCE(i.AMORTIZATION_DATE, osd.OSD) AS date) AS PubDate,
         i.PRICE_AMOUNT AS Price,
         CASE
             WHEN i.PUBLISHER_CODE = 'Quadrille Publishing Limited' THEN 'Quadrille'
@@ -25,6 +25,18 @@ def build_customer_sales_query(start_date: str) -> str:
     FROM [CBQ2].[cb].[Sellthrough_Barnes_and_Noble] sbn
     INNER JOIN ebs.item i
         ON i.ITEM_TITLE = sbn.ISBN13
+    LEFT JOIN (
+        SELECT
+            tt.ean13 AS ISBN,
+            MAX(tt.active_datevalue) AS OSD
+        FROM tmm.cb_Import_Title_Tasks tt
+        WHERE tt.date_desc = 'On Sale Date'
+          AND tt.active_datevalue IS NOT NULL
+          AND tt.printingnumber = 1
+          AND tt.activeind = '1'
+        GROUP BY tt.ean13
+    ) osd
+        ON osd.ISBN = i.ITEM_TITLE
     WHERE
         sbn.[WEEK] >= '{start_date}'
         AND i.SHORT_TITLE IS NOT NULL
@@ -50,7 +62,7 @@ def build_customer_sales_query(start_date: str) -> str:
         CAST(sbn.[WEEK] AS date),
         sbn.[ISBN13],
         i.SHORT_TITLE,
-        CAST(i.AMORTIZATION_DATE AS date),
+        CAST(COALESCE(i.AMORTIZATION_DATE, osd.OSD) AS date),
         i.PRICE_AMOUNT,
         CASE
             WHEN i.PUBLISHER_CODE = 'Quadrille Publishing Limited' THEN 'Quadrille'

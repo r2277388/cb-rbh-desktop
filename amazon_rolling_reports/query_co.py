@@ -46,9 +46,22 @@ def sql_co():
     IF OBJECT_ID('tempdb..#items') IS NOT NULL DROP TABLE #items;
     SELECT
         i.*,
+        osd.OSD,
         UPPER(RIGHT(REPLICATE('0',13) + REPLACE(REPLACE(CONVERT(varchar(32), i.ITEM_TITLE),'-',''),' ',''), 13)) AS ISBN13
     INTO #items
     FROM ebs.item i
+    LEFT JOIN (
+        SELECT
+            tt.ean13 AS ISBN,
+            MAX(tt.active_datevalue) AS OSD
+        FROM tmm.cb_Import_Title_Tasks tt
+        WHERE tt.date_desc = 'On Sale Date'
+          AND tt.active_datevalue IS NOT NULL
+          AND tt.printingnumber = 1
+          AND tt.activeind = '1'
+        GROUP BY tt.ean13
+    ) osd
+        ON osd.ISBN = i.ITEM_TITLE
     WHERE i.PRODUCT_TYPE IN ('BK','FT','CP','RP','DI')
       AND i.PUBLISHING_GROUP NOT IN ('MKT', 'ZZZ')
       AND i.PUBLISHER_CODE NOT IN (
@@ -181,7 +194,7 @@ def sql_co():
         it.ITEM_TITLE   AS [ISBN],
         it.SHORT_TITLE  AS Title,
         it.PRICE_AMOUNT AS Price,
-        CONVERT(varchar(10), it.AMORTIZATION_DATE, 110) AS PubDate,
+        CONVERT(varchar(10), COALESCE(it.AMORTIZATION_DATE, it.OSD), 110) AS PubDate,
         ISNULL(ag.OH,0)                                     AS OH,
         ISNULL(ag.W52,0)                                    AS W52,
         CAST(ISNULL(ag.SumLast6W,0) / 6.0 AS decimal(18,2)) AS AvgLast6W,

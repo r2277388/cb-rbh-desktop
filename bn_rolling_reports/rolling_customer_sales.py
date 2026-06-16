@@ -412,8 +412,20 @@ def _fetch_item_metadata_for_isbns(isbns: list[str]) -> pd.DataFrame:
         END AS pgrp,
         i.SHORT_TITLE AS Title,
         i.PRICE_AMOUNT AS Price,
-        CAST(i.AMORTIZATION_DATE AS date) AS PubDate
+        CAST(COALESCE(i.AMORTIZATION_DATE, osd.OSD) AS date) AS PubDate
     FROM ebs.item i
+    LEFT JOIN (
+        SELECT
+            tt.ean13 AS ISBN,
+            MAX(tt.active_datevalue) AS OSD
+        FROM tmm.cb_Import_Title_Tasks tt
+        WHERE tt.date_desc = 'On Sale Date'
+          AND tt.active_datevalue IS NOT NULL
+          AND tt.printingnumber = 1
+          AND tt.activeind = '1'
+        GROUP BY tt.ean13
+    ) osd
+        ON osd.ISBN = i.ITEM_TITLE
     WHERE
         i.ITEM_TITLE IN ({quoted_isbns})
         AND i.PUBLISHER_CODE IS NOT NULL

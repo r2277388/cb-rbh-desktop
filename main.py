@@ -76,7 +76,7 @@ def display_options():
 def display_info(choice):
     info = {
         "1": "Amazon: Opens Amazon PO, PreOrders, Customer Orders, and AMS monthly campaign workflows.",
-        "2": "Retailer Rolling Reports: Opens Amazon, Barnes & Noble, Bookscan, Target NOC, and UK rolling-report workflows.",
+        "2": "Retailer Rolling Reports: Opens Amazon, Barnes & Noble, Bookscan, Readerlink, Target NOC, and UK rolling-report workflows.",
         "3": "Sales / Operational Reports: Opens Cross Gap, Frontlist, General Editorial variations, Hachette, Monthend, Reprint Indicator, and SSR workflows.",
         "4": "Data & Automation Tools: Opens Automation Processes, Check Table Updates, Inventory Obsolescence Manager, Power BI Reports, and XGBoost Model.",
         "5": "Admin / Utilities: Opens Desk Procedures, requirements installation, and the main venv shell.",
@@ -96,6 +96,7 @@ def display_info(choice):
         "106": "Amazon Rolling Reports Weekly Process step 2: Process Weekly Rolling Report. Builds the weekly Amazon rolling report workbooks.",
         "107": "Amazon Rolling Reports Monthly Process step 1: Add new Monthly file to Cache. Compiles monthly Amazon sales CSVs into the monthly cache parquet.",
         "108": "Amazon Rolling Reports Monthly Process step 2: Run Monthly Rolling Report. Builds the standalone monthly Amazon rolling report workbooks.",
+        "209": "Readerlink Rolling Reports: Rebuilds the Readerlink source caches, then creates the weekly Readerlink rolling report workbook.",
         "109": "Amazon AMS Monthly Campaign Summary: Builds the monthly campaign summary workbook from a selected AMS CSV.",
         "94": "Check Table Updates: Runs SQL checks for table freshness and recent weeks for SSR/Amazon/Bookscan tables.",
         "95": "Install Main Venv Requirements: Runs `pip install -r requirements.txt` using the repo's main virtual environment.",
@@ -1151,7 +1152,7 @@ def run_python_process(
     *,
     python_executable: str | Path = "venv/Scripts/python",
     extra_args: list[str] | None = None,
-) -> None:
+) -> bool:
     print(f"Running the {report_name}... Please wait.")
     command = [str(python_executable), str(script_path)]
     if extra_args:
@@ -1159,8 +1160,10 @@ def run_python_process(
     try:
         subprocess.run(command, check=True, cwd=process_paths.REPO_ROOT)
         print(f"The {report_name} is now ready.")
+        return True
     except subprocess.CalledProcessError:
         print(f"An error occurred while running {script_path}.")
+        return False
 
 
 def confirm_refresh_all_amazon_rolling_caches() -> bool:
@@ -1171,6 +1174,19 @@ def confirm_refresh_all_amazon_rolling_caches() -> bool:
         if choice in {"n", "no"}:
             return False
         print("Invalid choice. Please enter y or n.")
+
+
+def run_readerlink_rolling_reports() -> None:
+    cache_ok = run_python_process(
+        "Readerlink Rolling Reports Cache",
+        process_paths.repo_path("readerlink_rolling_reports", "build_cache.py"),
+    )
+    if not cache_ok:
+        return
+    run_python_process(
+        "Readerlink Rolling Reports",
+        process_paths.repo_path("readerlink_rolling_reports", "main.py"),
+    )
 
 
 def install_main_venv_requirements() -> None:
@@ -1223,6 +1239,7 @@ def run_retailer_rolling_reports_menu() -> None:
         print("    06. Bookscan Rolling Reports")
         print("    07. Target NOC Rolling Reports")
         print("    08. Abrams & Chronicle UK Rolling Reports")
+        print("    09. Readerlink Rolling Reports")
         print()
         print("    99. Back to main menu")
         print()
@@ -1305,6 +1322,10 @@ def run_retailer_rolling_reports_menu() -> None:
                 "Abrams & Chronicle UK Rolling Reports",
                 process_paths.repo_path("Abrams_Chronicle_rollling_reports", "main.py"),
             )
+            continue
+
+        if choice == "9":
+            run_readerlink_rolling_reports()
             continue
 
         if choice in {"99", "back", "b", "return", "menu"}:
