@@ -20,6 +20,7 @@ SHARED_BASE_DIR = Path(r"F:\ANALYSIS\Finance\DataWarehouse\Atelier Readerlink")
 CACHE_DIR = SHARED_BASE_DIR / "cache"
 OUTPUT_DIR = Path(r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Readerlink")
 HBG_INVENTORY_FILE = Path(r"G:\OPS\Inventory\Daily\Finance_Only\Inventory Detail.xlsx")
+FROZEN_QUANTITIES_FILE = Path(r"G:\OPS\Inventory\Daily\Finance_Only\Frozen Quantities.xlsx")
 
 POS_HISTORY_CACHE = CACHE_DIR / "readerlink_pos_history.parquet"
 LATEST_INVENTORY_CACHE = CACHE_DIR / "readerlink_latest_inventory.parquet"
@@ -35,20 +36,18 @@ TRACKED_CHAINS = [
     "KROGER",
     "MEIJER",
     "PARADIES",
-    "SAMS",
-    "SAMSCLUB.COM",
+    "SamsClub",
     "TARGET",
-    "WALMART",
+    "Walmart",
     "WHOLE FOODS",
-    "WM.COM",
 ]
-CHAIN_SHEET_ORDER = ["Summary - All Accounts"] + TRACKED_CHAINS + ["All Other Accounts"]
 CHAIN_ALIASES = {
     "TARGET STORES": "TARGET",
     "TARGET": "TARGET",
-    "SAMS CLUB": "SAMS",
-    "SAM'S CLUB": "SAMS",
-    "SAMS": "SAMS",
+    "SAMS CLUB": "SamsClub",
+    "SAM'S CLUB": "SamsClub",
+    "SAMS": "SamsClub",
+    "SAMSCLUB.COM": "SamsClub",
     "BJS": "BJS",
     "COSTCO": "COSTCO",
     "FRED MEYER": "FRED MEYER",
@@ -57,10 +56,9 @@ CHAIN_ALIASES = {
     "MEIJER": "MEIJER",
     "PARADIES": "PARADIES",
     "AAFES": "AAFES",
-    "WALMART": "WALMART",
+    "WALMART": "Walmart",
+    "WM.COM": "Walmart",
     "WHOLE FOODS": "WHOLE FOODS",
-    "WM.COM": "WM.COM",
-    "SAMSCLUB.COM": "SAMSCLUB.COM",
 }
 
 PG_GROUPING_KEY = {
@@ -192,15 +190,39 @@ def pg_grouping(row: pd.Series) -> str:
 def load_hbg_inventory() -> pd.DataFrame:
     df = pd.read_excel(
         HBG_INVENTORY_FILE,
-        usecols=["ISBN", "Available To Sell", "Frozen"],
+        usecols=["ISBN", "Available To Sell"],
         dtype={"ISBN": str},
     )
     df["ISBN"] = df["ISBN"].map(normalize_isbn)
     df = df[df["ISBN"] != ""]
-    for column in ["Available To Sell", "Frozen"]:
+    df["Available To Sell"] = pd.to_numeric(df["Available To Sell"], errors="coerce").fillna(0)
+    df = df.groupby("ISBN", as_index=False)[["Available To Sell"]].sum()
+    return df.rename(columns={"Available To Sell": "HBG_Avail"})
+
+
+def load_readerlink_freezes() -> pd.DataFrame:
+    df = pd.read_excel(
+        FROZEN_QUANTITIES_FILE,
+        dtype={"ISBN": str},
+    )
+    required_cols = {"ISBN", "Reason", "Requestor", "Current Stock Freeze", "Future Reserve Qty"}
+    missing_cols = required_cols - set(df.columns)
+    if missing_cols:
+        missing = ", ".join(sorted(missing_cols))
+        raise ValueError(f"Missing expected Frozen Quantities column(s): {missing}")
+
+    df["ISBN"] = df["ISBN"].map(normalize_isbn)
+    reason = df["Reason"].astype("string").str.strip().str.upper()
+    requestor = df["Requestor"].astype("string").str.strip().str.upper().str.replace(".", "", regex=False)
+    df = df[
+        df["ISBN"].ne("")
+        & reason.eq("READERLINK")
+        & requestor.isin({"TRACY", "TRACY V", "TRACY VEGA"})
+    ].copy()
+    for column in ["Current Stock Freeze", "Future Reserve Qty"]:
         df[column] = pd.to_numeric(df[column], errors="coerce").fillna(0)
-    df = df.groupby("ISBN", as_index=False)[["Available To Sell", "Frozen"]].sum()
-    return df.rename(columns={"Available To Sell": "HBG_Avail", "Frozen": "Freezes"})
+    df["RL Freezes"] = df["Current Stock Freeze"] + df["Future Reserve Qty"]
+    return df.groupby("ISBN", as_index=False)[["RL Freezes"]].sum()
 
 
 def load_readerlink_inventory() -> pd.DataFrame:
@@ -289,6 +311,7 @@ def build_report_sheet(
     pos_history: pd.DataFrame,
     metadata: pd.DataFrame,
     hbg_inventory: pd.DataFrame,
+    readerlink_freezes: pd.DataFrame,
     readerlink_inventory: pd.DataFrame,
     all_week_cols: list[str],
     report_week_cols: list[str],
@@ -311,9 +334,10 @@ def build_report_sheet(
     report = history.merge(metadata, on="ISBN", how="left")
     report = report[report["Pub"].notna() & report["Pub"].astype(str).str.strip().ne("")]
     report = report.merge(hbg_inventory, on="ISBN", how="left")
+    report = report.merge(readerlink_freezes, on="ISBN", how="left")
     report = report.merge(readerlink_inventory, on="ISBN", how="left")
 
-    for column in ["HBG_Avail", "Freezes", "OH", "OO", "Price"]:
+    for column in ["HBG_Avail", "RL Freezes", "OH", "OO", "Price"]:
         report[column] = pd.to_numeric(report.get(column, 0), errors="coerce").fillna(0)
 
     for column in ["Pub", "pt", "ft", "pgrp", "Title", "PubDate"]:
@@ -358,6 +382,12 @@ def build_report_sheet(
         for col in all_week_cols
         if active_cutoff <= pd.to_datetime(col, format="%m-%d-%Y") <= latest_week
     ]
+    account_activity_cutoff = latest_week - pd.DateOffset(years=5)
+    account_activity_cols = [
+        col
+        for col in all_week_cols
+        if account_activity_cutoff <= pd.to_datetime(col, format="%m-%d-%Y") <= latest_week
+    ]
 
     for year_label in older_year_cols:
         year_cols = [
@@ -390,11 +420,14 @@ def build_report_sheet(
     else:
         report["PW %"] = 0
 
-    active_mask = (
-        report["OH"].ne(0)
-        | report["OO"].ne(0)
-        | report[active_sales_cols].sum(axis=1).ne(0)
-    )
+    if sheet_name == "Summary - All Accounts":
+        active_mask = (
+            report["OH"].ne(0)
+            | report["OO"].ne(0)
+            | report[active_sales_cols].sum(axis=1).ne(0)
+        )
+    else:
+        active_mask = report[account_activity_cols].sum(axis=1).ne(0)
     report = report[active_mask].copy()
 
     base_cols = [
@@ -408,7 +441,7 @@ def build_report_sheet(
         "Price",
         "PubDate",
         "HBG_Avail",
-        "Freezes",
+        "RL Freezes",
         "OH",
         "OO",
         "OH_Avg",
@@ -458,11 +491,30 @@ def write_workbook(sheets: dict[str, pd.DataFrame], output_path: Path, latest_we
         pct_fmt = workbook.add_format({"num_format": '0.0%'})
         isbn_fmt = workbook.add_format({"num_format": '0'})
         title_fmt = workbook.add_format({"bold": False, "align": "center_across", "valign": "vcenter", "bg_color": "#C4BD97", "font_size": 16})
+        unit_band_fmt = workbook.add_format({"bold": True, "align": "center_across", "valign": "vcenter", "bg_color": "#FCD5B4", "border": 1})
+        value_band_fmt = workbook.add_format({"bold": True, "align": "center_across", "valign": "vcenter", "bg_color": "#B7DEE8", "border": 1})
+        criteria_title_fmt = workbook.add_format({"bold": True, "font_size": 14, "bg_color": "#B8CCE4", "border": 1})
+        criteria_header_fmt = workbook.add_format({"bold": True, "bg_color": "#D9EAD3", "border": 1})
+        criteria_text_fmt = workbook.add_format({"text_wrap": True, "valign": "top", "border": 1})
 
         for sheet_name, df in sheets.items():
+            if sheet_name == "Criteria":
+                df.to_excel(writer, sheet_name=sheet_name, startrow=2, index=False)
+                ws = writer.sheets[sheet_name]
+                ws.set_tab_color("#403151")
+                ws.write(0, 0, "Readerlink Rolling Report Criteria", criteria_title_fmt)
+                for col_idx, col_name in enumerate(df.columns):
+                    ws.write(2, col_idx, col_name, criteria_header_fmt)
+                ws.set_column(0, 0, 28)
+                ws.set_column(1, 1, 120, criteria_text_fmt)
+                ws.freeze_panes(3, 0)
+                continue
+
             safe_sheet = sheet_name[:31]
             df.to_excel(writer, sheet_name=safe_sheet, startrow=header_row, index=False)
             ws = writer.sheets[safe_sheet]
+            if sheet_name == "Summary - All Accounts":
+                ws.set_tab_color("#0F243E")
             last_row = header_row + len(df)
             last_col = len(df.columns) - 1
 
@@ -475,6 +527,18 @@ def write_workbook(sheets: dict[str, pd.DataFrame], output_path: Path, latest_we
             ws.write(0, 8, "Total", total_label_fmt)
             ws.write(1, 8, "Subtotal", total_label_fmt)
             col_positions = {col_name: idx for idx, col_name in enumerate(df.columns)}
+            unit_cols = ["TYTD", "LYTD", "YTD Var"]
+            value_cols = ["TYTD Val", "LYTD Val", "YTD Val Var"]
+            if all(col in col_positions for col in unit_cols):
+                start_col = col_positions[unit_cols[0]]
+                ws.write(header_row - 1, start_col, "Unit", unit_band_fmt)
+                for col_idx in range(start_col + 1, col_positions[unit_cols[-1]] + 1):
+                    ws.write_blank(header_row - 1, col_idx, None, unit_band_fmt)
+            if all(col in col_positions for col in value_cols):
+                start_col = col_positions[value_cols[0]]
+                ws.write(header_row - 1, start_col, "$ Value", value_band_fmt)
+                for col_idx in range(start_col + 1, col_positions[value_cols[-1]] + 1):
+                    ws.write_blank(header_row - 1, col_idx, None, value_band_fmt)
             latest_label = latest_week.strftime("%m-%d-%Y")
             prior_label = (latest_week - pd.Timedelta(weeks=1)).strftime("%m-%d-%Y")
             for col_idx, col_name in enumerate(df.columns):
@@ -569,6 +633,95 @@ def write_workbook(sheets: dict[str, pd.DataFrame], output_path: Path, latest_we
     print(f"Saved Readerlink rolling report: {output_path}")
 
 
+def ordered_sheets_by_tytd(sheets: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
+    ordered = {"Summary - All Accounts": sheets["Summary - All Accounts"]}
+    remaining = [
+        (name, df)
+        for name, df in sheets.items()
+        if name != "Summary - All Accounts"
+    ]
+    remaining.sort(
+        key=lambda item: pd.to_numeric(item[1].get("TYTD", pd.Series(dtype=float)), errors="coerce").fillna(0).sum(),
+        reverse=True,
+    )
+    ordered.update(remaining)
+    return ordered
+
+
+def build_criteria_sheet(latest_week: pd.Timestamp) -> pd.DataFrame:
+    rows = [
+        (
+            "Report week",
+            f"Latest week is taken from the max week_end in the Readerlink POS cache. Current build week ending: {latest_week.strftime('%B %d, %Y')}.",
+        ),
+        (
+            "Sales source",
+            "Weekly Readerlink sales workbooks from the 2026/2025 Readerlink folders and the 2024 archive folder. Modern files use the Export/Data layout; 2024 archive files use the LAST WEEK layout.",
+        ),
+        (
+            "Sales metric",
+            "Weekly units come from CY POS UNITS. ISBN is normalized from EAN/ITEMNUMBER to a 13-digit text ISBN.",
+        ),
+        (
+            "Inventory source",
+            f"Readerlink OH and OO come from the latest Readerlink inventory cache built from {LATEST_INVENTORY_CACHE}. OH = RDS DC INVENTORY OH; OO = RDS OPEN PO QUANTITY.",
+        ),
+        (
+            "HBG availability",
+            f"HBG_Avail comes from {HBG_INVENTORY_FILE}, field Available To Sell, grouped by ISBN.",
+        ),
+        (
+            "RL Freezes",
+            f"RL Freezes comes from {FROZEN_QUANTITIES_FILE}. Included rows require Reason = Readerlink and Requestor in Tracy, Tracy V, Tracy Vega, or Tracy V. Value = Current Stock Freeze + Future Reserve Qty, grouped by ISBN.",
+        ),
+        (
+            "Title metadata",
+            "Pub, pt, ft, pgrp, ISBN, Title, Price, and PubDate come from ebs.item. PubDate uses AMORTIZATION_DATE with fallback to the On Sale Date task table when AMORTIZATION_DATE is blank.",
+        ),
+        (
+            "Metadata filter",
+            "Only EBS items with PRODUCT_TYPE in BK, FT, CP, RP, DI are included. Publishing groups MKT and ZZZ are excluded, along with the publisher exclusion list used by the shared rolling-report metadata query.",
+        ),
+        (
+            "Unknown ISBNs",
+            "Readerlink ISBNs not found in the EBS item query are left out of the report, even if Readerlink sent sales or inventory for them.",
+        ),
+        (
+            "Chain tabs",
+            "Summary - All Accounts is always first. Remaining account tabs are sorted by total TYTD units descending. Criteria is always last.",
+        ),
+        (
+            "Account rollups",
+            "SAMS, SAMS CLUB, SAM'S CLUB, and SAMSCLUB.COM roll into SamsClub. WALMART and WM.COM roll into Walmart. Untracked accounts roll into All Other Accounts.",
+        ),
+        (
+            "Inventory on tabs",
+            "Readerlink OH, OO, HBG_Avail, and RL Freezes are ISBN-level values and are repeated on account tabs because inventory is not provided at the Master Chain level.",
+        ),
+        (
+            "Displayed weekly history",
+            f"The report displays complete weekly years only using the current rolling setting of {WEEKLY_REPORT_YEARS} years. Older weeks stay in cache and are shown as annual aggregate columns.",
+        ),
+        (
+            "Row inclusion",
+            f"Rows are included when the ISBN is in EBS and has any OH, any OO, or any sales in the last {ACTIVE_ROW_YEARS} years. Cache data is retained even when rows are filtered from the report.",
+        ),
+        (
+            "Calculations",
+            "W52 is the latest 52 weeks. 6Wk Avg is the latest 6 weeks divided by 6. OH_Avg = OH / 6Wk Avg. OH+OO_Avg = (OH + OO) / 6Wk Avg. PW % = current week versus prior week.",
+        ),
+        (
+            "YTD logic",
+            "TYTD, LYTD, LY_FY, and related value fields follow the shared Bookscan calendar logic used by the other rolling reports.",
+        ),
+        (
+            "Caches",
+            f"Shared Readerlink caches live in {CACHE_DIR}. The cache keeps all collected Readerlink data for future report builds.",
+        ),
+    ]
+    return pd.DataFrame(rows, columns=["Criteria", "Rule / Source"])
+
+
 def _xl_cell(row: int, col: int) -> str:
     from xlsxwriter.utility import xl_rowcol_to_cell
 
@@ -587,16 +740,18 @@ def main() -> None:
     display_year_cols = older_year_columns(pos_history, latest_week)
     metadata = load_metadata()
     hbg_inventory = load_hbg_inventory()
+    readerlink_freezes = load_readerlink_freezes()
     readerlink_inventory = load_readerlink_inventory()
 
     sheets: dict[str, pd.DataFrame] = {}
-    for sheet_name in CHAIN_SHEET_ORDER:
+    for sheet_name in ["Summary - All Accounts"] + TRACKED_CHAINS + ["All Other Accounts"]:
         print(f"Building sheet: {sheet_name}")
         sheets[sheet_name] = build_report_sheet(
             sheet_name,
             pos_history,
             metadata,
             hbg_inventory,
+            readerlink_freezes,
             readerlink_inventory,
             week_cols,
             display_week_cols,
@@ -605,7 +760,9 @@ def main() -> None:
         )
 
     output_path = args.output or output_file_for(latest_week)
-    write_workbook(sheets, output_path, latest_week)
+    ordered_sheets = ordered_sheets_by_tytd(sheets)
+    ordered_sheets["Criteria"] = build_criteria_sheet(latest_week)
+    write_workbook(ordered_sheets, output_path, latest_week)
 
 
 if __name__ == "__main__":
