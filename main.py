@@ -96,7 +96,7 @@ def display_info(choice):
         "106": "Amazon Rolling Reports Weekly Process step 2: Process Weekly Rolling Report. Builds the weekly Amazon rolling report workbooks.",
         "107": "Amazon Rolling Reports Monthly Process step 1: Add new Monthly file to Cache. Compiles monthly Amazon sales CSVs into the monthly cache parquet.",
         "108": "Amazon Rolling Reports Monthly Process step 2: Run Monthly Rolling Report. Builds the standalone monthly Amazon rolling report workbooks.",
-        "209": "Readerlink Rolling Reports: Rebuilds the Readerlink source caches, then creates the weekly Readerlink rolling report workbook.",
+        "209": "Readerlink Rolling Reports: Updates the Readerlink source caches, then creates the weekly Readerlink rolling report workbook.",
         "109": "Amazon AMS Monthly Campaign Summary: Builds the monthly campaign summary workbook from a selected AMS CSV.",
         "94": "Check Table Updates: Runs SQL checks for table freshness and recent weeks for SSR/Amazon/Bookscan tables.",
         "95": "Install Main Venv Requirements: Runs `pip install -r requirements.txt` using the repo's main virtual environment.",

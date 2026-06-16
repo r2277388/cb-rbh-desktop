@@ -2,14 +2,28 @@ from __future__ import annotations
 
 import argparse
 import re
+import sys
+import warnings
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
 
-
 BASE_DIR = Path(__file__).resolve().parent
+REPO_ROOT = BASE_DIR.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from shared.bookscan_calendar import bookscan_week
+
+warnings.filterwarnings(
+    "ignore",
+    message="Workbook contains no default style, apply openpyxl's default",
+    category=UserWarning,
+    module="openpyxl.styles.stylesheet",
+)
+
 SHARED_BASE_DIR = Path(r"F:\ANALYSIS\Finance\DataWarehouse\Atelier Readerlink")
 CACHE_DIR = SHARED_BASE_DIR / "cache"
 
@@ -22,6 +36,10 @@ INVENTORY_SOURCE_DIR = (
     Path(r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Readerlink\Inventory")
 )
 HISTORICAL_ROLLING_FILE = BASE_DIR / "Week 23 - 2026 Rolling Readerlink (060626).xlsx"
+WEEKLY_SALES_CACHE = CACHE_DIR / "readerlink_weekly_sales.parquet"
+LATEST_INVENTORY_CACHE = CACHE_DIR / "readerlink_latest_inventory.parquet"
+PRE2024_HISTORY_CACHE = CACHE_DIR / "readerlink_pre2024_pos_history.parquet"
+POS_HISTORY_CACHE = CACHE_DIR / "readerlink_pos_history.parquet"
 
 SALES_COLUMNS = [
     "MASTER CHAIN",
@@ -83,10 +101,11 @@ def parse_readerlink_filename(path: Path) -> SourceFile | None:
     match = FILENAME_DATE_RE.search(path.name)
     if not match:
         return None
-    week_number = int(match.group(1))
-    year = int(match.group(2))
     date_token = match.group(3)
     week_end = pd.Timestamp(datetime.strptime(date_token, "%m%d%y"))
+    bookscan = bookscan_week(week_end)
+    week_number = bookscan.week
+    year = bookscan.year
     return SourceFile(path=path, week_number=week_number, year=year, week_end=week_end)
 
 
@@ -203,6 +222,59 @@ def build_sales_cache() -> pd.DataFrame:
     sales = pd.concat(frames, ignore_index=True)
     sales = sales.sort_values(["week_end", "master_chain", "isbn"]).reset_index(drop=True)
     return sales
+
+
+def load_cached_sales() -> pd.DataFrame | None:
+    if not WEEKLY_SALES_CACHE.exists():
+        return None
+    df = pd.read_parquet(WEEKLY_SALES_CACHE)
+    df["week_end"] = pd.to_datetime(df["week_end"])
+    return df
+
+
+def build_incremental_sales_cache(files: list[SourceFile], rebuild_all: bool) -> pd.DataFrame:
+    current_source_by_week = {
+        source.week_end.normalize(): source.path.name
+        for source in files
+    }
+    cached = None if rebuild_all else load_cached_sales()
+    if cached is None:
+        print("Sales cache: no reusable cache found; reading all sales source files.")
+        files_to_read = files
+    else:
+        cached_sources = set(cached["source_file"].astype("string").dropna())
+        cached_weeks = set(pd.to_datetime(cached["week_end"]).dt.normalize().dropna())
+        files_to_read = [source for source in files if source.week_end.normalize() not in cached_weeks]
+        print(f"Sales cache: {len(cached_sources):,} source file(s) already cached.")
+
+    if not files_to_read:
+        print("Sales cache: no new sales files to read.")
+        sales = cached.copy()
+        sales["week_end"] = pd.to_datetime(sales["week_end"])
+        sales["source_file"] = (
+            sales["week_end"].dt.normalize().map(current_source_by_week).fillna(sales["source_file"])
+        )
+        return (
+            sales.sort_values(["week_end", "source_file"])
+            .drop_duplicates(subset=["week_end", "master_chain", "isbn"], keep="last")
+            .sort_values(["week_end", "master_chain", "isbn"])
+            .reset_index(drop=True)
+        )
+
+    frames = []
+    for index, source in enumerate(files_to_read, start=1):
+        print(f"Reading sales {index:>3}/{len(files_to_read)}: {source.path.name}")
+        frames.append(read_sales_file(source))
+
+    new_sales = pd.concat(frames, ignore_index=True)
+    sales = new_sales if cached is None else pd.concat([cached, new_sales], ignore_index=True, sort=False)
+    sales["week_end"] = pd.to_datetime(sales["week_end"])
+    sales["source_file"] = sales["week_end"].dt.normalize().map(current_source_by_week).fillna(sales["source_file"])
+    sales = sales.drop_duplicates(
+        subset=["week_end", "master_chain", "isbn"],
+        keep="last",
+    )
+    return sales.sort_values(["week_end", "master_chain", "isbn"]).reset_index(drop=True)
 
 
 def read_inventory_file(source: SourceFile) -> pd.DataFrame:
@@ -365,6 +437,98 @@ def build_combined_pos_history(sales: pd.DataFrame, history: pd.DataFrame) -> pd
     return combined.sort_values(["week_end", "master_chain", "isbn"]).reset_index(drop=True)
 
 
+def load_or_build_history(skip_history: bool, rebuild_all: bool) -> pd.DataFrame:
+    if skip_history:
+        if PRE2024_HISTORY_CACHE.exists():
+            print(f"Pre-2024 history: using existing cache: {PRE2024_HISTORY_CACHE}")
+            return pd.read_parquet(PRE2024_HISTORY_CACHE)
+        print("Pre-2024 history: skipped and no existing cache found.")
+        return pd.DataFrame(columns=["week_end", "master_chain", "isbn", "cy_pos_units", "source_file", "source_sheet"])
+
+    if PRE2024_HISTORY_CACHE.exists() and not rebuild_all:
+        print(f"Pre-2024 history: using existing cache: {PRE2024_HISTORY_CACHE}")
+        return pd.read_parquet(PRE2024_HISTORY_CACHE)
+
+    print(f"Pre-2024 history: reading historical workbook: {HISTORICAL_ROLLING_FILE}")
+    history = build_historical_pos_cache()
+    save_cache(history, PRE2024_HISTORY_CACHE)
+    return history
+
+
+def print_cache_plan(sales_files: list[SourceFile], inventory_files: list[SourceFile], rebuild_all: bool) -> None:
+    print("")
+    print("Readerlink cache inputs")
+    print("-----------------------")
+    print(f"Sales source folders:")
+    for folder in SALES_SOURCE_DIRS:
+        print(f"  - {folder}")
+    print(f"Sales filenames found: {len(sales_files):,}")
+    if sales_files:
+        print(f"Latest sales file: {sales_files[-1].path.name} ({sales_files[-1].week_end:%m/%d/%Y})")
+    print(f"Inventory source folder: {INVENTORY_SOURCE_DIR}")
+    print(f"Inventory filenames found: {len(inventory_files):,}")
+    if inventory_files:
+        print(f"Latest inventory file: {inventory_files[-1].path.name} ({inventory_files[-1].week_end:%m/%d/%Y})")
+    print(f"Existing sales cache: {'yes' if WEEKLY_SALES_CACHE.exists() else 'no'}")
+    print(f"Existing pre-2024 history cache: {'yes' if PRE2024_HISTORY_CACHE.exists() else 'no'}")
+    print(f"Mode: {'full rebuild' if rebuild_all else 'incremental weekly update'}")
+    if not rebuild_all:
+        print("Normal weekly run: prior sales history is read from cache; only uncached weekly sales files are opened.")
+        print("Normal weekly run: Readerlink inventory is refreshed from the latest inventory workbook only.")
+    print("")
+
+
+def print_last_5_week_summary(pos_history: pd.DataFrame, latest_inventory: pd.DataFrame) -> None:
+    if pos_history.empty:
+        print("Last 5 cached weeks: no cached POS history found.")
+        return
+
+    data = pos_history.copy()
+    data["week_end"] = pd.to_datetime(data["week_end"])
+    data["cy_pos_units"] = pd.to_numeric(data["cy_pos_units"], errors="coerce").fillna(0)
+    last_weeks = sorted(data["week_end"].dropna().unique())[-5:]
+    summary = (
+        data[data["week_end"].isin(last_weeks)]
+        .groupby("week_end", as_index=False)
+        .agg(
+            pos_units=("cy_pos_units", "sum"),
+            isbn_count=("isbn", "nunique"),
+            chain_count=("master_chain", "nunique"),
+            source_files=("source_file", "nunique"),
+        )
+        .sort_values("week_end", ascending=False)
+    )
+
+    latest_inventory = latest_inventory.copy()
+    latest_inventory["rds_dc_inventory_oh"] = pd.to_numeric(
+        latest_inventory["rds_dc_inventory_oh"], errors="coerce"
+    ).fillna(0)
+    latest_inventory["rds_open_po_quantity"] = pd.to_numeric(
+        latest_inventory["rds_open_po_quantity"], errors="coerce"
+    ).fillna(0)
+
+    print("")
+    print("Last 5 cached Readerlink weeks")
+    print("------------------------------")
+    for row in summary.itertuples(index=False):
+        bs = bookscan_week(row.week_end)
+        print(
+            f"{pd.Timestamp(row.week_end):%m/%d/%Y} | "
+            f"Week {bs.week:02d} - {bs.year} | "
+            f"POS units: {row.pos_units:,.0f} | "
+            f"ISBNs: {row.isbn_count:,} | "
+            f"Chains: {row.chain_count:,} | "
+            f"Sales source files: {row.source_files:,}"
+        )
+    print(
+        "Latest inventory totals | "
+        f"OH: {latest_inventory['rds_dc_inventory_oh'].sum():,.0f} | "
+        f"OO: {latest_inventory['rds_open_po_quantity'].sum():,.0f} | "
+        f"ISBNs: {latest_inventory['isbn'].nunique():,}"
+    )
+    print("")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build Readerlink rolling report source caches.")
     parser.add_argument(
@@ -372,19 +536,32 @@ def main() -> None:
         action="store_true",
         help="Skip pre-2024 history extraction from the old rolling workbook.",
     )
+    parser.add_argument(
+        "--rebuild-all",
+        action="store_true",
+        help="Re-read every Readerlink sales workbook and rebuild the pre-2024 history cache.",
+    )
     args = parser.parse_args()
 
-    sales = build_sales_cache()
-    save_cache(sales, CACHE_DIR / "readerlink_weekly_sales.parquet")
+    sales_files = find_sales_files()
+    inventory_files = find_inventory_files()
+    if not sales_files:
+        raise FileNotFoundError("No Readerlink sales source files found.")
+    if not inventory_files:
+        raise FileNotFoundError("No Readerlink inventory source files found.")
+
+    print_cache_plan(sales_files, inventory_files, args.rebuild_all)
+
+    sales = build_incremental_sales_cache(sales_files, args.rebuild_all)
+    save_cache(sales, WEEKLY_SALES_CACHE)
 
     inventory = build_latest_inventory_cache()
-    save_cache(inventory, CACHE_DIR / "readerlink_latest_inventory.parquet")
+    save_cache(inventory, LATEST_INVENTORY_CACHE)
 
-    if not args.skip_history:
-        history = build_historical_pos_cache()
-        save_cache(history, CACHE_DIR / "readerlink_pre2024_pos_history.parquet")
-        combined_pos = build_combined_pos_history(sales, history)
-        save_cache(combined_pos, CACHE_DIR / "readerlink_pos_history.parquet")
+    history = load_or_build_history(args.skip_history, args.rebuild_all)
+    combined_pos = build_combined_pos_history(sales, history)
+    save_cache(combined_pos, POS_HISTORY_CACHE)
+    print_last_5_week_summary(combined_pos, inventory)
 
     print("Readerlink cache build complete.")
 

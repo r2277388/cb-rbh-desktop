@@ -2,10 +2,18 @@ from __future__ import annotations
 
 import argparse
 import sys
+import warnings
 from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
+
+warnings.filterwarnings(
+    "ignore",
+    message="Workbook contains no default style, apply openpyxl's default",
+    category=UserWarning,
+    module="openpyxl.styles.stylesheet",
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -114,13 +122,7 @@ def bookscan_year_start(week_end: pd.Timestamp) -> pd.Timestamp:
 
 
 def readerlink_week(date_value: pd.Timestamp) -> int:
-    date_value = pd.Timestamp(date_value)
-    jan1 = pd.Timestamp(year=date_value.year, month=1, day=1)
-    days_to_saturday = (5 - jan1.weekday()) % 7
-    first_saturday = jan1 + pd.Timedelta(days=days_to_saturday)
-    if date_value < first_saturday:
-        return readerlink_week(pd.Timestamp(year=date_value.year - 1, month=12, day=31))
-    return int(((date_value - first_saturday).days // 7) + 1)
+    return bookscan_week(date_value).week
 
 
 def canonical_chain(value: str) -> str:
@@ -464,7 +466,52 @@ def build_report_sheet(
 
 
 def output_file_for(latest_week: pd.Timestamp) -> Path:
-    return OUTPUT_DIR / f"Week {readerlink_week(latest_week):02d} - {latest_week.year} Rolling Readerlink ({latest_week.strftime('%m%d%y')}).xlsx"
+    bookscan = bookscan_week(latest_week)
+    return OUTPUT_DIR / f"Week {bookscan.week:02d} - {bookscan.year} Rolling Readerlink ({latest_week.strftime('%m%d%y')}).xlsx"
+
+
+def print_report_inputs(pos_history: pd.DataFrame, latest_week: pd.Timestamp, output_path: Path) -> None:
+    week_count = pos_history["week_end"].nunique()
+    isbn_count = pos_history["ISBN"].nunique()
+    source_count = pos_history["source_file"].nunique() if "source_file" in pos_history.columns else 0
+    latest_sales_sources = (
+        pos_history.loc[pos_history["week_end"].eq(latest_week), "source_file"]
+        .dropna()
+        .astype(str)
+        .drop_duplicates()
+        .sort_values()
+        .tolist()
+    )
+    inventory_source = ""
+    if LATEST_INVENTORY_CACHE.exists():
+        inventory_cache = pd.read_parquet(LATEST_INVENTORY_CACHE, columns=["source_file", "week_end"])
+        if not inventory_cache.empty:
+            latest_inventory_week = pd.to_datetime(inventory_cache["week_end"]).max()
+            inventory_files = (
+                inventory_cache.loc[pd.to_datetime(inventory_cache["week_end"]).eq(latest_inventory_week), "source_file"]
+                .dropna()
+                .astype(str)
+                .drop_duplicates()
+                .sort_values()
+                .tolist()
+            )
+            inventory_source = ", ".join(inventory_files)
+
+    bookscan = bookscan_week(latest_week)
+    print("")
+    print("Readerlink report inputs")
+    print("------------------------")
+    print(f"Latest sales week in cache: {latest_week:%m/%d/%Y} / Week {bookscan.week:02d} - {bookscan.year}")
+    print(f"POS cache: {POS_HISTORY_CACHE}")
+    print(f"POS cache coverage: {week_count:,} week(s), {isbn_count:,} ISBN(s), {source_count:,} source file(s)")
+    print(f"Latest sales source file(s): {', '.join(latest_sales_sources) if latest_sales_sources else 'none found'}")
+    print(f"Latest Readerlink inventory cache: {LATEST_INVENTORY_CACHE}")
+    print(f"Latest Readerlink inventory source file(s): {inventory_source or 'none found'}")
+    print(f"HBG_Avail source: {HBG_INVENTORY_FILE}")
+    print(f"RL Freezes source: {FROZEN_QUANTITIES_FILE}")
+    print("Title metadata source: SQL ebs.item with On Sale Date fallback")
+    print(f"Output workbook: {output_path}")
+    print("")
 
 
 def write_workbook(sheets: dict[str, pd.DataFrame], output_path: Path, latest_week: pd.Timestamp) -> None:
@@ -704,7 +751,7 @@ def build_criteria_sheet(latest_week: pd.Timestamp) -> pd.DataFrame:
         ),
         (
             "Row inclusion",
-            f"Rows are included when the ISBN is in EBS and has any OH, any OO, or any sales in the last {ACTIVE_ROW_YEARS} years. Cache data is retained even when rows are filtered from the report.",
+            f"Summary rows are included when the ISBN is in EBS and has any OH, any OO, or any sales in the last {ACTIVE_ROW_YEARS} years. Account tabs include only ISBNs with account sales activity in the last 5 years. Cache data is retained even when rows are filtered from the report.",
         ),
         (
             "Calculations",
@@ -738,6 +785,8 @@ def main() -> None:
     week_cols = history_columns(pos_history)
     display_week_cols = report_week_columns(pos_history, latest_week)
     display_year_cols = older_year_columns(pos_history, latest_week)
+    output_path = args.output or output_file_for(latest_week)
+    print_report_inputs(pos_history, latest_week, output_path)
     metadata = load_metadata()
     hbg_inventory = load_hbg_inventory()
     readerlink_freezes = load_readerlink_freezes()
@@ -759,7 +808,6 @@ def main() -> None:
             latest_week,
         )
 
-    output_path = args.output or output_file_for(latest_week)
     ordered_sheets = ordered_sheets_by_tytd(sheets)
     ordered_sheets["Criteria"] = build_criteria_sheet(latest_week)
     write_workbook(ordered_sheets, output_path, latest_week)
