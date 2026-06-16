@@ -96,7 +96,7 @@ def display_info(choice):
         "106": "Amazon Rolling Reports Weekly Process step 2: Process Weekly Rolling Report. Builds the weekly Amazon rolling report workbooks.",
         "107": "Amazon Rolling Reports Monthly Process step 1: Add new Monthly file to Cache. Compiles monthly Amazon sales CSVs into the monthly cache parquet.",
         "108": "Amazon Rolling Reports Monthly Process step 2: Run Monthly Rolling Report. Builds the standalone monthly Amazon rolling report workbooks.",
-        "209": "Readerlink Rolling Reports: Updates the Readerlink source caches, then creates the weekly Readerlink rolling report workbook.",
+        "209": "Readerlink Rolling Reports: Opens Readerlink cache update, cache totals, and report creation actions.",
         "109": "Amazon AMS Monthly Campaign Summary: Builds the monthly campaign summary workbook from a selected AMS CSV.",
         "94": "Check Table Updates: Runs SQL checks for table freshness and recent weeks for SSR/Amazon/Bookscan tables.",
         "95": "Install Main Venv Requirements: Runs `pip install -r requirements.txt` using the repo's main virtual environment.",
@@ -1152,6 +1152,7 @@ def run_python_process(
     *,
     python_executable: str | Path = "venv/Scripts/python",
     extra_args: list[str] | None = None,
+    skipped_returncodes: set[int] | None = None,
 ) -> bool:
     print(f"Running the {report_name}... Please wait.")
     command = [str(python_executable), str(script_path)]
@@ -1161,7 +1162,9 @@ def run_python_process(
         subprocess.run(command, check=True, cwd=process_paths.REPO_ROOT)
         print(f"The {report_name} is now ready.")
         return True
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as exc:
+        if skipped_returncodes and exc.returncode in skipped_returncodes:
+            return False
         print(f"An error occurred while running {script_path}.")
         return False
 
@@ -1177,16 +1180,40 @@ def confirm_refresh_all_amazon_rolling_caches() -> bool:
 
 
 def run_readerlink_rolling_reports() -> None:
-    cache_ok = run_python_process(
-        "Readerlink Rolling Reports Cache",
-        process_paths.repo_path("readerlink_rolling_reports", "build_cache.py"),
-    )
-    if not cache_ok:
-        return
-    run_python_process(
-        "Readerlink Rolling Reports",
-        process_paths.repo_path("readerlink_rolling_reports", "main.py"),
-    )
+    while True:
+        print("")
+        print("Readerlink Rolling Reports")
+        print("    1. Add a new week's data to cache")
+        print("    2. Show totals for the last 4 cached Readerlink weeks")
+        print("    3. Create the Readerlink Rolling Report")
+        print("    0. Back")
+        choice = input("Choose an action: ").strip().lower()
+
+        if choice in {"0", "b", "back"}:
+            return
+        if choice == "1":
+            run_python_process(
+                "Readerlink Cache Update",
+                process_paths.repo_path("readerlink_rolling_reports", "build_cache.py"),
+                extra_args=["--add-new-week"],
+                skipped_returncodes={10},
+            )
+            continue
+        if choice == "2":
+            run_python_process(
+                "Readerlink Cache Totals",
+                process_paths.repo_path("readerlink_rolling_reports", "build_cache.py"),
+                extra_args=["--show-last-weeks"],
+            )
+            continue
+        if choice == "3":
+            run_python_process(
+                "Readerlink Rolling Reports",
+                process_paths.repo_path("readerlink_rolling_reports", "main.py"),
+            )
+            continue
+
+        print("Invalid choice. Please select a valid option.")
 
 
 def install_main_venv_requirements() -> None:

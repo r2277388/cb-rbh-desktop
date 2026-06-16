@@ -478,15 +478,19 @@ def print_cache_plan(sales_files: list[SourceFile], inventory_files: list[Source
     print("")
 
 
-def print_last_5_week_summary(pos_history: pd.DataFrame, latest_inventory: pd.DataFrame) -> None:
+def print_recent_week_summary(
+    pos_history: pd.DataFrame,
+    latest_inventory: pd.DataFrame | None = None,
+    week_count: int = 4,
+) -> None:
     if pos_history.empty:
-        print("Last 5 cached weeks: no cached POS history found.")
+        print(f"Last {week_count} cached weeks: no cached POS history found.")
         return
 
     data = pos_history.copy()
     data["week_end"] = pd.to_datetime(data["week_end"])
     data["cy_pos_units"] = pd.to_numeric(data["cy_pos_units"], errors="coerce").fillna(0)
-    last_weeks = sorted(data["week_end"].dropna().unique())[-5:]
+    last_weeks = sorted(data["week_end"].dropna().unique())[-week_count:]
     summary = (
         data[data["week_end"].isin(last_weeks)]
         .groupby("week_end", as_index=False)
@@ -499,16 +503,8 @@ def print_last_5_week_summary(pos_history: pd.DataFrame, latest_inventory: pd.Da
         .sort_values("week_end", ascending=False)
     )
 
-    latest_inventory = latest_inventory.copy()
-    latest_inventory["rds_dc_inventory_oh"] = pd.to_numeric(
-        latest_inventory["rds_dc_inventory_oh"], errors="coerce"
-    ).fillna(0)
-    latest_inventory["rds_open_po_quantity"] = pd.to_numeric(
-        latest_inventory["rds_open_po_quantity"], errors="coerce"
-    ).fillna(0)
-
     print("")
-    print("Last 5 cached Readerlink weeks")
+    print(f"Last {week_count} cached Readerlink weeks")
     print("------------------------------")
     for row in summary.itertuples(index=False):
         bs = bookscan_week(row.week_end)
@@ -520,17 +516,99 @@ def print_last_5_week_summary(pos_history: pd.DataFrame, latest_inventory: pd.Da
             f"Chains: {row.chain_count:,} | "
             f"Sales source files: {row.source_files:,}"
         )
-    print(
-        "Latest inventory totals | "
-        f"OH: {latest_inventory['rds_dc_inventory_oh'].sum():,.0f} | "
-        f"OO: {latest_inventory['rds_open_po_quantity'].sum():,.0f} | "
-        f"ISBNs: {latest_inventory['isbn'].nunique():,}"
-    )
+    if latest_inventory is not None and not latest_inventory.empty:
+        latest_inventory = latest_inventory.copy()
+        latest_inventory["rds_dc_inventory_oh"] = pd.to_numeric(
+            latest_inventory["rds_dc_inventory_oh"], errors="coerce"
+        ).fillna(0)
+        latest_inventory["rds_open_po_quantity"] = pd.to_numeric(
+            latest_inventory["rds_open_po_quantity"], errors="coerce"
+        ).fillna(0)
+        print(
+            "Latest inventory totals | "
+            f"OH: {latest_inventory['rds_dc_inventory_oh'].sum():,.0f} | "
+            f"OO: {latest_inventory['rds_open_po_quantity'].sum():,.0f} | "
+            f"ISBNs: {latest_inventory['isbn'].nunique():,}"
+        )
     print("")
+
+
+def confirm_latest_files(sales_files: list[SourceFile], inventory_files: list[SourceFile]) -> bool:
+    latest_sales = sales_files[-1]
+    latest_inventory = inventory_files[-1]
+    sales_cached = False
+    if WEEKLY_SALES_CACHE.exists():
+        cached_sales = pd.read_parquet(WEEKLY_SALES_CACHE, columns=["week_end"])
+        cached_weeks = set(pd.to_datetime(cached_sales["week_end"]).dt.normalize().dropna())
+        sales_cached = latest_sales.week_end.normalize() in cached_weeks
+
+    print("")
+    print("Readerlink files selected for cache update")
+    print("------------------------------------------")
+    print(f"Latest sales file: {latest_sales.path.name} ({latest_sales.week_end:%m/%d/%Y})")
+    print(f"Latest inventory file: {latest_inventory.path.name} ({latest_inventory.week_end:%m/%d/%Y})")
+    print(f"Latest sales week already cached: {'yes' if sales_cached else 'no'}")
+    print("The cache update will add any uncached sales weeks and refresh inventory from the latest inventory file.")
+    while True:
+        try:
+            choice = input("Add/update Readerlink cache with these files? (y/n): ").strip().lower()
+        except EOFError:
+            choice = "n"
+        if choice in {"y", "yes"}:
+            return True
+        if choice in {"n", "no"}:
+            print("Readerlink cache update skipped. Returning to the Readerlink menu.")
+            return False
+        print("Invalid choice. Please enter y or n.")
+
+
+def run_add_new_week(skip_history: bool, rebuild_all: bool) -> bool:
+    sales_files = find_sales_files()
+    inventory_files = find_inventory_files()
+    if not sales_files:
+        raise FileNotFoundError("No Readerlink sales source files found.")
+    if not inventory_files:
+        raise FileNotFoundError("No Readerlink inventory source files found.")
+
+    print_cache_plan(sales_files, inventory_files, rebuild_all)
+    if not confirm_latest_files(sales_files, inventory_files):
+        return False
+
+    sales = build_incremental_sales_cache(sales_files, rebuild_all)
+    save_cache(sales, WEEKLY_SALES_CACHE)
+
+    inventory = build_latest_inventory_cache()
+    save_cache(inventory, LATEST_INVENTORY_CACHE)
+
+    history = load_or_build_history(skip_history, rebuild_all)
+    combined_pos = build_combined_pos_history(sales, history)
+    save_cache(combined_pos, POS_HISTORY_CACHE)
+    print_recent_week_summary(combined_pos, inventory, week_count=4)
+
+    print("Readerlink cache update complete.")
+    return True
+
+
+def run_show_last_weeks() -> None:
+    if not POS_HISTORY_CACHE.exists():
+        raise FileNotFoundError(f"Readerlink POS cache not found: {POS_HISTORY_CACHE}")
+    pos_history = pd.read_parquet(POS_HISTORY_CACHE)
+    latest_inventory = pd.read_parquet(LATEST_INVENTORY_CACHE) if LATEST_INVENTORY_CACHE.exists() else None
+    print_recent_week_summary(pos_history, latest_inventory, week_count=4)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build Readerlink rolling report source caches.")
+    parser.add_argument(
+        "--add-new-week",
+        action="store_true",
+        help="Preview latest Readerlink files, confirm, then add uncached weeks to cache.",
+    )
+    parser.add_argument(
+        "--show-last-weeks",
+        action="store_true",
+        help="Show totals for the last 4 cached Readerlink weeks without reading source Excel files.",
+    )
     parser.add_argument(
         "--skip-history",
         action="store_true",
@@ -543,27 +621,12 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    sales_files = find_sales_files()
-    inventory_files = find_inventory_files()
-    if not sales_files:
-        raise FileNotFoundError("No Readerlink sales source files found.")
-    if not inventory_files:
-        raise FileNotFoundError("No Readerlink inventory source files found.")
+    if args.show_last_weeks:
+        run_show_last_weeks()
+        return
 
-    print_cache_plan(sales_files, inventory_files, args.rebuild_all)
-
-    sales = build_incremental_sales_cache(sales_files, args.rebuild_all)
-    save_cache(sales, WEEKLY_SALES_CACHE)
-
-    inventory = build_latest_inventory_cache()
-    save_cache(inventory, LATEST_INVENTORY_CACHE)
-
-    history = load_or_build_history(args.skip_history, args.rebuild_all)
-    combined_pos = build_combined_pos_history(sales, history)
-    save_cache(combined_pos, POS_HISTORY_CACHE)
-    print_last_5_week_summary(combined_pos, inventory)
-
-    print("Readerlink cache build complete.")
+    if not run_add_new_week(args.skip_history, args.rebuild_all):
+        raise SystemExit(10)
 
 
 if __name__ == "__main__":
