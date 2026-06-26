@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 import re
 import sys
 from pathlib import Path
@@ -33,6 +34,10 @@ CATALOG_FILE = Path(
 )
 AMS_HISTORY_PICKLE = REPO_ROOT / "amazon_ams" / "combined_amazon_ads_by_asin.pkl"
 AMS_HISTORY_PARQUET = CAMPAIGN_FOLDER / "cache" / "ams_monthly_campaigns.parquet"
+AMS_AGGREGATE_EXCEL = Path(
+    r"F:\ANALYSIS\Finance\DataWarehouse\Atelier Amazon\ams_summaries\combined_amazon_ads_by_asin.xlsx"
+)
+AMS_AGGREGATE_PICKLE = REPO_ROOT / "amazon_ams" / "combined_amazon_ads_by_asin.pkl"
 FINAL_REPORTS_FOLDER = Path(
     r"G:\Sales\Amazon\AMAZON ADVERTISING\MONTHLY REPORTS\MONTHLY REPORTS - PERFORMANCE BY ASIN\2026"
 )
@@ -93,6 +98,27 @@ OUTPUT_COLUMNS = [
     "campaign",
 ]
 HISTORY_COLUMNS = ["period", "source_file", *OUTPUT_COLUMNS]
+LEGACY_AGGREGATE_COLUMNS = [
+    "ASIN",
+    "impressions",
+    "clicks",
+    "spend",
+    "14 day total sales",
+    "units sold",
+    "count of campaigns",
+    "ISBN",
+    "CTR",
+    "CRV",
+    "ACOS",
+    "ROAS",
+    "period",
+    "source_file",
+    "title",
+    "publisher",
+    "pgrp",
+    "PT",
+    "OSD",
+]
 COMPARISON_METRICS = [
     "Impressions",
     "Clicks",
@@ -1260,6 +1286,65 @@ def write_history(history: pd.DataFrame) -> None:
     history[HISTORY_COLUMNS].to_parquet(AMS_HISTORY_PARQUET, index=False)
 
 
+def history_to_legacy_aggregate(history: pd.DataFrame) -> pd.DataFrame:
+    output = pd.DataFrame(
+        {
+            "ASIN": history["ASIN"].astype("string").fillna("").str.strip(),
+            "impressions": history["Impressions"],
+            "clicks": history["Clicks"],
+            "spend": history["Spend"],
+            "14 day total sales": history["Sales"],
+            "units sold": history["Units sold"],
+            "count of campaigns": history["Count of Campaigns"],
+            "ISBN": pd.to_numeric(
+                history["ISBN"].replace({"NO ISBN": pd.NA, "": pd.NA}),
+                errors="coerce",
+            ),
+            "CTR": history["CTR"],
+            "CRV": history["CVR"],
+            "ACOS": history["ACOS"],
+            "ROAS": history["ROAS"],
+            "period": history["period"].astype("string").fillna("").str.strip(),
+            "source_file": history["source_file"],
+            "title": history["Title"],
+            "publisher": history["Publisher"],
+            "pgrp": history["pgrp"],
+            "PT": history["Format"],
+            "OSD": pd.to_datetime(history["osd"], errors="coerce"),
+        }
+    )
+    return output[LEGACY_AGGREGATE_COLUMNS]
+
+
+def refresh_legacy_aggregate_outputs(history: pd.DataFrame) -> pd.DataFrame:
+    history_periods = set(history["period"].dropna().astype(str).unique())
+    aggregate = history_to_legacy_aggregate(history)
+
+    if AMS_AGGREGATE_EXCEL.exists() and history_periods:
+        existing = pd.read_excel(AMS_AGGREGATE_EXCEL)
+        for column in LEGACY_AGGREGATE_COLUMNS:
+            if column not in existing.columns:
+                existing[column] = pd.NA
+        existing = existing[LEGACY_AGGREGATE_COLUMNS]
+        existing_periods = existing["period"].dropna().astype(str)
+        existing = existing[~existing_periods.isin(history_periods)].copy()
+        aggregate = pd.concat([existing, aggregate], ignore_index=True)
+
+    if not aggregate.empty and "period" in aggregate.columns:
+        aggregate = aggregate.sort_values(["period", "ASIN"], kind="stable").reset_index(drop=True)
+
+    if AMS_AGGREGATE_EXCEL.exists():
+        archive_dir = AMS_AGGREGATE_EXCEL.parent / "archive"
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        archive_file = archive_dir / f"{AMS_AGGREGATE_EXCEL.stem}_{pd.Timestamp.now():%Y%m%d_%H%M%S}.xlsx"
+        shutil.copy2(AMS_AGGREGATE_EXCEL, archive_file)
+
+    AMS_AGGREGATE_EXCEL.parent.mkdir(parents=True, exist_ok=True)
+    aggregate.to_excel(AMS_AGGREGATE_EXCEL, index=False)
+    aggregate.to_pickle(AMS_AGGREGATE_PICKLE)
+    return aggregate
+
+
 def upsert_history_month(summary: pd.DataFrame, period: str, source_file: Path) -> pd.DataFrame:
     history = read_history()
     history = history[~history["period"].astype(str).eq(period)].copy()
@@ -1334,8 +1419,11 @@ def run(
 
     if save_history:
         history = upsert_history_month(summary, current_period, source_file)
+        aggregate = refresh_legacy_aggregate_outputs(history)
         print(f"Saved AMS history parquet: {AMS_HISTORY_PARQUET}")
         print(f"  History rows: {len(history):,}")
+        print(f"Refreshed AMS aggregate workbook: {AMS_AGGREGATE_EXCEL}")
+        print(f"  Aggregate rows: {len(aggregate):,}")
 
     output = output_file or final_report_file(current_period, "ALL")
     write_summary_excel(
