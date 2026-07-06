@@ -27,23 +27,38 @@ SQL_QUERIES = {
         None,
     ),
     "4": (
-        "Amazon",
+        "Amazon Rolling SQL",
         load_sql("table_check", "amazon_weeks.sql"),
     ),
     "5": (
-        "Bookscan",
+        "Bookscan Rolling SQL",
         load_sql("table_check", "bookscan_weeks.sql"),
     ),
     "6": (
-        "Barnes & Noble",
+        "Barnes & Noble Rolling SQL",
         load_sql("table_check", "bn_weeks.sql"),
     ),
     "7": (
         "Freight Costs",
         None,
     ),
+    "8": (
+        "Edelweiss Rolling SQL",
+        """
+SELECT DISTINCT TOP 10
+    ste.[WEEK],
+    COUNT(ste.ISBN) AS Row_Cnt,
+    SUM(ste.WeekEnding) AS Week_Qty,
+    SUM(ste.OH) AS OH,
+    SUM(ste.OO) AS OO
+FROM [CBQ2].[cb].[Sellthrough_Edelweiss] ste
+GROUP BY
+    ste.[WEEK]
+ORDER BY
+    ste.[WEEK] DESC;
+""".strip(),
+    ),
 }
-
 
 def _prior_period_yyyymm(today: datetime | None = None) -> str:
     now = today or datetime.now()
@@ -133,12 +148,12 @@ def _print_grid_table(df: pd.DataFrame) -> None:
 
 def main():
     if len(sys.argv) < 2:
-        print("Please provide a query choice: 1, 2, 3, 4, 5, 6, or 7.")
+        print("Please provide a query choice: 1, 2, 3, 4, 5, 6, 7, or 8.")
         return 1
 
     choice = sys.argv[1].strip()
     if choice not in SQL_QUERIES:
-        print(f"Invalid query choice: {choice}. Use 1, 2, 3, 4, 5, 6, or 7.")
+        print(f"Invalid query choice: {choice}. Use 1, 2, 3, 4, 5, 6, 7, or 8.")
         return 1
 
     report_name, sql_query = SQL_QUERIES[choice]
@@ -168,6 +183,12 @@ def main():
             .dt.strftime("%Y-%m-%d")
             .fillna("")
         )
+    for column in df.columns:
+        if str(column).strip().upper() == "WEEK":
+            original = df[column].astype("string").fillna("")
+            parsed = pd.to_datetime(df[column], errors="coerce")
+            formatted = parsed.dt.strftime("%Y-%m-%d")
+            df[column] = formatted.where(parsed.notna(), original).fillna("")
 
     display_df = _format_for_display(df)
     _print_grid_table(display_df)
@@ -176,3 +197,6 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+

@@ -292,24 +292,24 @@ ACTIONS: dict[str, Action] = {
     ),
     "table_amazon": Action(
         "table_amazon",
-        "Amazon",
+        "Amazon Rolling SQL",
         [str(VENV_PYTHON), "table_check/check_table_updates.py", "4"],
-        "Run the Amazon table check.",
-        "Check Table Updates",
+        "Run the Amazon rolling SQL table check.",
+        "Check Rolling Report Tables",
     ),
     "table_bookscan": Action(
         "table_bookscan",
-        "Bookscan",
+        "Bookscan Rolling SQL",
         [str(VENV_PYTHON), "table_check/check_table_updates.py", "5"],
-        "Run the Bookscan table check.",
-        "Check Table Updates",
+        "Run the Bookscan rolling SQL table check.",
+        "Check Rolling Report Tables",
     ),
     "table_bn": Action(
         "table_bn",
-        "Barnes & Noble",
+        "Barnes & Noble Rolling SQL",
         [str(VENV_PYTHON), "table_check/check_table_updates.py", "6"],
-        "Run the Barnes & Noble table check.",
-        "Check Table Updates",
+        "Run the Barnes & Noble rolling SQL table check.",
+        "Check Rolling Report Tables",
     ),
     "table_freight_costs": Action(
         "table_freight_costs",
@@ -317,6 +317,13 @@ ACTIONS: dict[str, Action] = {
         [str(VENV_PYTHON), "table_check/check_table_updates.py", "7"],
         "Run the freight costs table check.",
         "Check Table Updates",
+    ),
+    "table_edelweiss": Action(
+        "table_edelweiss",
+        "Edelweiss Rolling SQL",
+        [str(VENV_PYTHON), "table_check/check_table_updates.py", "8"],
+        "Run the Edelweiss rolling SQL table check.",
+        "Check Rolling Report Tables",
     ),
 }
 
@@ -327,6 +334,7 @@ SECTION_ORDER = [
     "Automation Processes",
     "SSR Daily Summary",
     "Check Table Updates",
+    "Check Rolling Report Tables",
     "Amazon Rolling Reports (Weekly Process)",
     "Amazon Rolling Reports (Monthly Process)",
 ]
@@ -691,5 +699,7 @@ def launch_browser_menu() -> None:
     timer.start()
     print(f"Opening graphical launcher at {url}")
     app.run(host=HOST, port=port, debug=False, use_reloader=False)
+
+
 
 

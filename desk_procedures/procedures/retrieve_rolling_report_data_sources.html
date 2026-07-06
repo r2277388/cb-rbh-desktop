@@ -124,11 +124,12 @@
     <h3>Steps</h3>
     <ol>
       <li>Retrieve the available Edelweiss report from the source shown in Sam's screenshot.</li>
+      <li>Before uploading to SQL, convert the <code>ISBN</code> and <code>List Price</code> fields to numbers, not text.</li>
       <li>Before upload/use, remove the date-specific text from the week columns called out in the note. Leave the relevant columns labeled as <code>Week Ending</code> so the downstream upload/report logic can read both consistently.</li>
       <li>Save the Edelweiss source file in the Edelweiss weekly source folder.</li>
       <li>When the Edelweiss rolling report is built, use this source folder for the update process and write the final workbook to the Edelweiss Sell-Through Reporting folder.</li>
     </ol>
-    <div class="note">The Edelweiss rolling report has not been created yet. The current captured procedure is source retrieval plus the column-label cleanup Sam noted.</div>
+    <div class="note">The Edelweiss rolling report has not been created yet. The current captured procedure is source retrieval, SQL upload prep, and the column-label cleanup Sam noted.</div>
     <div class="shots"><figure><img src="assets/retrieve_data_sources/edelweiss/screenshots/reference_01.png" alt="Edelweiss source reference crop"><figcaption>Edelweiss source, cleanup note, and folder reference from Sam's PDF.</figcaption></figure></div>
   </section>
 
@@ -191,3 +192,4 @@
 </main>
 </body>
 </html>
+

@@ -1821,7 +1821,54 @@ def run_amazon_rolling_reports_menu():
                 print("An error occurred while running amazon_rolling_reports/monthly_rolling_reports.py.")
             continue
 
-        if subchoice in ["8", "back", "b", "exit", "quit", "q"]:
+        if subchoice in ["9", "back", "b", "exit", "quit", "q"]:
+            return
+
+        print("Invalid choice. Please select a valid option.")
+
+
+def run_table_check(choice: str) -> None:
+    print("Running table-update SQL check... Please wait.")
+    try:
+        subprocess.run(
+            [
+                "venv/Scripts/python",
+                "table_check/check_table_updates.py",
+                choice,
+            ],
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        print("The table-update SQL check failed.")
+
+
+def run_check_rolling_report_tables_menu() -> None:
+    while True:
+        print("\nCheck Rolling Report Tables")
+        print()
+        print("    1. Amazon Rolling SQL")
+        print("    2. Bookscan Rolling SQL")
+        print("    3. Barnes & Noble Rolling SQL")
+        print("    4. Edelweiss Rolling SQL")
+        print("    9. Back to Check Table Updates")
+        print()
+        try:
+            subchoice = input("Choose an option: ").strip().lower()
+        except KeyboardInterrupt:
+            print("\nReturning to Check Table Updates.")
+            return
+
+        rolling_choices = {
+            "1": "4",
+            "2": "5",
+            "3": "6",
+            "4": "8",
+        }
+        if subchoice in rolling_choices:
+            run_table_check(rolling_choices[subchoice])
+            continue
+
+        if subchoice in ["9", "back", "b", "exit", "quit", "q"]:
             return
 
         print("Invalid choice. Please select a valid option.")
@@ -1834,11 +1881,9 @@ def run_check_table_updates_menu():
         print("    1. All Updates")
         print("    2. Tables for SSR Summary")
         print("    3. Ebs.Sales Prior 5 Days")
-        print("    4. Amazon")
-        print("    5. Bookscan")
-        print("    6. Barnes & Noble")
-        print("    7. Freight Costs")
-        print("    8. Back to main menu")
+        print("    4. Check Rolling Report Tables")
+        print("    5. Freight Costs")
+        print("    9. Back to main menu")
         print()
         try:
             subchoice = input("Choose an option: ").strip().lower()
@@ -1846,22 +1891,19 @@ def run_check_table_updates_menu():
             print("\nReturning to main menu.")
             return
 
-        if subchoice in ["1", "2", "3", "4", "5", "6", "7"]:
-            print("Running table-update SQL check... Please wait.")
-            try:
-                subprocess.run(
-                    [
-                        "venv/Scripts/python",
-                        "table_check/check_table_updates.py",
-                        subchoice,
-                    ],
-                    check=True,
-                )
-            except subprocess.CalledProcessError:
-                print("The table-update SQL check failed.")
+        if subchoice in ["1", "2", "3"]:
+            run_table_check(subchoice)
             continue
 
-        if subchoice in ["8", "back", "b", "exit", "quit", "q"]:
+        if subchoice == "4":
+            run_check_rolling_report_tables_menu()
+            continue
+
+        if subchoice == "5":
+            run_table_check("7")
+            continue
+
+        if subchoice in ["9", "back", "b", "exit", "quit", "q"]:
             return
 
         print("Invalid choice. Please select a valid option.")
@@ -1969,6 +2011,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
 
 
 
