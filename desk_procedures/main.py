@@ -1,4 +1,4 @@
-import os
+﻿import os
 import webbrowser
 from pathlib import Path
 
@@ -32,6 +32,11 @@ PROCEDURES = {
         "path": BASE_DIR / "procedures" / "update_fltracking_supercharged.html",
     },
     "6": {
+        "title": "Retrieve Rolling Report Data Sources",
+        "type": "html",
+        "path": BASE_DIR / "procedures" / "retrieve_rolling_report_data_sources.html",
+    },
+    "7": {
         "title": "How To Add Procedures",
         "type": "text",
         "steps": [
@@ -117,3 +122,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -1,4 +1,4 @@
-import getpass
+﻿import getpass
 import importlib.util
 import os
 import re
@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import textwrap
+import webbrowser
 from datetime import datetime, timedelta
 from pathlib import Path
 from tkinter import Tk, filedialog
@@ -1169,6 +1170,31 @@ def run_python_process(
         return False
 
 
+def open_rolling_data_source_instructions() -> None:
+    html_path = process_paths.repo_path(
+        "desk_procedures",
+        "procedures",
+        "retrieve_rolling_report_data_sources.html",
+    )
+    if not html_path.exists():
+        print(f"Data source instructions file not found: {html_path}")
+        return
+
+    html_uri = html_path.resolve().as_uri()
+    try:
+        if webbrowser.open_new_tab(html_uri):
+            print(f"Opened data source instructions: {html_path}")
+            return
+    except webbrowser.Error:
+        pass
+
+    try:
+        os.startfile(str(html_path))
+        print(f"Opened data source instructions: {html_path}")
+    except OSError as exc:
+        print(f"Unable to open data source instructions: {exc}")
+        print(f"Procedure file: {html_path}")
+
 def confirm_refresh_all_amazon_rolling_caches() -> bool:
     while True:
         choice = input("Do you want to update all Amazon Rolling caches now? (y/n): ").strip().lower()
@@ -1186,6 +1212,7 @@ def run_readerlink_rolling_reports() -> None:
         print("    1. Add a new week's data to cache")
         print("    2. Show totals for the last 4 cached Readerlink weeks")
         print("    3. Create the Readerlink Rolling Report")
+        print("    4. Retrieve Data Source Instructions")
         print("    0. Back")
         choice = input("Choose an action: ").strip().lower()
 
@@ -1211,6 +1238,9 @@ def run_readerlink_rolling_reports() -> None:
                 "Readerlink Rolling Reports",
                 process_paths.repo_path("readerlink_rolling_reports", "main.py"),
             )
+            continue
+        if choice in {"4", "instructions", "directions"}:
+            open_rolling_data_source_instructions()
             continue
 
         print("Invalid choice. Please select a valid option.")
@@ -1267,6 +1297,7 @@ def run_retailer_rolling_reports_menu() -> None:
         print("    07. Target NOC Rolling Reports")
         print("    08. Abrams & Chronicle UK Rolling Reports")
         print("    09. Readerlink Rolling Reports")
+        print("    10. Retrieve Data Source Instructions")
         print()
         print("    99. Back to main menu")
         print()
@@ -1319,6 +1350,10 @@ def run_retailer_rolling_reports_menu() -> None:
                 print(f"Unable to locate the Amazon Monthly Sales files: {e}")
                 continue
             run_python_process("Amazon Monthly Rolling Reports", "amazon_rolling_reports/monthly_rolling_reports.py")
+            continue
+
+        if choice == "10":
+            open_rolling_data_source_instructions()
             continue
 
         if choice == "5":
@@ -1934,3 +1969,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+

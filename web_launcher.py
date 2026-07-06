@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import html
 import socket
@@ -156,6 +156,13 @@ ACTIONS: dict[str, Action] = {
         [str(VENV_PYTHON), "tools/gen_editorial_automation.py", "disable"],
         "Disable the Monday General Editorial archive/report scheduled task.",
         "Automation Processes",
+    ),
+    "rolling_data_source_instructions": Action(
+        "rolling_data_source_instructions",
+        "Retrieve Rolling Report Data Sources",
+        [str(VENV_PYTHON), "desk_procedures/open_retrieve_data_sources.py"],
+        "Open the data-source retrieval directions for Readerlink, Target NOC, AWBC, Edelweiss, Barnes & Noble, and XGap.",
+        "Main Processes",
     ),
     "bn_rolling_reports": Action(
         "bn_rolling_reports",
@@ -684,3 +691,5 @@ def launch_browser_menu() -> None:
     timer.start()
     print(f"Opening graphical launcher at {url}")
     app.run(host=HOST, port=port, debug=False, use_reloader=False)
+
+

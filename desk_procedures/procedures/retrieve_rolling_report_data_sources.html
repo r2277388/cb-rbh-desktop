@@ -1,0 +1,193 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Retrieve Rolling Report Data Sources</title>
+  <style>
+    :root { --ink:#1f2933; --muted:#5f6b7a; --line:#d8dee8; --paper:#fff; --band:#f5f7fa; --accent:#255f85; --code:#eef3f8; }
+    * { box-sizing: border-box; }
+    body { margin:0; color:var(--ink); background:var(--band); font-family:"Segoe UI", Arial, sans-serif; line-height:1.45; }
+    main { max-width:1180px; margin:0 auto; padding:28px 22px 48px; }
+    section { background:var(--paper); border:1px solid var(--line); border-radius:6px; margin:0 0 18px; padding:22px; }
+    h1,h2,h3 { margin:0 0 12px; line-height:1.18; }
+    h1 { font-size:2rem; color:var(--accent); }
+    h2 { font-size:1.45rem; color:var(--accent); padding-bottom:8px; border-bottom:1px solid var(--line); }
+    h3 { font-size:1.08rem; margin-top:18px; }
+    p { margin:0 0 12px; }
+    ul,ol { margin:0 0 14px 1.35rem; padding:0; }
+    li { margin:0 0 7px; }
+    code { display:inline-block; max-width:100%; overflow-wrap:anywhere; padding:1px 5px; border-radius:4px; background:var(--code); font-family:Consolas,"Courier New",monospace; font-size:.95em; }
+    .note { padding:12px 14px; border-left:4px solid var(--accent); background:#eef6fb; color:#24465c; margin:12px 0; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin:14px 0 0; }
+    .meta { border:1px solid var(--line); border-radius:6px; padding:12px; background:#fbfcfe; }
+    .meta strong { display:block; margin-bottom:4px; color:var(--accent); }
+    .shots { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px; margin-top:16px; }
+    figure { margin:0; border:1px solid var(--line); border-radius:6px; overflow:hidden; background:#fff; }
+    figure img { display:block; width:100%; height:auto; }
+    figcaption { padding:9px 10px; color:var(--muted); font-size:.9rem; border-top:1px solid var(--line); background:#fafbfc; }
+    .status { display:inline-block; margin-left:8px; padding:2px 7px; border-radius:999px; color:#29415c; background:#e6eef6; font-size:.78rem; vertical-align:middle; }
+    @media print { body{background:#fff;} main{max-width:none;padding:0;} section{break-inside:avoid;} }
+  </style>
+</head>
+<body>
+<main>
+  <section>
+    <h1>Retrieve Rolling Report Data Sources</h1>
+    <p>This procedure collects Sam's data-source retrieval notes for recurring rolling reports. Use it when a report needs a fresh weekly source file before the launcher can update a cache or build the final workbook.</p>
+    <p>The screenshots are reference images from the original PDF directions. Follow the written steps below for the working process, source folders, and launcher actions.</p>
+    <div class="grid">
+      <div class="meta"><strong>Existing reports</strong>Readerlink, Target NOC, Barnes &amp; Noble.</div>
+      <div class="meta"><strong>Planned reports</strong>AWBC, Edelweiss, XGap. These source steps are captured before the rolling reports are built.</div>
+      <div class="meta"><strong>General rule</strong>Retrieve the source file first, save it in the matching DataWarehouse weekly folder, then run the report's cache/update process.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Readerlink <span class="status">Existing</span></h2>
+    <p><strong>Report:</strong> Readerlink Rolling Reports</p>
+    <p><strong>Source PDF:</strong> <code>F:\ANALYSIS\Finance\DataWarehouse\Atelier Readerlink\Readerlink_DataSources.pdf</code></p>
+    <p><strong>Working source folders:</strong></p>
+    <ul>
+      <li>Sales workbooks: <code>F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Readerlink</code></li>
+      <li>Inventory workbooks: <code>F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Readerlink\Inventory</code></li>
+      <li>Cache folder: <code>F:\ANALYSIS\Finance\DataWarehouse\Atelier Readerlink\cache</code></li>
+    </ul>
+    <h3>Steps</h3>
+    <ol>
+      <li>Retrieve the latest Readerlink sales export for the new reporting week.</li>
+      <li>Before saving/exporting, verify the selected week is correct and no extra filters are applied.</li>
+      <li>Save the sales workbook in the current-year Readerlink weekly source folder.</li>
+      <li>Retrieve the matching Readerlink inventory export and save it in the Readerlink <code>Inventory</code> folder.</li>
+      <li>Run <code>Retailer Rolling Reports &gt; Readerlink Rolling Reports &gt; Add a new week's data to cache</code>.</li>
+      <li>Review the selected source files shown by the cache update prompt before confirming.</li>
+      <li>Build the Readerlink Rolling Report after the cache update completes.</li>
+    </ol>
+    <div class="shots">
+      <figure><img src="assets/retrieve_data_sources/readerlink/screenshots/screenshot_01.png" alt="Readerlink source screen showing week and filter checks"><figcaption>Readerlink: check the selected week and filter state before exporting.</figcaption></figure>
+      <figure><img src="assets/retrieve_data_sources/readerlink/screenshots/screenshot_02.jpeg" alt="Readerlink source screen showing no filters applied"><figcaption>Readerlink: confirm no unintended filters are applied.</figcaption></figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>Target NOC <span class="status">Existing</span></h2>
+    <p><strong>Report:</strong> Target NOC Rolling Reports</p>
+    <p><strong>Source PDF:</strong> <code>F:\ANALYSIS\Finance\DataWarehouse\Atelier TargetNOC\Target_DataSources.pdf</code></p>
+    <p><strong>Working source folders:</strong></p>
+    <ul>
+      <li>Sales source folder: <code>F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Target NOC\TargetNOC_Sales</code></li>
+      <li>Inventory source folder: <code>F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Target NOC\TargetNOC_Inventory</code></li>
+    </ul>
+    <h3>Steps</h3>
+    <ol>
+      <li>Retrieve the latest Target NOC sales export for the new week.</li>
+      <li>Retrieve the matching Target NOC inventory export for the same reporting week.</li>
+      <li>Save each export into its matching Target NOC weekly source folder.</li>
+      <li>Run <code>Retailer Rolling Reports &gt; Target NOC Rolling Reports</code>.</li>
+      <li>Use the Target NOC menu to update the cache/report after confirming the source files shown on screen.</li>
+    </ol>
+    <div class="shots">
+      <figure><img src="assets/retrieve_data_sources/target_noc/screenshots/screenshot_01.jpeg" alt="Target NOC source reference"><figcaption>Target NOC source reference.</figcaption></figure>
+      <figure><img src="assets/retrieve_data_sources/target_noc/screenshots/screenshot_02.png" alt="Target NOC export reference"><figcaption>Target NOC export reference.</figcaption></figure>
+      <figure><img src="assets/retrieve_data_sources/target_noc/screenshots/screenshot_03.png" alt="Target NOC report filter reference"><figcaption>Target NOC report/filter reference.</figcaption></figure>
+      <figure><img src="assets/retrieve_data_sources/target_noc/screenshots/screenshot_04.png" alt="Target NOC save reference"><figcaption>Target NOC save reference.</figcaption></figure>
+      <figure><img src="assets/retrieve_data_sources/target_noc/screenshots/screenshot_05.png" alt="Target NOC inventory reference"><figcaption>Target NOC inventory reference.</figcaption></figure>
+      <figure><img src="assets/retrieve_data_sources/target_noc/screenshots/screenshot_06.png" alt="Target NOC source option reference"><figcaption>Target NOC source option reference.</figcaption></figure>
+      <figure><img src="assets/retrieve_data_sources/target_noc/screenshots/screenshot_07.jpeg" alt="Target NOC path reference"><figcaption>Target NOC path reference.</figcaption></figure>
+      <figure><img src="assets/retrieve_data_sources/target_noc/screenshots/screenshot_08.png" alt="Target NOC final reference"><figcaption>Target NOC final reference.</figcaption></figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>AWBC <span class="status">Planned</span></h2>
+    <p><strong>Report:</strong> AWBC Rolling Reports</p>
+    <p><strong>Source PDF:</strong> <code>F:\ANALYSIS\Finance\DataWarehouse\Atelier AWBC\AWBC_DataSources.pdf</code></p>
+    <p><strong>Expected source folder:</strong> <code>F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\AWBC</code></p>
+    <p><strong>Expected output folder:</strong> <code>G:\SALES\2026 Sales Reports\Sell-Through Reporting\AWBC</code></p>
+    <h3>Steps</h3>
+    <ol>
+      <li>Go to the AWBC reporting portal/source shown in Sam's screenshot.</li>
+      <li>Run or download the weekly AWBC sales report for the current reporting week.</li>
+      <li>Save the downloaded file in the AWBC weekly source folder.</li>
+      <li>When the AWBC rolling report is built, point its cache/update process at this weekly source folder and write the final workbook to the AWBC Sell-Through Reporting folder.</li>
+    </ol>
+    <div class="note">The AWBC rolling report has not been created yet. These steps document where the source data should come from and where it should land.</div>
+    <div class="shots"><figure><img src="assets/retrieve_data_sources/awbc/screenshots/reference_01.png" alt="AWBC source reference crop"><figcaption>AWBC source and folder reference from Sam's PDF.</figcaption></figure></div>
+  </section>
+
+  <section>
+    <h2>Edelweiss <span class="status">Planned</span></h2>
+    <p><strong>Report:</strong> Edelweiss Rolling Reports</p>
+    <p><strong>Source PDF:</strong> <code>F:\ANALYSIS\Finance\DataWarehouse\Atelier Edelweiss\Edelweiss_DataSources.pdf</code></p>
+    <p><strong>Expected source folder:</strong> <code>F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Edelweiss</code></p>
+    <p><strong>Expected output folder:</strong> <code>G:\SALES\2026 Sales Reports\Sell-Through Reporting\Edelweiss</code></p>
+    <h3>Steps</h3>
+    <ol>
+      <li>Retrieve the available Edelweiss report from the source shown in Sam's screenshot.</li>
+      <li>Before upload/use, remove the date-specific text from the week columns called out in the note. Leave the relevant columns labeled as <code>Week Ending</code> so the downstream upload/report logic can read both consistently.</li>
+      <li>Save the Edelweiss source file in the Edelweiss weekly source folder.</li>
+      <li>When the Edelweiss rolling report is built, use this source folder for the update process and write the final workbook to the Edelweiss Sell-Through Reporting folder.</li>
+    </ol>
+    <div class="note">The Edelweiss rolling report has not been created yet. The current captured procedure is source retrieval plus the column-label cleanup Sam noted.</div>
+    <div class="shots"><figure><img src="assets/retrieve_data_sources/edelweiss/screenshots/reference_01.png" alt="Edelweiss source reference crop"><figcaption>Edelweiss source, cleanup note, and folder reference from Sam's PDF.</figcaption></figure></div>
+  </section>
+
+  <section>
+    <h2>Barnes &amp; Noble <span class="status">Existing</span></h2>
+    <p><strong>Report:</strong> Barnes &amp; Noble Rolling Reports</p>
+    <p><strong>Source PDF:</strong> <code>F:\ANALYSIS\Finance\DataWarehouse\Atelier BarnesNoble\BN DataSources.pdf</code></p>
+    <p><strong>Default raw source base:</strong> <code>F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Barnes &amp; Noble</code></p>
+    <h3>Steps</h3>
+    <ol>
+      <li>Retrieve the new weekly Barnes &amp; Noble raw source files from the B&amp;N portal/source shown in the screenshots.</li>
+      <li>Create or use the weekly raw folder for the new week under the Barnes &amp; Noble weekly reports folder.</li>
+      <li>Save the sales, inventory, and non-book source files into that weekly raw folder using the current naming convention.</li>
+      <li>Run <code>Retailer Rolling Reports &gt; Barnes &amp; Noble Rolling Reports</code>.</li>
+      <li>At the folder review screen, confirm the launcher found the expected raw folder and source workbooks. Use <code>Change raw folder</code> if it selected the wrong week.</li>
+      <li>Run the B&amp;N process steps in order: refresh/combine raw source data, build working sales/inventory files, then run the final rolling report.</li>
+    </ol>
+    <div class="shots">
+      <figure><img src="assets/retrieve_data_sources/barnes_noble/screenshots/screenshot_01.png" alt="Barnes and Noble source reference one"><figcaption>B&amp;N source reference.</figcaption></figure>
+      <figure><img src="assets/retrieve_data_sources/barnes_noble/screenshots/screenshot_02.png" alt="Barnes and Noble source reference two"><figcaption>B&amp;N source reference.</figcaption></figure>
+      <figure><img src="assets/retrieve_data_sources/barnes_noble/screenshots/screenshot_03.png" alt="Barnes and Noble report menu reference"><figcaption>B&amp;N report menu/reference.</figcaption></figure>
+      <figure><img src="assets/retrieve_data_sources/barnes_noble/screenshots/screenshot_04.jpeg" alt="Barnes and Noble save folder reference"><figcaption>B&amp;N save-folder reference.</figcaption></figure>
+      <figure><img src="assets/retrieve_data_sources/barnes_noble/screenshots/screenshot_05.png" alt="Barnes and Noble file reference"><figcaption>B&amp;N file reference.</figcaption></figure>
+      <figure><img src="assets/retrieve_data_sources/barnes_noble/screenshots/screenshot_06.png" alt="Barnes and Noble file preparation reference"><figcaption>B&amp;N file preparation reference.</figcaption></figure>
+      <figure><img src="assets/retrieve_data_sources/barnes_noble/screenshots/screenshot_07.jpeg" alt="Barnes and Noble final reference"><figcaption>B&amp;N final source reference.</figcaption></figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>XGap <span class="status">Planned</span></h2>
+    <p><strong>Report:</strong> XGap Rolling Report</p>
+    <p><strong>Source PDF:</strong> <code>F:\ANALYSIS\Finance\DataWarehouse\Atelier XGap\XGap DataSources.pdf</code></p>
+    <p><strong>Expected working area:</strong> <code>G:\SALES\2026 Sales Reports\Sell-Through Reporting\XGap</code></p>
+    <h3>Steps</h3>
+    <ol>
+      <li>Run XGap only after the other rolling reports needed by the workbook have been completed.</li>
+      <li>Open the current XGap template/workbook from the XGap reporting folder or archive path shown in Sam's screenshot.</li>
+      <li>Update the date fields/tabs to the latest reporting week.</li>
+      <li>Run the SQL source query and paste/save the output into the <code>Sellthru/SellIn</code> tab called out in the screenshot.</li>
+      <li>Refresh the workbook's Power Query steps.</li>
+      <li>Update the workbook links to the most recent rolling report workbooks.</li>
+      <li>When the workbook is complete, save as values and remove all tabs except the final <code>Sell List</code> tab before distributing or archiving.</li>
+    </ol>
+    <div class="note">The XGap rolling report has not been created yet. These are workbook-update instructions captured from Sam's PDF, not an automated launcher process yet.</div>
+    <div class="shots">
+      <figure><img src="assets/retrieve_data_sources/xgap/screenshots/screenshot_01.png" alt="XGap source workbook reference"><figcaption>XGap source workbook/path reference.</figcaption></figure>
+      <figure><img src="assets/retrieve_data_sources/xgap/screenshots/screenshot_02.png" alt="XGap workbook update reference"><figcaption>XGap workbook update reference.</figcaption></figure>
+      <figure><img src="assets/retrieve_data_sources/xgap/screenshots/reference_02.png" alt="XGap final cleanup reference"><figcaption>XGap final cleanup reference from Sam's PDF.</figcaption></figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>Maintenance Notes</h2>
+    <ul>
+      <li>If Sam sends updated directions, replace or add screenshots under <code>desk_procedures\procedures\assets\retrieve_data_sources</code> and update this HTML page.</li>
+      <li>For planned reports, update the paths and launcher steps once the report automation exists.</li>
+      <li>Keep source files in the DataWarehouse weekly-report folders; keep final generated workbooks in the Sales reporting folders.</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>
