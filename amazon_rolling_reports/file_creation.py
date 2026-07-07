@@ -5,6 +5,7 @@ import pandas as pd
 pd.set_option('future.no_silent_downcasting', True)
 
 from paths import amazon_po_pickle_file, customer_orders_pickle_file, monthly_sales_parquet_file, oracle_ypticod_file
+from shared.pg_grouping import apply_pg_grouping
 
 
 def normalize_isbn(value) -> str:
@@ -118,7 +119,7 @@ def prepare_weekly_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     dropped = before - len(output)
     if dropped:
         print(f"Removed {dropped:,} duplicate/blank ISBN row(s) from weekly Amazon data before PO merge.")
-    return output
+    return apply_pg_grouping(output)
 
 
 def prepare_po_dataframe(df: pd.DataFrame) -> pd.DataFrame:
@@ -183,6 +184,7 @@ MONTHLY_BASE_COLUMNS = [
     "pt",
     "ft",
     "pgrp",
+    "PG_Grouping",
     "ASIN",
     "ISBN",
     "Title",

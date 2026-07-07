@@ -16,6 +16,7 @@ from bn_rolling_reports.isbn_utils import normalize_isbn_series
 from shared.bookscan_calendar import bookscan_parts, bookscan_week
 from shared.db.connection import get_connection
 from shared.db.query_runner import fetch_data_from_db
+from shared.pg_grouping import apply_pg_grouping
 
 try:
     from .rolling_paths import (
@@ -465,12 +466,14 @@ def build_report_dataframe(
 
     report = pd.concat([metadata[["Pub", "PT", "CAT", "PGRP", "TITLE", "PRICE", "PubDate"]], inventory[["On Hand", "On Order"]], metrics, weekly_df], axis=1)
     report = report.reset_index().rename(columns={"index": "ISBN"})
+    report = apply_pg_grouping(report, publisher_col="Pub", publishing_group_col="PGRP", product_type_col="PT")
 
     ordered_columns = [
         "Pub",
         "PT",
         "CAT",
         "PGRP",
+        "PG_Grouping",
         "ISBN",
         "TITLE",
         "PRICE",
@@ -488,7 +491,7 @@ def build_report_dataframe(
     history_columns = [column for column in report.columns if column not in ordered_columns]
     report = report[ordered_columns + history_columns].copy()
 
-    for column in ["Pub", "PT", "CAT", "PGRP", "TITLE", "PubDate"]:
+    for column in ["Pub", "PT", "CAT", "PGRP", "PG_Grouping", "TITLE", "PubDate"]:
         report[column] = report[column].fillna("")
     report["PRICE"] = pd.to_numeric(report["PRICE"], errors="coerce")
     for column in ["On Hand", "On Order", "52 WK", "TYTD", "LYTD", "YTD Var", "LY_FY", "LTD"]:
@@ -514,18 +517,18 @@ def _build_save_options(report_df: pd.DataFrame, latest_week: pd.Timestamp) -> d
     decimal_accounting_format = {"num_format": '_(* #,##0.00_);_(* (#,##0.00);_(* "-"??_);_(@_)'}
     column_format_overrides = {
         col_idx: {"format": accounting_format}
-        for col_idx in range(8, min(17, len(report_df.columns)))
-        if col_idx != 11
+        for col_idx in range(9, min(18, len(report_df.columns)))
+        if col_idx != 12
     }
-    if 11 < len(report_df.columns):
-        column_format_overrides[11] = {"format": decimal_accounting_format, "width": 10}
-    if 5 < len(report_df.columns):
-        column_format_overrides[5] = {"format": {"num_format": "General"}, "width": 42}
+    if 12 < len(report_df.columns):
+        column_format_overrides[12] = {"format": decimal_accounting_format, "width": 10}
+    if 6 < len(report_df.columns):
+        column_format_overrides[6] = {"format": {"num_format": "General"}, "width": 42}
     title_block = {
         "start_row": 1,
         "end_row": 2,
-        "start_col": 5,
-        "end_col": 5,
+        "start_col": 6,
+        "end_col": 6,
         "title": "Edelweiss Rolling POS",
         "subtitle": f"Week Ending: {latest_week.strftime('%B %d, %Y')}",
         "merge_cells": False,
@@ -537,9 +540,9 @@ def _build_save_options(report_df: pd.DataFrame, latest_week: pd.Timestamp) -> d
         "decimal_cols": decimal_cols,
         "integer_accounting_no_symbol": True,
         "rolling_main_layout": True,
-        "pre_date_column_count": 17,
-        "summary_label_col_idx": 7,
-        "header_fill_overrides": {8: "#E6B8B7", 9: "#E6B8B7"},
+        "pre_date_column_count": 18,
+        "summary_label_col_idx": 8,
+        "header_fill_overrides": {9: "#E6B8B7", 10: "#E6B8B7"},
         "format_blank_summary_cells": False,
         "title_block": title_block,
         "header_row_override": 5,
@@ -690,10 +693,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-

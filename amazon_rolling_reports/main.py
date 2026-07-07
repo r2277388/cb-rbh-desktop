@@ -77,8 +77,8 @@ def build_title_block(report_type: str, date_formatted: str) -> dict[str, object
     return {
         "start_row": 1,
         "end_row": 2,
-        "start_col": 6,
-        "end_col": 6,
+        "start_col": 7,
+        "end_col": 7,
         "title": title_text,
         "subtitle": f"Week Ending: {subtitle_date}",
         "merge_cells": False,
@@ -120,8 +120,8 @@ def save_reports_by_pub(
                 format_cols=pub_format_cols,
                 decimal_cols=decimal_cols,
                 rolling_main_layout=True,
-                pre_date_column_count=19,
-                summary_label_col_idx=8,
+                pre_date_column_count=20,
+                summary_label_col_idx=9,
                 integer_accounting_no_symbol=True,
                 title_block=build_title_block(report_type, date_formatted),
             )
@@ -266,8 +266,8 @@ def main():
         format_cols=format_cols,
         decimal_cols=decimal_cols,
         rolling_main_layout=True,
-        pre_date_column_count=19,
-        summary_label_col_idx=8,
+        pre_date_column_count=20,
+        summary_label_col_idx=9,
         integer_accounting_no_symbol=True,
         title_block=build_title_block(name1, date_formatted),
     )
@@ -322,8 +322,8 @@ def main():
         format_cols=format_cols,
         decimal_cols=decimal_cols,
         rolling_main_layout=True,
-        pre_date_column_count=19,
-        summary_label_col_idx=8,
+        pre_date_column_count=20,
+        summary_label_col_idx=9,
         integer_accounting_no_symbol=True,
         title_block=build_title_block(name2, units_date_formatted),
     )
@@ -355,3 +355,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+

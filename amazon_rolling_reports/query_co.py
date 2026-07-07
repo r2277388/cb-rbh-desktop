@@ -1,3 +1,13 @@
+from shared.pg_grouping import build_pg_grouping_sql_case
+
+PG_GROUPING_SQL = build_pg_grouping_sql_case(
+    "it.PUBLISHER_CODE",
+    "it.PUBLISHING_GROUP",
+    "it.PRODUCT_TYPE",
+    quote="''",
+    indent="        ",
+)
+
 def sql_co():
     return r"""
     DECLARE @start_date_weekly date = '2019-01-01';
@@ -191,6 +201,7 @@ def sql_co():
         it.PRODUCT_TYPE AS pt,
         it.FORMAT       AS ft,
         CASE WHEN LEFT(it.PUBLISHING_GROUP,3) = ''BAR'' THEN ''BAR'' ELSE it.PUBLISHING_GROUP END AS pgrp,
+__PG_GROUPING_SQL__,
         it.ITEM_TITLE   AS [ISBN],
         it.SHORT_TITLE  AS Title,
         it.PRICE_AMOUNT AS Price,
@@ -220,4 +231,4 @@ def sql_co():
         N'@start_date_weekly date, @last_date date',
         @start_date_weekly = @start_date_weekly,
         @last_date = @last_date;
-    """
+    """.replace("__PG_GROUPING_SQL__", PG_GROUPING_SQL)
