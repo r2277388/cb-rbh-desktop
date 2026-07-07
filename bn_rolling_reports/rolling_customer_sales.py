@@ -12,6 +12,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from amazon_rolling_reports.functions import build_column_totals, save_to_excel
 from shared.bookscan_calendar import bookscan_parts, bookscan_week
+from shared.pg_grouping import apply_pg_grouping
 from inventory_working import build_inventory_working_file
 from isbn_utils import normalize_isbn_series
 from pos_combiner import (
@@ -79,6 +80,10 @@ class RollingBuildResult:
     inventory_rows: int
     report_shape: tuple[int, int]
     dp_files_saved: int = 0
+    hbg_pos_file: Path | None = None
+    hbg_pos_rows: int = 0
+    hbg_new_isbns: int = 0
+    hbg_replaced_isbns: int = 0
 
 
 @dataclass
@@ -88,6 +93,10 @@ class CacheRefreshResult:
     inventory_cache_week: pd.Timestamp | None
     sales_rows: int
     inventory_rows: int
+    hbg_pos_file: Path | None = None
+    hbg_pos_rows: int = 0
+    hbg_new_isbns: int = 0
+    hbg_replaced_isbns: int = 0
 
 
 def _ensure_cache_dir() -> None:
@@ -123,6 +132,113 @@ def _save_parquet(df: pd.DataFrame, cache_file: Path) -> None:
     _ensure_cache_dir()
     df.to_parquet(cache_file, index=False)
 
+
+
+@dataclass
+class HbgPosOverlayResult:
+    dataframe: pd.DataFrame
+    source_file: Path | None = None
+    source_rows: int = 0
+    new_isbns: int = 0
+    replaced_isbns: int = 0
+
+
+def _read_hbg_store_level_pos_file(file_path: str | Path) -> pd.DataFrame:
+    source_file = Path(file_path)
+    last_error: Exception | None = None
+    for encoding in ("utf-8-sig", "cp1252", "latin1"):
+        try:
+            df = pd.read_csv(source_file, dtype="string", encoding=encoding)
+            break
+        except Exception as exc:  # pragma: no cover - fallback path
+            last_error = exc
+    else:
+        raise RuntimeError(f"Unable to read HBG-BNN Store Level POS file {source_file}: {last_error}")
+
+    required_columns = {"ISBN (Item Code)", "POS Sold Qty"}
+    missing = required_columns.difference(df.columns)
+    if missing:
+        raise ValueError(
+            f"HBG-BNN Store Level POS file is missing required columns: {sorted(missing)}"
+        )
+
+    output = df.loc[:, ["ISBN (Item Code)", "POS Sold Qty"]].copy()
+    output.rename(columns={"ISBN (Item Code)": "ISBN", "POS Sold Qty": "qty"}, inplace=True)
+    output["ISBN"] = normalize_isbn_series(output["ISBN"].astype("string"))
+    output = output[output["ISBN"].notna()].copy()
+    output["qty"] = pd.to_numeric(
+        output["qty"].astype("string").str.replace(",", "", regex=False),
+        errors="coerce",
+    ).fillna(0)
+    output = output.groupby("ISBN", as_index=False)["qty"].sum()
+    output["qty"] = output["qty"].round(0).astype(int)
+    return output[output["qty"] > 0].copy()
+
+
+def apply_hbg_store_level_pos_overlay(
+    sales_df: pd.DataFrame,
+    hbg_pos_file: str | Path | None,
+    week_ending: pd.Timestamp,
+    save_cache: bool = False,
+) -> HbgPosOverlayResult:
+    if not hbg_pos_file:
+        return HbgPosOverlayResult(dataframe=sales_df)
+
+    hbg_df = _read_hbg_store_level_pos_file(hbg_pos_file)
+    if hbg_df.empty:
+        return HbgPosOverlayResult(dataframe=sales_df, source_file=Path(hbg_pos_file))
+
+    output = sales_df.copy()
+    if output.empty:
+        output = pd.DataFrame(columns=["Week", "ISBN", "qty"])
+    for column in ["Week", "ISBN", "qty"]:
+        if column not in output.columns:
+            output[column] = pd.NA
+
+    output["Week"] = pd.to_datetime(output["Week"], errors="coerce")
+    output["ISBN"] = normalize_isbn_series(output["ISBN"].astype("string"))
+    output["qty"] = pd.to_numeric(output["qty"], errors="coerce").fillna(0).astype(int)
+    week = pd.Timestamp(week_ending.date())
+
+    new_rows: list[dict[str, object]] = []
+    drop_indexes: list[int] = []
+    new_isbns = 0
+    replaced_isbns = 0
+
+    for row in hbg_df.itertuples(index=False):
+        isbn = row.ISBN
+        hbg_qty = int(row.qty)
+        matches = output.index[(output["Week"] == week) & (output["ISBN"] == isbn)].tolist()
+        if matches:
+            current_qty = int(output.loc[matches, "qty"].sum())
+            if hbg_qty > current_qty:
+                first_idx = matches[0]
+                output.loc[first_idx, "qty"] = hbg_qty
+                drop_indexes.extend(matches[1:])
+                replaced_isbns += 1
+            continue
+
+        new_row = {column: pd.NA for column in output.columns}
+        new_row.update({"Week": week, "ISBN": isbn, "qty": hbg_qty})
+        new_rows.append(new_row)
+        new_isbns += 1
+
+    if drop_indexes:
+        output = output.drop(index=drop_indexes)
+    if new_rows:
+        output = pd.concat([output, pd.DataFrame(new_rows)], ignore_index=True, sort=False)
+
+    output = output.sort_values(["Week", "ISBN"]).reset_index(drop=True)
+    if save_cache:
+        _save_parquet(output, sales_cache_file)
+
+    return HbgPosOverlayResult(
+        dataframe=output,
+        source_file=Path(hbg_pos_file),
+        source_rows=len(hbg_df),
+        new_isbns=new_isbns,
+        replaced_isbns=replaced_isbns,
+    )
 
 def _format_bn_output_filename(week_ending: pd.Timestamp) -> str:
     return (
@@ -575,12 +691,14 @@ def build_report_dataframe(sales_df: pd.DataFrame, inventory_df: pd.DataFrame) -
     report = pd.concat([metadata, latest_inventory, metrics, weekly_df, yearly_df], axis=1)
     report = report.reset_index()
     report.rename(columns={"index": "ISBN"}, inplace=True)
+    report = apply_pg_grouping(report, publisher_col="Pub", publishing_group_col="pgrp", product_type_col="PT", output_col="PG_Group")
 
     ordered_columns = [
         "Pub",
         "PT",
         "CAT",
         "pgrp",
+        "PG_Group",
         "ISBN",
         "Title",
         "Price",
@@ -605,7 +723,7 @@ def build_report_dataframe(sales_df: pd.DataFrame, inventory_df: pd.DataFrame) -
     dynamic_columns = [column for column in report.columns if column not in ordered_columns]
     report = report[ordered_columns + dynamic_columns]
 
-    text_columns = ["Pub", "PT", "CAT", "pgrp", "Title", "PubDate"]
+    text_columns = ["Pub", "PT", "CAT", "PG_Group", "pgrp", "Title", "PubDate"]
     for column in text_columns:
         if column in report.columns:
             report[column] = report[column].fillna("")
@@ -668,37 +786,37 @@ def _build_save_options(report_df: pd.DataFrame, latest_week: pd.Timestamp) -> d
     decimal_cols = ["Price", "Avg_Wk_OH"]
     totals = build_column_totals(report_df, format_cols)
     top_row_groups = [
-        {"label": "STORE", "start_col": 10, "end_col": 11},
-        {"label": "DC", "start_col": 12, "end_col": 13},
-        {"label": "Total", "start_col": 14, "end_col": 15},
+        {"label": "STORE", "start_col": 11, "end_col": 12},
+        {"label": "DC", "start_col": 13, "end_col": 14},
+        {"label": "Total", "start_col": 15, "end_col": 16},
     ]
     header_overrides = {
-        10: "O/H",
-        11: "O/O",
-        12: "O/H",
-        13: "O/O",
-        14: "O/H",
-        15: "O/O",
-        16: "Avg OH",
-        17: "52 WK",
+        11: "O/H",
+        12: "O/O",
+        13: "O/H",
+        14: "O/O",
+        15: "O/H",
+        16: "O/O",
+        17: "Avg OH",
+        18: "52 WK",
     }
     header_fill_overrides = {
-        10: "#E6B8B7",
         11: "#E6B8B7",
         12: "#E6B8B7",
         13: "#E6B8B7",
         14: "#E6B8B7",
         15: "#E6B8B7",
+        16: "#E6B8B7",
     }
     accounting_format = {
         "num_format": '_(* #,##0_);_(* (#,##0);_(* "-"_);_(@_)',
     }
     column_format_overrides = {
         col_idx: {"format": accounting_format}
-        for col_idx in range(10, min(24, len(report_df.columns)))
+        for col_idx in range(11, min(25, len(report_df.columns)))
     }
-    if 23 in column_format_overrides:
-        column_format_overrides[23]["width"] = 10
+    if 24 in column_format_overrides:
+        column_format_overrides[24]["width"] = 10
     history_top_labels: dict[int, str] = {}
     for col_idx, column in enumerate(report_df.columns):
         if isinstance(column, str) and column.startswith("12-31-"):
@@ -706,8 +824,8 @@ def _build_save_options(report_df: pd.DataFrame, latest_week: pd.Timestamp) -> d
     title_block = {
         "start_row": 1,
         "end_row": 2,
-        "start_col": 5,
-        "end_col": 5,
+        "start_col": 6,
+        "end_col": 6,
         "title": "Rolling B&N POS",
         "subtitle": f"Week Ending: {latest_week.strftime('%B %d, %Y')}",
         "merge_cells": False,
@@ -719,8 +837,8 @@ def _build_save_options(report_df: pd.DataFrame, latest_week: pd.Timestamp) -> d
         "decimal_cols": decimal_cols,
         "integer_accounting_no_symbol": True,
         "rolling_main_layout": True,
-        "pre_date_column_count": 24,
-        "summary_label_col_idx": 9,
+        "pre_date_column_count": 25,
+        "summary_label_col_idx": 10,
         "top_row_groups": top_row_groups,
         "header_overrides": header_overrides,
         "header_fill_overrides": header_fill_overrides,
@@ -757,6 +875,17 @@ def save_reports_by_pub(report_df: pd.DataFrame, latest_week: pd.Timestamp) -> i
     return saved_count
 
 
+
+def _hbg_overlay_week(raw_folder: str | Path | None, sales_df: pd.DataFrame) -> pd.Timestamp:
+    if raw_folder:
+        return pd.Timestamp(parse_week_ending(resolve_raw_folder(raw_folder).name).date())
+    if sales_df.empty or "Week" not in sales_df.columns:
+        raise ValueError("A raw folder is required when applying the HBG-BNN Store Level POS file to an empty sales cache.")
+    latest = pd.to_datetime(sales_df["Week"], errors="coerce").dropna().max()
+    if pd.isna(latest):
+        raise ValueError("Could not determine the week ending date for the HBG-BNN Store Level POS file.")
+    return pd.Timestamp(latest.date())
+
 def build_customer_sales_report(
     raw_folder: str | Path | None = None,
     refresh_sales: bool = False,
@@ -765,6 +894,7 @@ def build_customer_sales_report(
     save_dp: bool = False,
     local_only: bool = False,
     manual_missing_weeks_workbook: str | Path | None = None,
+    hbg_pos_file: str | Path | None = None,
 ) -> RollingBuildResult:
     if manual_missing_weeks_workbook:
         refresh_manual_missing_weeks_cache(manual_missing_weeks_workbook)
@@ -775,6 +905,13 @@ def build_customer_sales_report(
         else _load_parquet_or_empty(sales_cache_file)
     )
     sales_df = _apply_manual_missing_weeks(sales_df)
+    hbg_overlay = apply_hbg_store_level_pos_overlay(
+        sales_df,
+        hbg_pos_file,
+        _hbg_overlay_week(raw_folder, sales_df) if hbg_pos_file else pd.Timestamp.min,
+        save_cache=bool(hbg_pos_file and (refresh_sales or full_refresh)),
+    )
+    sales_df = hbg_overlay.dataframe
     inventory_df = (
         refresh_inventory_cache(raw_folder=raw_folder, full_refresh=full_refresh)
         if refresh_inventory or full_refresh or not inventory_cache_file.exists()
@@ -796,15 +933,27 @@ def build_customer_sales_report(
         inventory_rows=len(inventory_df),
         report_shape=report_df.shape,
         dp_files_saved=dp_files_saved,
+        hbg_pos_file=hbg_overlay.source_file,
+        hbg_pos_rows=hbg_overlay.source_rows,
+        hbg_new_isbns=hbg_overlay.new_isbns,
+        hbg_replaced_isbns=hbg_overlay.replaced_isbns,
     )
 
 
 def refresh_caches_only(
     raw_folder: str | Path | None = None,
     full_refresh: bool = False,
+    hbg_pos_file: str | Path | None = None,
 ) -> CacheRefreshResult:
     latest_sql_week = get_latest_sql_week()
     sales_df = refresh_sales_cache(full_refresh=full_refresh)
+    hbg_overlay = apply_hbg_store_level_pos_overlay(
+        sales_df,
+        hbg_pos_file,
+        _hbg_overlay_week(raw_folder, sales_df) if hbg_pos_file else pd.Timestamp.min,
+        save_cache=bool(hbg_pos_file),
+    )
+    sales_df = hbg_overlay.dataframe
     inventory_df = refresh_inventory_cache(raw_folder=raw_folder, full_refresh=full_refresh)
     sales_cache_week = pd.to_datetime(sales_df["Week"]).max() if not sales_df.empty else None
     inventory_cache_week = pd.to_datetime(inventory_df["Week"]).max() if not inventory_df.empty else None
@@ -814,8 +963,11 @@ def refresh_caches_only(
         inventory_cache_week=inventory_cache_week,
         sales_rows=len(sales_df),
         inventory_rows=len(inventory_df),
+        hbg_pos_file=hbg_overlay.source_file,
+        hbg_pos_rows=hbg_overlay.source_rows,
+        hbg_new_isbns=hbg_overlay.new_isbns,
+        hbg_replaced_isbns=hbg_overlay.replaced_isbns,
     )
-
 
 def print_result_summary(result: RollingBuildResult) -> None:
     print()
@@ -826,6 +978,11 @@ def print_result_summary(result: RollingBuildResult) -> None:
     print(f"Saved file: {result.output_file}")
     if result.dp_files_saved:
         print(f"DP files saved: {result.dp_files_saved}")
+    if result.hbg_pos_file:
+        print(f"HBG-BNN POS file: {result.hbg_pos_file}")
+        print(f"HBG-BNN POS ISBNs read: {result.hbg_pos_rows:,}")
+        print(f"HBG-BNN POS new ISBNs added: {result.hbg_new_isbns:,}")
+        print(f"HBG-BNN POS ISBNs replaced with higher qty: {result.hbg_replaced_isbns:,}")
 
 
 def print_cache_refresh_summary(result: CacheRefreshResult) -> None:
@@ -844,6 +1001,11 @@ def print_cache_refresh_summary(result: CacheRefreshResult) -> None:
     )
     print(f"Sales cache rows: {result.sales_rows:,}")
     print(f"Inventory cache rows: {result.inventory_rows:,}")
+    if result.hbg_pos_file:
+        print(f"HBG-BNN POS file: {result.hbg_pos_file}")
+        print(f"HBG-BNN POS ISBNs read: {result.hbg_pos_rows:,}")
+        print(f"HBG-BNN POS new ISBNs added: {result.hbg_new_isbns:,}")
+        print(f"HBG-BNN POS ISBNs replaced with higher qty: {result.hbg_replaced_isbns:,}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -855,6 +1017,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--save-dp", action="store_true", help="Also save publisher-filtered versions to the B&N DP folders.")
     parser.add_argument("--local-only", action="store_true", help="Save the rolling report to the local bn_rolling_reports/review_output folder instead of the network target.")
     parser.add_argument("--manual-missing-weeks-workbook", help="Optional manual workbook used to refresh the supplemental parquet for SQL-missing weekly history.")
+    parser.add_argument("--hbg-pos-file", help="Optional HBG-BNN Store Level POS CSV to overlay for the selected/latest week.")
     return parser
 
 
@@ -869,6 +1032,7 @@ def main() -> None:
         save_dp=args.save_dp,
         local_only=args.local_only,
         manual_missing_weeks_workbook=args.manual_missing_weeks_workbook,
+        hbg_pos_file=args.hbg_pos_file,
     )
     print_result_summary(result)
 

@@ -91,6 +91,78 @@ def load_pos_dataframe(raw_folder: Path) -> pd.DataFrame:
     return df
 
 
+
+def find_hbg_store_level_pos_file(raw_folder: Path) -> Path | None:
+    matches = sorted(
+        path
+        for path in raw_folder.iterdir()
+        if path.is_file()
+        and path.suffix.lower() == ".csv"
+        and path.name.lower().startswith("bnn store level pos")
+    )
+    return matches[-1] if matches else None
+
+
+def read_hbg_store_level_pos_file(file_path: Path) -> pd.DataFrame:
+    last_error: Exception | None = None
+    for encoding in ("utf-8-sig", "cp1252", "latin1"):
+        try:
+            df = pd.read_csv(file_path, dtype="string", encoding=encoding)
+            break
+        except Exception as exc:  # pragma: no cover - fallback path
+            last_error = exc
+    else:
+        raise RuntimeError(f"Unable to read HBG-BNN Store Level POS file {file_path}: {last_error}")
+
+    required = {"ISBN (Item Code)", "POS Sold Qty"}
+    missing = required.difference(df.columns)
+    if missing:
+        raise ValueError(f"HBG-BNN Store Level POS file is missing required columns: {sorted(missing)}")
+
+    hbg = df.loc[:, ["ISBN (Item Code)", "POS Sold Qty"]].copy()
+    hbg.rename(columns={"ISBN (Item Code)": "ISBN", "POS Sold Qty": "LW"}, inplace=True)
+    hbg["ISBN"] = normalize_isbn_series(hbg["ISBN"].astype("string"))
+    hbg = hbg[hbg["ISBN"].notna()].copy()
+    hbg["LW"] = pd.to_numeric(
+        hbg["LW"].astype("string").str.replace(",", "", regex=False),
+        errors="coerce",
+    ).fillna(0)
+    hbg = hbg.groupby("ISBN", as_index=False)["LW"].sum()
+    hbg["LW"] = hbg["LW"].round(0).astype(int)
+    return hbg[hbg["LW"] > 0].copy()
+
+
+def apply_hbg_store_level_pos_to_pos(pos_df: pd.DataFrame, raw_folder: Path) -> tuple[pd.DataFrame, Path | None, int, int, int]:
+    hbg_file = find_hbg_store_level_pos_file(raw_folder)
+    if hbg_file is None:
+        return pos_df, None, 0, 0, 0
+
+    hbg_df = read_hbg_store_level_pos_file(hbg_file)
+    if hbg_df.empty:
+        return pos_df, hbg_file, 0, 0, 0
+
+    combined = pos_df.copy()
+    combined["LW"] = pd.to_numeric(combined["LW"], errors="coerce").fillna(0).round(0).astype(int)
+    combined = combined.drop_duplicates(subset=["ISBN"], keep="first").set_index("ISBN")
+
+    new_isbns = 0
+    replaced_isbns = 0
+    for row in hbg_df.itertuples(index=False):
+        isbn = row.ISBN
+        hbg_lw = int(row.LW)
+        if isbn in combined.index:
+            current_lw = int(combined.at[isbn, "LW"])
+            if hbg_lw > current_lw:
+                combined.at[isbn, "LW"] = hbg_lw
+                replaced_isbns += 1
+            continue
+        combined.loc[isbn, "LW"] = hbg_lw
+        new_isbns += 1
+
+    output = combined.reset_index()
+    output["LW"] = pd.to_numeric(output["LW"], errors="coerce").fillna(0).round(0).astype(int)
+    return output, hbg_file, len(hbg_df), new_isbns, replaced_isbns
+
 def normalize_existing_headers(ws) -> None:
     current_headers = [ws.cell(row=SALES_HEADER_ROW, column=idx).value for idx in range(1, 24)]
     if current_headers == SALES_REQUIRED_HEADERS:

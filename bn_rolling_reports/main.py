@@ -217,7 +217,6 @@ def confirm_build_report(latest_sql_week, latest_cache_week) -> bool:
     finally:
         root.destroy()
 
-
 def confirm_partial_pos_build(raw_folder: Path) -> bool:
     selection = collect_pos_source_files(raw_folder)
     print()
