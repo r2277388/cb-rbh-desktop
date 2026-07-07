@@ -1,4 +1,4 @@
-﻿import getpass
+import getpass
 import importlib.util
 import os
 import re
@@ -1292,12 +1292,14 @@ def run_retailer_rolling_reports_menu() -> None:
         print("    04. Run Monthly Rolling Report (monthly step 2)")
         print()
         print("Other Retailer Rolling Reports")
-        print("    05. Barnes & Noble Rolling Reports")
-        print("    06. Bookscan Rolling Reports")
-        print("    07. Target NOC Rolling Reports")
-        print("    08. Abrams & Chronicle UK Rolling Reports")
-        print("    09. Readerlink Rolling Reports")
-        print("    10. Retrieve Data Source Instructions")
+        print("    05. Abrams & Chronicle UK Rolling Reports")
+        print("    06. Barnes & Noble Rolling Reports")
+        print("    07. Bookscan Rolling Reports")
+        print("    08. Edelweiss Rolling Reports")
+        print("    09. Target NOC Rolling Reports")
+        print("    10. Readerlink Rolling Reports")
+        print()
+        print("    98. Retrieve Data Source Instructions")
         print()
         print("    99. Back to main menu")
         print()
@@ -1352,11 +1354,18 @@ def run_retailer_rolling_reports_menu() -> None:
             run_python_process("Amazon Monthly Rolling Reports", "amazon_rolling_reports/monthly_rolling_reports.py")
             continue
 
-        if choice == "10":
+        if choice == "98":
             open_rolling_data_source_instructions()
             continue
 
         if choice == "5":
+            run_python_process(
+                "Abrams & Chronicle UK Rolling Reports",
+                process_paths.repo_path("Abrams_Chronicle_rollling_reports", "main.py"),
+            )
+            continue
+
+        if choice == "6":
             try:
                 selected_bn_raw_folder = confirm_bn_rolling_reports_files()
                 if selected_bn_raw_folder is None:
@@ -1371,25 +1380,21 @@ def run_retailer_rolling_reports_menu() -> None:
             )
             continue
 
-        if choice == "6":
+        if choice == "7":
             run_python_process("Bookscan Rolling Reports", process_paths.BOOKSCAN_ROLLING_REPORTS_SCRIPT)
             continue
 
-        if choice == "7":
-            run_python_process("Target NOC Rolling Reports", process_paths.repo_path("target_rolling_report", "main.py"))
-            continue
-
         if choice == "8":
-            run_python_process(
-                "Abrams & Chronicle UK Rolling Reports",
-                process_paths.repo_path("Abrams_Chronicle_rollling_reports", "main.py"),
-            )
+            run_python_process("Edelweiss Rolling Reports", process_paths.EDELWEISS_ROLLING_REPORTS_SCRIPT)
             continue
 
         if choice == "9":
-            run_readerlink_rolling_reports()
+            run_python_process("Target NOC Rolling Reports", process_paths.repo_path("target_rolling_report", "main.py"))
             continue
 
+        if choice == "10":
+            run_readerlink_rolling_reports()
+            continue
         if choice in {"99", "back", "b", "return", "menu"}:
             return
 
@@ -2011,6 +2016,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
 
 
 

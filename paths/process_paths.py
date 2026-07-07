@@ -80,6 +80,9 @@ TARGET_NOC_CACHE_DIR = Path(r"F:\ANALYSIS\Finance\DataWarehouse\Atelier TargetNO
 BOOKSCAN_WEEKLY_REPORT_FOLDER = Path(
     r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Bookscan"
 )
+EDELWEISS_WEEKLY_REPORT_FOLDER = Path(
+    r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Edelweiss"
+)
 POWER_BI_REPORTS_FOLDER = Path(
     r"\\sfx\SFNY-Files\SF\Groups\Visual Dashboards"
 )
@@ -281,6 +284,7 @@ FRONTLIST_FAIRE_ORDERS_SQL = repo_path(
 )
 BN_ROLLING_REPORTS_SCRIPT = repo_path("bn_rolling_reports", "main.py")
 BOOKSCAN_ROLLING_REPORTS_SCRIPT = repo_path("bookscan_rolling_reports", "main.py")
+EDELWEISS_ROLLING_REPORTS_SCRIPT = repo_path("edelweiss_rolling_reports", "main.py")
 POWER_BI_REPORTS_SCRIPT = repo_path("power_bi_reports", "main.py")
 CROSS_GAP_SCRIPT = repo_path("cross_gap", "main.py")
 GEN_EDITORIAL_VARIATIONS_SCRIPT = repo_path("gen_editorial_variations", "main.py")
@@ -337,3 +341,4 @@ def amazon_weekly_report_file(for_date: datetime) -> Path:
         AMAZON_WEEKLY_REPORTS_DIR
         / f"w{week:02d}__{for_date.strftime('%Y_%m_%d')}.xlsx"
     )
+

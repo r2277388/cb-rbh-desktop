@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import html
 import socket
@@ -176,6 +176,13 @@ ACTIONS: dict[str, Action] = {
         "Bookscan Rolling Reports",
         [str(VENV_PYTHON), "bookscan_rolling_reports/main.py"],
         "Run the Bookscan rolling reports process.",
+        "Main Processes",
+    ),
+    "edelweiss_rolling_reports": Action(
+        "edelweiss_rolling_reports",
+        "Edelweiss Rolling Reports",
+        [str(VENV_PYTHON), "edelweiss_rolling_reports/main.py"],
+        "Run the Edelweiss rolling reports process.",
         "Main Processes",
     ),
     "frontlist_supercharged": Action(
@@ -699,6 +706,7 @@ def launch_browser_menu() -> None:
     timer.start()
     print(f"Opening graphical launcher at {url}")
     app.run(host=HOST, port=port, debug=False, use_reloader=False)
+
 
 
 
