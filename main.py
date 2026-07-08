@@ -1293,11 +1293,12 @@ def run_retailer_rolling_reports_menu() -> None:
         print()
         print("Other Retailer Rolling Reports")
         print("    05. Abrams & Chronicle UK Rolling Reports")
-        print("    06. Barnes & Noble Rolling Reports")
-        print("    07. Bookscan Rolling Reports")
-        print("    08. Edelweiss Rolling Reports")
-        print("    09. Target NOC Rolling Reports")
-        print("    10. Readerlink Rolling Reports")
+        print("    06. AWBC Rolling Reports")
+        print("    07. Barnes & Noble Rolling Reports")
+        print("    08. Bookscan Rolling Reports")
+        print("    09. Edelweiss Rolling Reports")
+        print("    10. Target NOC Rolling Reports")
+        print("    11. Readerlink Rolling Reports")
         print()
         print("    98. Retrieve Data Source Instructions")
         print()
@@ -1366,6 +1367,10 @@ def run_retailer_rolling_reports_menu() -> None:
             continue
 
         if choice == "6":
+            run_python_process("AWBC Rolling Reports", process_paths.AWBC_ROLLING_REPORTS_SCRIPT)
+            continue
+
+        if choice == "7":
             try:
                 selected_bn_raw_folder = confirm_bn_rolling_reports_files()
                 if selected_bn_raw_folder is None:
@@ -1380,19 +1385,19 @@ def run_retailer_rolling_reports_menu() -> None:
             )
             continue
 
-        if choice == "7":
+        if choice == "8":
             run_python_process("Bookscan Rolling Reports", process_paths.BOOKSCAN_ROLLING_REPORTS_SCRIPT)
             continue
 
-        if choice == "8":
+        if choice == "9":
             run_python_process("Edelweiss Rolling Reports", process_paths.EDELWEISS_ROLLING_REPORTS_SCRIPT)
             continue
 
-        if choice == "9":
+        if choice == "10":
             run_python_process("Target NOC Rolling Reports", process_paths.repo_path("target_rolling_report", "main.py"))
             continue
 
-        if choice == "10":
+        if choice == "11":
             run_readerlink_rolling_reports()
             continue
         if choice in {"99", "back", "b", "return", "menu"}:
@@ -1855,6 +1860,7 @@ def run_check_rolling_report_tables_menu() -> None:
         print("    2. Bookscan Rolling SQL")
         print("    3. Barnes & Noble Rolling SQL")
         print("    4. Edelweiss Rolling SQL")
+        print("    5. AWBC Rolling SQL")
         print("    9. Back to Check Table Updates")
         print()
         try:
@@ -1868,6 +1874,7 @@ def run_check_rolling_report_tables_menu() -> None:
             "2": "5",
             "3": "6",
             "4": "8",
+            "5": "9",
         }
         if subchoice in rolling_choices:
             run_table_check(rolling_choices[subchoice])

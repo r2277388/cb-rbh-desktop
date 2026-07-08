@@ -58,6 +58,22 @@ ORDER BY
     ste.[WEEK] DESC;
 """.strip(),
     ),
+    "9": (
+        "AWBC Rolling SQL",
+        """
+SELECT TOP 10
+    awbc.[WEEK],
+    COUNT(awbc.ISBN) AS row_cnt,
+    SUM(awbc.Week1Units) AS Qty,
+    SUM(awbc.Warehouse_OnHand) AS WH_OH,
+    SUM(awbc.Qty_OnOrder) AS OO
+FROM [CBQ2].[cb].[sellthrough_AWBC] awbc
+GROUP BY
+    awbc.[WEEK]
+ORDER BY
+    awbc.[WEEK] DESC;
+""".strip(),
+    ),
 }
 
 def _prior_period_yyyymm(today: datetime | None = None) -> str:
@@ -148,12 +164,12 @@ def _print_grid_table(df: pd.DataFrame) -> None:
 
 def main():
     if len(sys.argv) < 2:
-        print("Please provide a query choice: 1, 2, 3, 4, 5, 6, 7, or 8.")
+        print("Please provide a query choice: 1, 2, 3, 4, 5, 6, 7, 8, or 9.")
         return 1
 
     choice = sys.argv[1].strip()
     if choice not in SQL_QUERIES:
-        print(f"Invalid query choice: {choice}. Use 1, 2, 3, 4, 5, 6, 7, or 8.")
+        print(f"Invalid query choice: {choice}. Use 1, 2, 3, 4, 5, 6, 7, 8, or 9.")
         return 1
 
     report_name, sql_query = SQL_QUERIES[choice]
