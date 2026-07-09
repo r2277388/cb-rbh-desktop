@@ -49,6 +49,7 @@ SELECT
         WHEN LEFT(i.PUBLISHING_GROUP, 3) = 'BAR' THEN 'BAR'
         ELSE i.PUBLISHING_GROUP
     END AS PGRP,
+    i.PRODUCT_TYPE AS Product_Type,
     i.PRICE_AMOUNT AS Price
 FROM
     ebs.item i
@@ -595,6 +596,7 @@ def preview_verticalized_coninv():
         "ISBN",
         "Title",
         "PGRP",
+        "Product_Type",
         "Price",
         "Publisher",
         "period",
@@ -1121,9 +1123,11 @@ def check_inventory_no_value_rows():
     period_df = period_df[
         period_df["Publisher"].fillna("").astype(str).str.strip() == "Chronicle"
     ].copy()
+    product_types = period_df["Product_Type"].fillna("").astype(str).str.strip().str.upper()
     period_df = period_df[
         (pd.to_numeric(period_df["Inventory"], errors="coerce").fillna(0) != 0)
         & (pd.to_numeric(period_df["Value"], errors="coerce").fillna(0) == 0)
+        & product_types.ne("MI")
     ].copy()
 
     if period_df.empty:
@@ -1330,6 +1334,7 @@ def coerce_vertical_dtypes(df: pd.DataFrame) -> pd.DataFrame:
     typed_df["ORG"] = typed_df["ORG"].astype("string")
     typed_df["Publisher"] = typed_df["Publisher"].astype("string")
     typed_df["PGRP"] = typed_df["PGRP"].astype("string")
+    typed_df["Product_Type"] = typed_df["Product_Type"].astype("string")
     typed_df["Price"] = pd.to_numeric(typed_df["Price"], errors="coerce")
     typed_df["Value"] = pd.to_numeric(typed_df["Value"], errors="coerce").fillna(0)
     typed_df["Inventory"] = pd.to_numeric(typed_df["Inventory"], errors="coerce").fillna(0)
@@ -1346,19 +1351,19 @@ def load_publisher_lookup() -> pd.DataFrame:
     cache_path = get_publisher_cache_path()
     if cache_path.exists():
         cached_df = pd.read_pickle(cache_path)
-        required_columns = {"ISBN", "Title", "Publisher", "PGRP", "Price"}
+        required_columns = {"ISBN", "Title", "Publisher", "PGRP", "Product_Type", "Price"}
         if required_columns.issubset(set(cached_df.columns)):
-            return cached_df[["ISBN", "Title", "Publisher", "PGRP", "Price"]].copy()
+            return cached_df[["ISBN", "Title", "Publisher", "PGRP", "Product_Type", "Price"]].copy()
 
     engine = get_connection()
     publisher_df = fetch_data_from_db(engine, PUBLISHER_LOOKUP_SQL)
     if publisher_df.empty:
-        return pd.DataFrame(columns=["ISBN", "Title", "Publisher", "PGRP", "Price"])
+        return pd.DataFrame(columns=["ISBN", "Title", "Publisher", "PGRP", "Product_Type", "Price"])
 
-    required_columns = {"ISBN", "Title", "Publisher", "PGRP", "Price"}
+    required_columns = {"ISBN", "Title", "Publisher", "PGRP", "Product_Type", "Price"}
     if not required_columns.issubset(set(publisher_df.columns)):
         raise ValueError(
-            "Publisher lookup query must return ISBN, Title, Publisher, PGRP, and Price columns."
+            "Publisher lookup query must return ISBN, Title, Publisher, PGRP, Product_Type, and Price columns."
         )
 
     publisher_df = publisher_df.copy()
@@ -1366,11 +1371,12 @@ def load_publisher_lookup() -> pd.DataFrame:
     publisher_df["Title"] = publisher_df["Title"].astype("string").str.strip()
     publisher_df["Publisher"] = publisher_df["Publisher"].astype("string").str.strip()
     publisher_df["PGRP"] = publisher_df["PGRP"].astype("string").str.strip()
+    publisher_df["Product_Type"] = publisher_df["Product_Type"].astype("string").str.strip()
     publisher_df["Price"] = pd.to_numeric(publisher_df["Price"], errors="coerce")
     publisher_df = publisher_df[publisher_df["ISBN"].notna()].copy()
     publisher_df = publisher_df.drop_duplicates(subset=["ISBN"], keep="first")
     publisher_df = publisher_df[
-        ["ISBN", "Title", "Publisher", "PGRP", "Price"]
+        ["ISBN", "Title", "Publisher", "PGRP", "Product_Type", "Price"]
     ].reset_index(drop=True)
 
     cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1385,6 +1391,7 @@ def attach_publishers(df: pd.DataFrame) -> pd.DataFrame:
         enriched_df["Title"] = pd.Series(pd.NA, index=enriched_df.index, dtype="string")
         enriched_df["Publisher"] = pd.Series(pd.NA, index=enriched_df.index, dtype="string")
         enriched_df["PGRP"] = pd.Series(pd.NA, index=enriched_df.index, dtype="string")
+        enriched_df["Product_Type"] = pd.Series(pd.NA, index=enriched_df.index, dtype="string")
         enriched_df["Price"] = pd.Series(pd.NA, index=enriched_df.index, dtype="float64")
         return enriched_df
 
@@ -1401,6 +1408,7 @@ def load_existing_vertical_pickle() -> pd.DataFrame:
                 "Title",
                 "Publisher",
                 "PGRP",
+                "Product_Type",
                 "Price",
                 "ORG",
                 "Value",
@@ -1416,12 +1424,13 @@ def load_existing_vertical_pickle() -> pd.DataFrame:
         "Title",
         "Publisher",
         "PGRP",
+        "Product_Type",
         "Price",
         "ORG",
         "Value",
         "Inventory",
     ]
-    if any(column not in existing_df.columns for column in ["Title", "Publisher", "PGRP", "Price"]):
+    if any(column not in existing_df.columns for column in ["Title", "Publisher", "PGRP", "Product_Type", "Price"]):
         existing_df = attach_publishers(
             existing_df[["period", "ISBN", "ORG", "Value", "Inventory"]]
         )
@@ -1588,7 +1597,7 @@ def process_consolidated_file(source_file: Path, period: str):
     output_df.insert(0, "period", period)
     output_df = attach_publishers(output_df)
     output_df = output_df[
-        ["period", "ISBN", "Title", "Publisher", "PGRP", "Price", "ORG", "Value", "Inventory"]
+        ["period", "ISBN", "Title", "Publisher", "PGRP", "Product_Type", "Price", "ORG", "Value", "Inventory"]
     ]
     combined_df = save_vertical_pickle(output_df)
 
