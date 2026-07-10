@@ -38,7 +38,7 @@ def load_allowed_invobs_isbns() -> set[str]:
     }
 
 
-def consolidate_inventory_from_pickle(period: str) -> pd.DataFrame:
+def load_period_consolidated_inventory(period: str) -> pd.DataFrame:
     if not CONINV_PICKLE_FILE.exists():
         raise FileNotFoundError(f"ConInv pickle not found: {CONINV_PICKLE_FILE}")
 
@@ -54,10 +54,26 @@ def consolidate_inventory_from_pickle(period: str) -> pd.DataFrame:
     if df.empty:
         raise ValueError(f"No ConInv rows were found for period {period}.")
 
+    return df
+
+
+def filter_invobs_inventory_rows(df: pd.DataFrame) -> pd.DataFrame:
+    period_label = (
+        df["period"].iloc[0]
+        if "period" in df.columns and not df.empty
+        else "selected period"
+    )
     allowed_isbns = load_allowed_invobs_isbns()
-    df = df[df["ISBN"].isin(allowed_isbns)].copy()
+    filtered = df[df["ISBN"].isin(allowed_isbns)].copy()
+    if filtered.empty:
+        raise ValueError(f"No Chronicle BK/FT/RP/CP ISBN rows remained for {period_label}.")
+
+    return filtered
+
+
+def consolidate_inventory_from_rows(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
-        raise ValueError(f"No Chronicle BK/FT/RP/CP ISBN rows remained for period {period}.")
+        raise ValueError("No ConInv rows were provided for consolidation.")
 
     pivot = (
         df.pivot_table(
@@ -86,6 +102,11 @@ def consolidate_inventory_from_pickle(period: str) -> pd.DataFrame:
     result["units_cbp"] = pivot["inventory_cbp"] if "inventory_cbp" in pivot.columns else 0
     return result
 
+
+def consolidate_inventory_from_pickle(period: str) -> pd.DataFrame:
+    df = load_period_consolidated_inventory(period)
+    df = filter_invobs_inventory_rows(df)
+    return consolidate_inventory_from_rows(df)
 
 def consolidate_inventory(period):
     print(">>> consolidate_inventory() started")
