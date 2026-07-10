@@ -23,6 +23,39 @@ WHERE
     AND i.PUBLISHER_CODE = 'Chronicle'
     AND i.PRODUCT_TYPE IN ('BK', 'FT', 'RP', 'CP')
 """
+TITLE_LOOKUP_BATCH_SIZE = 1000
+
+
+def load_isbn_titles(isbns) -> dict[str, str]:
+    clean_isbns = sorted({str(isbn).strip() for isbn in isbns if str(isbn).strip()})
+    if not clean_isbns:
+        return {}
+
+    engine = get_connection()
+    title_lookup = {}
+    for start in range(0, len(clean_isbns), TITLE_LOOKUP_BATCH_SIZE):
+        batch = clean_isbns[start:start + TITLE_LOOKUP_BATCH_SIZE]
+        isbn_literals = ", ".join(
+            f"'{isbn.replace(chr(39), chr(39) * 2)}'" for isbn in batch
+        )
+        query = f"""
+SELECT
+    i.ISBN AS ISBN,
+    i.SHORT_TITLE AS Title
+FROM ebs.item i
+WHERE i.ISBN IN ({isbn_literals})
+  AND i.SHORT_TITLE IS NOT NULL
+"""
+        titles = fetch_data_from_db(engine, query)
+        if titles.empty:
+            continue
+        for _, row in titles.iterrows():
+            isbn = str(row["ISBN"]).strip()
+            title = str(row["Title"]).strip()
+            if isbn and title:
+                title_lookup.setdefault(isbn, title)
+
+    return title_lookup
 
 
 def load_allowed_invobs_isbns() -> set[str]:

@@ -10,6 +10,7 @@ from dict_unit_cost2 import df_to_nested_dict
 from load_consolidated_inventory import (
     consolidate_inventory_from_rows,
     filter_invobs_inventory_rows,
+    load_isbn_titles,
     load_period_consolidated_inventory,
 )
 
@@ -159,6 +160,19 @@ def add_titles_after_isbn(df, title_lookup):
     return result
 
 
+def fill_missing_titles(df, title_lookup):
+    result = df.copy()
+    if "Title" not in result.columns:
+        result.insert(1, "Title", result["ISBN"].map(title_lookup).fillna(""))
+        return result
+
+    missing_title = result["Title"].isna() | result["Title"].astype(str).str.strip().eq("")
+    result.loc[missing_title, "Title"] = (
+        result.loc[missing_title, "ISBN"].map(title_lookup).fillna("")
+    )
+    return result
+
+
 def build_value_variance(source_rows, aggregated_inventory, cdu_dict=None):
     original_pivot = (
         source_rows.pivot_table(
@@ -211,10 +225,12 @@ def build_value_variance(source_rows, aggregated_inventory, cdu_dict=None):
         variance["ISBN"].map(component_notes)
     )
     variance["conversion_note"] = variance["conversion_note"].fillna("")
+    variance_title_lookup = build_title_lookup(source_rows)
+    variance_title_lookup.update(build_title_lookup(aggregated_inventory))
     variance.insert(
         1,
         "Title",
-        variance["ISBN"].map(build_title_lookup(source_rows)).fillna(""),
+        variance["ISBN"].map(variance_title_lookup).fillna(""),
     )
 
     detail_cols = [
@@ -300,6 +316,11 @@ def run(period):
     # Create the aggregated result by grouping by 'ISBN' and summing
     df_aggregated_inventory = df_result_inventory.groupby('ISBN').sum().reset_index()
     title_lookup = build_title_lookup(df_original_inventory)
+    report_isbns = set(df_original_inventory["ISBN"]) | set(df_aggregated_inventory["ISBN"])
+    missing_title_isbns = report_isbns - set(title_lookup)
+    title_lookup.update(load_isbn_titles(missing_title_isbns))
+    df_original_inventory = fill_missing_titles(df_original_inventory, title_lookup)
+    df_invobs_source_inventory = fill_missing_titles(df_invobs_source_inventory, title_lookup)
     df_result_inventory = add_titles_after_isbn(df_result_inventory, title_lookup)
     df_aggregated_inventory = add_titles_after_isbn(df_aggregated_inventory, title_lookup)
 
