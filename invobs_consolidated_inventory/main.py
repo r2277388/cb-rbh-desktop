@@ -23,7 +23,32 @@ VALUE_ORGS = ("cbc", "hbg", "cbp")
 VALUE_TOLERANCE = 0.004
 
 
+def resolve_component_unit_costs(cdu_dict, dict_uc):
+    """Fill missing component costs from the value of the CDU that contains them."""
+    resolved_costs = {isbn: costs.copy() for isbn, costs in dict_uc.items()}
+
+    for cdu_isbn, components in cdu_dict.items():
+        total_component_qty = sum(components.values())
+        if total_component_qty <= 0:
+            continue
+
+        cdu_costs = dict_uc.get(cdu_isbn, {})
+        for component_isbn in components:
+            component_costs = resolved_costs.setdefault(component_isbn, {})
+            for org in VALUE_ORGS:
+                cost_key = f"uc_{org}"
+                component_cost = component_costs.get(cost_key, 0)
+                if pd.isna(component_cost) or component_cost == 0:
+                    cdu_unit_cost = cdu_costs.get(cost_key, 0)
+                    if pd.notna(cdu_unit_cost) and cdu_unit_cost != 0:
+                        component_costs[cost_key] = cdu_unit_cost / total_component_qty
+
+    return resolved_costs
+
+
 def process_inventory(df_inventory, cdu_dict, dict_uc):
+    dict_uc = resolve_component_unit_costs(cdu_dict, dict_uc)
+
     # Initialize a list to store total units and values for each component ISBN
     result = []
 
@@ -97,7 +122,44 @@ def process_inventory(df_inventory, cdu_dict, dict_uc):
     return result_df
 
 
-def build_value_variance(source_rows, aggregated_inventory):
+def build_cdu_conversion_notes(cdu_dict):
+    cdu_notes = {}
+    component_notes = {}
+    for cdu_isbn, components in cdu_dict.items():
+        component_parts = [
+            f"{component_isbn} (qty {component_qty})"
+            for component_isbn, component_qty in components.items()
+        ]
+        cdu_notes[cdu_isbn] = f"CDU converted to component(s): {', '.join(component_parts)}"
+
+        for component_isbn, component_qty in components.items():
+            component_notes.setdefault(component_isbn, []).append(
+                f"{cdu_isbn} (qty {component_qty})"
+            )
+
+    for component_isbn, cdu_parts in component_notes.items():
+        component_notes[component_isbn] = f"Component from CDU(s): {', '.join(cdu_parts)}"
+
+    return cdu_notes, component_notes
+
+
+def build_title_lookup(source_rows):
+    if "Title" not in source_rows.columns:
+        return {}
+
+    titles = source_rows[["ISBN", "Title"]].copy()
+    titles["Title"] = titles["Title"].fillna("").astype(str).str.strip()
+    titles = titles[titles["Title"] != ""].drop_duplicates("ISBN", keep="first")
+    return titles.set_index("ISBN")["Title"].to_dict()
+
+
+def add_titles_after_isbn(df, title_lookup):
+    result = df.copy()
+    result.insert(1, "Title", result["ISBN"].map(title_lookup).fillna(""))
+    return result
+
+
+def build_value_variance(source_rows, aggregated_inventory, cdu_dict=None):
     original_pivot = (
         source_rows.pivot_table(
             index="ISBN",
@@ -144,9 +206,22 @@ def build_value_variance(source_rows, aggregated_inventory):
     variance["variance_status"] = variance.apply(variance_status, axis=1)
     variance["abs_variance_total_value"] = variance["variance_total_value"].abs()
 
+    cdu_notes, component_notes = build_cdu_conversion_notes(cdu_dict or {})
+    variance["conversion_note"] = variance["ISBN"].map(cdu_notes).fillna(
+        variance["ISBN"].map(component_notes)
+    )
+    variance["conversion_note"] = variance["conversion_note"].fillna("")
+    variance.insert(
+        1,
+        "Title",
+        variance["ISBN"].map(build_title_lookup(source_rows)).fillna(""),
+    )
+
     detail_cols = [
         "ISBN",
+        "Title",
         "variance_status",
+        "conversion_note",
         "original_total_value",
         "final_total_value",
         "variance_total_value",
@@ -177,8 +252,8 @@ def build_value_variance(source_rows, aggregated_inventory):
     return summary, variance_detail
 
 
-def write_value_variance_sheet(writer, source_rows, aggregated_inventory):
-    summary, variance_detail = build_value_variance(source_rows, aggregated_inventory)
+def write_value_variance_sheet(writer, source_rows, aggregated_inventory, cdu_dict):
+    summary, variance_detail = build_value_variance(source_rows, aggregated_inventory, cdu_dict)
     sheet_name = "Value Variance"
     summary.to_excel(writer, sheet_name=sheet_name, index=False, startrow=0)
 
@@ -198,8 +273,10 @@ def write_value_variance_sheet(writer, source_rows, aggregated_inventory):
 
     worksheet.write(startrow - 1, 0, "ISBN-level variance detail", header_format)
     worksheet.set_column(0, 0, 18)
-    worksheet.set_column(1, 1, 34)
-    worksheet.set_column(2, 13, 16, money_format)
+    worksheet.set_column(1, 1, 42)
+    worksheet.set_column(2, 2, 34)
+    worksheet.set_column(3, 3, 62)
+    worksheet.set_column(4, 15, 16, money_format)
 
 def run(period):
     print(">>> Running pickle-based INVOBS flow")
@@ -222,6 +299,16 @@ def run(period):
 
     # Create the aggregated result by grouping by 'ISBN' and summing
     df_aggregated_inventory = df_result_inventory.groupby('ISBN').sum().reset_index()
+    title_lookup = build_title_lookup(df_original_inventory)
+    df_result_inventory = add_titles_after_isbn(df_result_inventory, title_lookup)
+    df_aggregated_inventory = add_titles_after_isbn(df_aggregated_inventory, title_lookup)
+
+    original_columns = list(df_original_inventory.columns)
+    if "Title" in original_columns:
+        original_columns.remove("Title")
+        isbn_index = original_columns.index("ISBN")
+        original_columns.insert(isbn_index + 1, "Title")
+        df_original_inventory = df_original_inventory[original_columns]
 
     # Use a file dialog to select the save location
     Tk().withdraw()  # Hide the root Tkinter window
@@ -238,7 +325,7 @@ def run(period):
             df_result_inventory.to_excel(writer, sheet_name='Detailed_Results', index=False)
             df_aggregated_inventory.to_excel(writer, sheet_name='Aggregated_Results', index=False)
             df_original_inventory.to_excel(writer, sheet_name='Original_Consolidated_Inventory', index=False)
-            write_value_variance_sheet(writer, df_invobs_source_inventory, df_aggregated_inventory)
+            write_value_variance_sheet(writer, df_invobs_source_inventory, df_aggregated_inventory, dict_cdu)
 
         print(f"Results saved to {output_file_path}")
     else:
