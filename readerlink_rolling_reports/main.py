@@ -32,6 +32,10 @@ FROZEN_QUANTITIES_FILE = Path(r"G:\OPS\Inventory\Daily\Finance_Only\Frozen Quant
 
 POS_HISTORY_CACHE = CACHE_DIR / "readerlink_pos_history.parquet"
 LATEST_INVENTORY_CACHE = CACHE_DIR / "readerlink_latest_inventory.parquet"
+STORE_INVENTORY_DIR = Path(
+    r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Readerlink\OH_Store_TitlePerformanceReport"
+)
+STORE_INVENTORY_GLOB = "*.xlsx"
 WEEKLY_REPORT_YEARS = 5
 ACTIVE_ROW_YEARS = 3
 
@@ -232,12 +236,35 @@ def load_readerlink_inventory() -> pd.DataFrame:
     df = df.rename(
         columns={
             "isbn": "ISBN",
-            "rds_dc_inventory_oh": "OH",
+            "rds_dc_inventory_oh": "OH_DC",
             "rds_open_po_quantity": "OO",
         }
     )
     df["ISBN"] = df["ISBN"].map(normalize_isbn)
-    return df.groupby("ISBN", as_index=False)[["OH", "OO"]].sum()
+    return df.groupby("ISBN", as_index=False)[["OH_DC", "OO"]].sum()
+
+
+def latest_store_inventory_file() -> Path:
+    files = [
+        path for path in STORE_INVENTORY_DIR.glob(STORE_INVENTORY_GLOB)
+        if not path.name.startswith("~$")
+    ]
+    if not files:
+        raise FileNotFoundError(
+            f"No Readerlink store inventory workbook found in {STORE_INVENTORY_DIR}"
+        )
+    return max(files, key=lambda path: path.stat().st_mtime)
+
+
+def load_store_inventory(source_path: Path | None = None) -> pd.DataFrame:
+    path = source_path or latest_store_inventory_file()
+    required = ["MASTER CHAIN", "EAN", "TOTAL OH UNITS"]
+    df = pd.read_excel(path, sheet_name="Export", usecols=required, dtype={"EAN": str})
+    df["ISBN"] = df["EAN"].map(normalize_isbn)
+    df["sheet_chain"] = df["MASTER CHAIN"].map(sheet_chain_filter_name)
+    df["OH_Store"] = pd.to_numeric(df["TOTAL OH UNITS"], errors="coerce").fillna(0)
+    df = df[df["ISBN"] != ""]
+    return df.groupby(["sheet_chain", "ISBN"], as_index=False)[["OH_Store"]].sum()
 
 
 def load_pos_history() -> pd.DataFrame:
@@ -315,6 +342,7 @@ def build_report_sheet(
     hbg_inventory: pd.DataFrame,
     readerlink_freezes: pd.DataFrame,
     readerlink_inventory: pd.DataFrame,
+    store_inventory: pd.DataFrame,
     all_week_cols: list[str],
     report_week_cols: list[str],
     older_year_cols: list[str],
@@ -322,10 +350,26 @@ def build_report_sheet(
 ) -> pd.DataFrame:
     history = build_sheet_history(pos_history, sheet_name, all_week_cols)
     inventory_isbns = readerlink_inventory[
-        pd.to_numeric(readerlink_inventory["OH"], errors="coerce").fillna(0).ne(0)
+        pd.to_numeric(readerlink_inventory["OH_DC"], errors="coerce").fillna(0).ne(0)
         | pd.to_numeric(readerlink_inventory["OO"], errors="coerce").fillna(0).ne(0)
     ][["ISBN"]].drop_duplicates()
     history = pd.concat([history, inventory_isbns], ignore_index=True, sort=False)
+    if sheet_name == "Summary - All Accounts":
+        sheet_store_inventory = store_inventory.groupby("ISBN", as_index=False)[["OH_Store"]].sum()
+        history = pd.concat(
+            [history, sheet_store_inventory.loc[sheet_store_inventory["OH_Store"].ne(0), ["ISBN"]]],
+            ignore_index=True,
+            sort=False,
+        )
+    else:
+        sheet_store_inventory = store_inventory[store_inventory["sheet_chain"].eq(sheet_name)][
+            ["ISBN", "OH_Store"]
+        ]
+        history = pd.concat(
+            [history, sheet_store_inventory.loc[sheet_store_inventory["OH_Store"].ne(0), ["ISBN"]]],
+            ignore_index=True,
+            sort=False,
+        )
     history["ISBN"] = history["ISBN"].map(normalize_isbn)
     history = history[history["ISBN"] != ""].drop_duplicates(subset="ISBN", keep="first")
     for column in all_week_cols:
@@ -338,9 +382,11 @@ def build_report_sheet(
     report = report.merge(hbg_inventory, on="ISBN", how="left")
     report = report.merge(readerlink_freezes, on="ISBN", how="left")
     report = report.merge(readerlink_inventory, on="ISBN", how="left")
+    report = report.merge(sheet_store_inventory, on="ISBN", how="left")
 
-    for column in ["HBG_Avail", "RL Freezes", "OH", "OO", "Price"]:
+    for column in ["HBG_Avail", "RL Freezes", "OH_DC", "OH_Store", "OO", "Price"]:
         report[column] = pd.to_numeric(report.get(column, 0), errors="coerce").fillna(0)
+    report["OH_ALL"] = report["OH_DC"] + report["OH_Store"]
 
     for column in ["Pub", "pt", "ft", "pgrp", "Title", "PubDate"]:
         if column not in report.columns:
@@ -410,9 +456,9 @@ def build_report_sheet(
     report["YTD Val Var"] = report["TYTD Val"] - report["LYTD Val"]
     report["LY_FY"] = report[ly_fy_cols].sum(axis=1)
     report["LTD"] = report[all_week_cols].sum(axis=1)
-    report["OH_Avg"] = (report["OH"] / report["6Wk Avg"].where(report["6Wk Avg"].ne(0))).fillna(0).round(2)
+    report["OH_Avg"] = (report["OH_DC"] / report["6Wk Avg"].where(report["6Wk Avg"].ne(0))).fillna(0).round(2)
     report["OH+OO_Avg"] = (
-        (report["OH"] + report["OO"]) / report["6Wk Avg"].where(report["6Wk Avg"].ne(0))
+        (report["OH_DC"] + report["OO"]) / report["6Wk Avg"].where(report["6Wk Avg"].ne(0))
     ).fillna(0).round(2)
     if latest_label in report.columns and prior_label in report.columns:
         report["PW %"] = (
@@ -424,12 +470,16 @@ def build_report_sheet(
 
     if sheet_name == "Summary - All Accounts":
         active_mask = (
-            report["OH"].ne(0)
+            report["OH_DC"].ne(0)
+            | report["OH_Store"].ne(0)
             | report["OO"].ne(0)
             | report[active_sales_cols].sum(axis=1).ne(0)
         )
     else:
-        active_mask = report[account_activity_cols].sum(axis=1).ne(0)
+        active_mask = (
+            report["OH_Store"].ne(0)
+            | report[account_activity_cols].sum(axis=1).ne(0)
+        )
     report = report[active_mask].copy()
 
     base_cols = [
@@ -444,7 +494,9 @@ def build_report_sheet(
         "PubDate",
         "HBG_Avail",
         "RL Freezes",
-        "OH",
+        "OH_DC",
+        "OH_Store",
+        "OH_ALL",
         "OO",
         "OH_Avg",
         "OH+OO_Avg",
@@ -507,6 +559,7 @@ def print_report_inputs(pos_history: pd.DataFrame, latest_week: pd.Timestamp, ou
     print(f"Latest sales source file(s): {', '.join(latest_sales_sources) if latest_sales_sources else 'none found'}")
     print(f"Latest Readerlink inventory cache: {LATEST_INVENTORY_CACHE}")
     print(f"Latest Readerlink inventory source file(s): {inventory_source or 'none found'}")
+    print(f"Latest Readerlink store inventory source: {latest_store_inventory_file()}")
     print(f"HBG_Avail source: {HBG_INVENTORY_FILE}")
     print(f"RL Freezes source: {FROZEN_QUANTITIES_FILE}")
     print("Title metadata source: SQL ebs.item with On Sale Date fallback")
@@ -518,8 +571,6 @@ def write_workbook(sheets: dict[str, pd.DataFrame], output_path: Path, latest_we
     output_path.parent.mkdir(parents=True, exist_ok=True)
     header_row = 4
     data_start_row = header_row + 1
-    pre_week_cols = 26
-
     with pd.ExcelWriter(output_path, engine="xlsxwriter") as writer:
         workbook = writer.book
         week_header_fmt_a = workbook.add_format({"bold": True, "align": "center", "valign": "vcenter", "bg_color": "#D8E4BC", "border": 1})
@@ -574,6 +625,7 @@ def write_workbook(sheets: dict[str, pd.DataFrame], output_path: Path, latest_we
             ws.write(0, 8, "Total", total_label_fmt)
             ws.write(1, 8, "Subtotal", total_label_fmt)
             col_positions = {col_name: idx for idx, col_name in enumerate(df.columns)}
+            pre_week_cols = col_positions.get(latest_week.strftime("%m-%d-%Y"), len(df.columns))
             unit_cols = ["TYTD", "LYTD", "YTD Var"]
             value_cols = ["TYTD Val", "LYTD Val", "YTD Val Var"]
             if all(col in col_positions for col in unit_cols):
@@ -614,19 +666,19 @@ def write_workbook(sheets: dict[str, pd.DataFrame], output_path: Path, latest_we
                         fmt_total = total_num_fmt
 
                     if col_name == "OH_Avg":
-                        oh_total = _xl_cell(0, col_positions["OH"])
+                        oh_total = _xl_cell(0, col_positions["OH_DC"])
                         avg_total = _xl_cell(0, col_positions["6Wk Avg"])
-                        oh_subtotal = _xl_cell(1, col_positions["OH"])
+                        oh_subtotal = _xl_cell(1, col_positions["OH_DC"])
                         avg_subtotal = _xl_cell(1, col_positions["6Wk Avg"])
                         total_formula = f'=IFERROR({oh_total}/{avg_total},0)'
                         subtotal_formula = f'=IFERROR({oh_subtotal}/{avg_subtotal},0)'
                         total_6wk = pd.to_numeric(df["6Wk Avg"], errors="coerce").fillna(0).sum()
-                        value = 0 if total_6wk == 0 else float(pd.to_numeric(df["OH"], errors="coerce").fillna(0).sum() / total_6wk)
+                        value = 0 if total_6wk == 0 else float(pd.to_numeric(df["OH_DC"], errors="coerce").fillna(0).sum() / total_6wk)
                     elif col_name == "OH+OO_Avg":
-                        oh_total = _xl_cell(0, col_positions["OH"])
+                        oh_total = _xl_cell(0, col_positions["OH_DC"])
                         oo_total = _xl_cell(0, col_positions["OO"])
                         avg_total = _xl_cell(0, col_positions["6Wk Avg"])
-                        oh_subtotal = _xl_cell(1, col_positions["OH"])
+                        oh_subtotal = _xl_cell(1, col_positions["OH_DC"])
                         oo_subtotal = _xl_cell(1, col_positions["OO"])
                         avg_subtotal = _xl_cell(1, col_positions["6Wk Avg"])
                         total_formula = f'=IFERROR(({oh_total}+{oo_total})/{avg_total},0)'
@@ -637,7 +689,7 @@ def write_workbook(sheets: dict[str, pd.DataFrame], output_path: Path, latest_we
                             if total_6wk == 0
                             else float(
                                 (
-                                    pd.to_numeric(df["OH"], errors="coerce").fillna(0).sum()
+                                    pd.to_numeric(df["OH_DC"], errors="coerce").fillna(0).sum()
                                     + pd.to_numeric(df["OO"], errors="coerce").fillna(0).sum()
                                 )
                                 / total_6wk
@@ -675,7 +727,7 @@ def write_workbook(sheets: dict[str, pd.DataFrame], output_path: Path, latest_we
             ws.set_column(8, 8, 11)
             ws.set_column(9, 9, 11, plain_int_fmt)
             ws.set_column(10, last_col, 11, int_fmt)
-            ws.set_column(25, 25, 9, pct_fmt)
+            ws.set_column(col_positions["PW %"], col_positions["PW %"], 9, pct_fmt)
 
     print(f"Saved Readerlink rolling report: {output_path}")
 
@@ -711,7 +763,11 @@ def build_criteria_sheet(latest_week: pd.Timestamp) -> pd.DataFrame:
         ),
         (
             "Inventory source",
-            f"Readerlink OH and OO come from the latest Readerlink inventory cache built from {LATEST_INVENTORY_CACHE}. OH = RDS DC INVENTORY OH; OO = RDS OPEN PO QUANTITY.",
+            f"Readerlink OH_DC and OO come from the latest Readerlink inventory cache built from {LATEST_INVENTORY_CACHE}. OH_DC = RDS DC INVENTORY OH; OO = RDS OPEN PO QUANTITY.",
+        ),
+        (
+            "Store inventory source",
+            f"OH_Store comes from the latest Excel workbook in {STORE_INVENTORY_DIR}. It is grouped by MASTER CHAIN and EAN for account tabs, and across all master chains for Summary - All Accounts. OH_ALL = OH_DC + OH_Store.",
         ),
         (
             "HBG availability",
@@ -743,7 +799,7 @@ def build_criteria_sheet(latest_week: pd.Timestamp) -> pd.DataFrame:
         ),
         (
             "Inventory on tabs",
-            "Readerlink OH, OO, HBG_Avail, and RL Freezes are ISBN-level values and are repeated on account tabs because inventory is not provided at the Master Chain level.",
+            "Readerlink OH_DC, OO, HBG_Avail, and RL Freezes are ISBN-level values repeated on every account tab. OH_Store is specific to each Master Chain; the summary uses total store OH across all chains.",
         ),
         (
             "Displayed weekly history",
@@ -751,11 +807,11 @@ def build_criteria_sheet(latest_week: pd.Timestamp) -> pd.DataFrame:
         ),
         (
             "Row inclusion",
-            f"Summary rows are included when the ISBN is in EBS and has any OH, any OO, or any sales in the last {ACTIVE_ROW_YEARS} years. Account tabs include only ISBNs with account sales activity in the last 5 years. Cache data is retained even when rows are filtered from the report.",
+            f"Summary rows are included when the ISBN is in EBS and has any OH_DC, OH_Store, OO, or sales in the last {ACTIVE_ROW_YEARS} years. Account tabs include ISBNs with that account's OH_Store or sales activity in the last 5 years. Cache data is retained even when rows are filtered from the report.",
         ),
         (
             "Calculations",
-            "W52 is the latest 52 weeks. 6Wk Avg is the latest 6 weeks divided by 6. OH_Avg = OH / 6Wk Avg. OH+OO_Avg = (OH + OO) / 6Wk Avg. PW % = current week versus prior week.",
+            "W52 is the latest 52 weeks. 6Wk Avg is the latest 6 weeks divided by 6. Existing coverage calculations remain DC-based: OH_Avg = OH_DC / 6Wk Avg and OH+OO_Avg = (OH_DC + OO) / 6Wk Avg. PW % = current week versus prior week.",
         ),
         (
             "YTD logic",
@@ -791,6 +847,7 @@ def main() -> None:
     hbg_inventory = load_hbg_inventory()
     readerlink_freezes = load_readerlink_freezes()
     readerlink_inventory = load_readerlink_inventory()
+    store_inventory = load_store_inventory()
 
     sheets: dict[str, pd.DataFrame] = {}
     for sheet_name in ["Summary - All Accounts"] + TRACKED_CHAINS + ["All Other Accounts"]:
@@ -802,6 +859,7 @@ def main() -> None:
             hbg_inventory,
             readerlink_freezes,
             readerlink_inventory,
+            store_inventory,
             week_cols,
             display_week_cols,
             display_year_cols,

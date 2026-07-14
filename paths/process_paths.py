@@ -321,6 +321,15 @@ GEN_EDITORIAL_TASK_LOCATION = "Task Scheduler Library"
 GEN_EDITORIAL_SCHEDULE_DAYS = "MON"
 GEN_EDITORIAL_SCHEDULE_TIME = "09:30"
 GEN_EDITORIAL_SCHEDULE_DESCRIPTION = "Every Monday at 9:30 AM"
+EXPORT_REPORT_WORKBOOKS = (
+    Path(r"G:\SALES\2026 Sales Reports\Reports\Export\Export_DataDump.xlsx"),
+    Path(r"G:\SALES\2026 Sales Reports\Reports\Export\UK Detail Report_2025_2026.xlsx"),
+)
+EXPORT_REPORT_REFRESH_SCRIPT = repo_path("tools", "export_reports_refresh.py")
+EXPORT_REPORT_TASK_NAME = "Chronicle Weekly Export Reports Refresh"
+EXPORT_REPORT_SCHEDULE_DAY = "SUN"
+EXPORT_REPORT_SCHEDULE_TIME = "10:30"
+EXPORT_REPORT_SCHEDULE_DESCRIPTION = "Every Sunday at 10:30 AM"
 
 
 def amazon_sql_upload_output_file(for_date: datetime | None = None) -> Path:

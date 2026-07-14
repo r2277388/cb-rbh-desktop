@@ -827,7 +827,8 @@ def run_automation_processes_menu() -> None:
         print("    1. Title Lookup Refresh (weekly)")
         print("    2. Cross Gap Report (weekly)")
         print("    3. General Editorial Data Variations (weekly Monday)")
-        print("    4. Back to main menu")
+        print("    4. Export Reports Query & Pivot Refresh (weekly Sunday)")
+        print("    5. Back to main menu")
         print()
         try:
             subchoice = input("Choose an option: ").strip().lower()
@@ -855,7 +856,15 @@ def run_automation_processes_menu() -> None:
             input("\nPress Enter to return to Automation Processes...")
             continue
 
-        if subchoice in {"4", "b", "back", "return", "menu"}:
+        if subchoice == "4":
+            run_python_process(
+                "Export Reports Query & Pivot Refresh",
+                process_paths.repo_path("tools", "export_reports_automation.py"),
+                extra_args=["menu"],
+            )
+            continue
+
+        if subchoice in {"5", "b", "back", "return", "menu"}:
             return
 
         print("Invalid choice. Please select a valid option.")
