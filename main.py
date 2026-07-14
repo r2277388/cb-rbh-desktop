@@ -1427,6 +1427,7 @@ def run_sales_operational_reports_menu() -> None:
         print("    06. SSR Daily Summary")
         print("    07. General Editorial Data Variations")
         print("    08. Monthly Top Customers")
+        print("    09. Ingram Weekly Report")
         print()
         print("    99. Back to main menu")
         print()
@@ -1481,6 +1482,13 @@ def run_sales_operational_reports_menu() -> None:
             run_python_process(
                 "Monthly Top Customers",
                 process_paths.repo_path("Monthly_Top_Customers", "main.py"),
+            )
+            continue
+
+        if choice == "9":
+            run_python_process(
+                "Ingram Weekly Report",
+                process_paths.INGRAM_WEEKLY_REPORT_SCRIPT,
             )
             continue
 

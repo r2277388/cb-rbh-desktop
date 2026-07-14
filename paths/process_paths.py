@@ -286,6 +286,7 @@ FRONTLIST_FAIRE_ORDERS_SQL = repo_path(
     "FLTracking_Supercharged", "sql", "faire_orders.sql"
 )
 BN_ROLLING_REPORTS_SCRIPT = repo_path("bn_rolling_reports", "main.py")
+INGRAM_WEEKLY_REPORT_SCRIPT = repo_path("ingram_weekly_report", "main.py")
 BOOKSCAN_ROLLING_REPORTS_SCRIPT = repo_path("bookscan_rolling_reports", "main.py")
 EDELWEISS_ROLLING_REPORTS_SCRIPT = repo_path("edelweiss_rolling_reports", "main.py")
 AWBC_ROLLING_REPORTS_SCRIPT = repo_path("awbc_rolling_reports", "main.py")
