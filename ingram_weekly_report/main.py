@@ -115,13 +115,20 @@ def load_top_titles() -> pd.DataFrame:
 
 
 def load_ingram_inventory(path: Path) -> pd.DataFrame:
-    usecols = ["EAN"] + INVENTORY_COLUMNS
+    usecols = ["EAN", "Title"] + INVENTORY_COLUMNS
     df = pd.read_excel(path, sheet_name=0, usecols=usecols, dtype={"EAN": str})
     df["ISBN"] = df["EAN"].map(normalize_isbn)
     for column in INVENTORY_COLUMNS:
         df[column] = pd.to_numeric(df[column], errors="coerce").fillna(0)
     df = df[df["ISBN"].ne("")]
-    return df.groupby("ISBN", as_index=False)[INVENTORY_COLUMNS].sum()
+    titles = (
+        df[["ISBN", "Title"]]
+        .dropna(subset=["Title"])
+        .drop_duplicates("ISBN")
+        .rename(columns={"Title": "Ingram Title"})
+    )
+    totals = df.groupby("ISBN", as_index=False)[INVENTORY_COLUMNS].sum()
+    return totals.merge(titles, on="ISBN", how="left")
 
 
 def load_hachette_inventory() -> pd.DataFrame:
@@ -210,7 +217,19 @@ def build_full_list(metadata, sales_cache, hachette, ingram, top_titles) -> pd.D
     for column in numeric:
         report[column] = pd.to_numeric(report.get(column, 0), errors="coerce").fillna(0)
     report["Total Ingram OH & OO"] = report["On Hand Total"] + report["On Order Total"]
-    report["Suggested Buy"] = report["Avg 4wk Sales"] * 3 + report["Customer Backorder Total"] - report["Total Ingram OH & OO"]
+    report["Total Demand last 4 weeks"] = report[
+        [
+            "Previous Week Demand Total",
+            "Two Weeks Ago Demand Total",
+            "Three Weeks Ago Demand Total",
+            "Four Weeks Ago Demand Total",
+        ]
+    ].sum(axis=1)
+    report["Suggested Buy"] = (
+        report["Total Demand last 4 weeks"] * 3
+        + report["Customer Backorder Total"]
+        - report["Total Ingram OH & OO"]
+    ).clip(lower=0)
     report["Buyer"] = report.apply(buyer, axis=1)
     report["Top 1500/FL/NYP"] = report["cat"].fillna("Other")
     rename = {
@@ -231,13 +250,28 @@ def build_full_list(metadata, sales_cache, hachette, ingram, top_titles) -> pd.D
     )
 
 
-def build_inventory_tab(ingram: pd.DataFrame) -> pd.DataFrame:
-    result = ingram.rename(columns={"ISBN": "ISBN"}).copy()
+def build_inventory_tab(ingram: pd.DataFrame, metadata: pd.DataFrame) -> pd.DataFrame:
+    ingram = ingram[
+        ingram[INVENTORY_COLUMNS]
+        .apply(pd.to_numeric, errors="coerce")
+        .fillna(0)
+        .ne(0)
+        .any(axis=1)
+    ].copy()
+    result = ingram.merge(
+        metadata[["ISBN", "Title", "Pub"]]
+        .drop_duplicates("ISBN")
+        .rename(columns={"Title": "EBS Title"}),
+        on="ISBN",
+        how="left",
+    )
+    result["Title"] = result["EBS Title"].fillna(result["Ingram Title"]).fillna("")
+    result["Pub"] = result["Pub"].fillna("")
     result["Total Demand last 4 weeks"] = result[
         ["Previous Week Demand Total", "Two Weeks Ago Demand Total", "Three Weeks Ago Demand Total", "Four Weeks Ago Demand Total"]
     ].sum(axis=1)
     return (
-        result[["ISBN"] + INVENTORY_COLUMNS + ["Total Demand last 4 weeks"]]
+        result[["ISBN", "Title", "Pub"] + INVENTORY_COLUMNS + ["Total Demand last 4 weeks"]]
         .drop_duplicates(subset="ISBN", keep="first")
         .sort_values("On Hand Total", ascending=False)
         .reset_index(drop=True)
@@ -248,7 +282,7 @@ def write_report(full_list: pd.DataFrame, inventory: pd.DataFrame, output: Path,
     output.parent.mkdir(parents=True, exist_ok=True)
     with pd.ExcelWriter(output, engine="xlsxwriter", datetime_format="mm/dd/yyyy") as writer:
         full_header_row = 3
-        inventory_header_row = 3
+        inventory_header_row = 4
         full_list.to_excel(writer, sheet_name="Full List", startrow=full_header_row, index=False)
         inventory.to_excel(writer, sheet_name="Ingram Inventory", startrow=inventory_header_row, index=False)
         workbook = writer.book
@@ -266,6 +300,13 @@ def write_report(full_list: pd.DataFrame, inventory: pd.DataFrame, output: Path,
         accounting_total = workbook.add_format({
             "bold": True, "bg_color": "#E4DFEC", "border": 1,
             "num_format": '_(* #,##0_);_(* (#,##0);_(* "-"_);_(@_)',
+        })
+        inventory_total = workbook.add_format({
+            "bold": True, "bg_color": "#DCE6F1",
+            "num_format": '_(* #,##0_);_(* (#,##0);_(* "-"_);_(@_)',
+        })
+        inventory_total_label = workbook.add_format({
+            "bold": True, "bg_color": "#DCE6F1",
         })
         total_label = workbook.add_format({
             "bold": True, "bg_color": "#CCC0DA", "border": 1,
@@ -286,9 +327,28 @@ def write_report(full_list: pd.DataFrame, inventory: pd.DataFrame, output: Path,
             ws.autofilter(header_row, 0, header_row + len(df), len(df.columns) - 1)
             if name == "Ingram Inventory":
                 for col in range(len(df.columns)):
-                    ws.set_column(col, col, 16.71, isbn_format if col == 0 else accounting)
+                    cell_format = accounting if col >= 3 else (isbn_format if col == 0 else None)
+                    ws.set_column(col, col, 16.71, cell_format)
+                ws.write(1, 2, "Totals", inventory_total_label)
+                ws.write(2, 2, "Subtotals", inventory_total_label)
+                first_data_row = inventory_header_row + 1
+                last_data_row = inventory_header_row + len(df)
+                from xlsxwriter.utility import xl_rowcol_to_cell
+                for col in range(3, len(df.columns)):
+                    first_cell = xl_rowcol_to_cell(first_data_row, col)
+                    last_cell = xl_rowcol_to_cell(last_data_row, col)
+                    total_value = float(pd.to_numeric(df.iloc[:, col], errors="coerce").fillna(0).sum())
+                    ws.write_formula(
+                        1, col, f"=SUM({first_cell}:{last_cell})",
+                        inventory_total, total_value,
+                    )
+                    ws.write_formula(
+                        2, col, f"=SUBTOTAL(9,{first_cell}:{last_cell})",
+                        inventory_total, total_value,
+                    )
 
         full_ws = writer.sheets["Full List"]
+        full_ws.freeze_panes(4, 8)
         full_ws.merge_range(
             0, 0, 0, 3,
             f"Chronicle Ingram Full List {start:%m/%d/%y} to {end:%m/%d/%y}",
@@ -359,8 +419,9 @@ def main() -> int:
     output = args.output or OUTPUT_DIR / f"Daily Report - {end.year} Flash Ingram ({pd.Timestamp.today():%m%d%y}).xlsx"
     cache = update_sales_cache(sales_path)
     ingram = load_ingram_inventory(ingram_path)
-    full = build_full_list(load_metadata(), cache, load_hachette_inventory(), ingram, load_top_titles())
-    write_report(full, build_inventory_tab(ingram), output, start, end)
+    metadata = load_metadata()
+    full = build_full_list(metadata, cache, load_hachette_inventory(), ingram, load_top_titles())
+    write_report(full, build_inventory_tab(ingram, metadata), output, start, end)
     print(f"Saved Ingram weekly report: {output}")
     return 0
 
