@@ -61,11 +61,16 @@ def get_farewell_message():
 
 def display_options():
     options = [
-        "01. Amazon",
-        "02. Retailer Rolling Reports",
-        "03. Sales / Operational Reports",
-        "04. Data & Automation Tools",
-        "05. Admin / Utilities",
+        "01. Daily Reporting",
+        "02. Weekly Reporting",
+        "03. MonthEnd Reporting",
+        "04. Automated Processes",
+        "05. Amazon Weekly Reporting",
+        "06. Retailer Rolling/Flash Reports",
+        "07. Adhoc Reporting",
+        "08. Data Checks",
+        "09. Admin / Utilities",
+        "",
         "99. Exit",
     ]
     print("\nWhat would you like to run?")
@@ -76,11 +81,15 @@ def display_options():
 
 def display_info(choice):
     info = {
-        "1": "Amazon: Opens Amazon PO, PreOrders, Customer Orders, and AMS monthly campaign workflows.",
-        "2": "Retailer Rolling Reports: Opens Amazon, Barnes & Noble, Bookscan, Readerlink, Target NOC, and UK rolling-report workflows.",
-        "3": "Sales / Operational Reports: Opens Cross Gap, Frontlist, General Editorial variations, Hachette, Monthend, Reprint Indicator, and SSR workflows.",
-        "4": "Data & Automation Tools: Opens Automation Processes, Check Table Updates, Inventory Obsolescence Manager, Power BI Reports, and XGBoost Model.",
-        "5": "Admin / Utilities: Opens Desk Procedures, requirements installation, and the main venv shell.",
+        "1": "Daily Reporting: Opens the SSR Daily Summary workflows.",
+        "2": "Weekly Reporting: Opens Reprint Indicator Report Updater and Frontlist Supercharged Data.",
+        "3": "MonthEnd Reporting: Opens Barnes & Noble Monthly Coop, Monthly Top Customers, and Inventory Obsolescence Manager.",
+        "4": "Automated Processes: Opens Title Lookup, Cross Gap, General Editorial, and Export Reports automation workflows.",
+        "5": "Amazon Weekly Reporting: Opens Amazon PO, PreOrders, Customer Orders, rolling reports, and AMS workflows.",
+        "6": "Retailer Rolling/Flash Reports: Opens retailer rolling and flash-report workflows.",
+        "7": "Adhoc Reporting: Opens XGBoost Model and Hachette Orders - Shipping Estimates.",
+        "8": "Data Checks: Opens Check Table Updates and Power BI Reports.",
+        "9": "Admin / Utilities: Opens Desk Procedures, requirements installation, and the main venv shell.",
         "101": f"""Amazon (1) PO Archive Manager: Copies the selected Amazon Vendor Central PO CSV to:
         {process_paths.AMAZON_PO_CURRENT_FILE}
         then prints row and cost-column totals. After reviewing the totals, you can choose whether to save an
@@ -717,7 +726,8 @@ def run_title_lookup_refresh_menu() -> None:
         print("    2. Enable or Update Weekly Automation")
         print("    3. Disable Weekly Automation")
         print("    4. Show Automation Details")
-        print("    5. Return to main menu")
+        print()
+        print("    99. Back to main menu")
         print()
         choice = input("Choose an option: ").strip().lower()
 
@@ -750,7 +760,7 @@ def run_title_lookup_refresh_menu() -> None:
             input("\nPress Enter to return to the Title Lookup menu...")
             continue
 
-        if choice in {"5", "b", "back", "return", "menu"}:
+        if choice in {"99", "b", "back", "return", "menu"}:
             return
 
         print("Invalid choice. Please select a valid option.")
@@ -781,7 +791,8 @@ def run_cross_gap_automation_menu() -> None:
         print("    2. Enable or Update Weekly Automation")
         print("    3. Disable Weekly Automation")
         print("    4. Show Automation Details")
-        print("    5. Return to Automation Processes")
+        print()
+        print("    99. Back to main menu")
         print()
         choice = input("Choose an option: ").strip().lower()
 
@@ -814,7 +825,7 @@ def run_cross_gap_automation_menu() -> None:
             input("\nPress Enter to return to the Cross Gap automation menu...")
             continue
 
-        if choice in {"5", "b", "back", "return", "menu"}:
+        if choice in {"99", "b", "back", "return", "menu"}:
             return
 
         print("Invalid choice. Please select a valid option.")
@@ -822,41 +833,35 @@ def run_cross_gap_automation_menu() -> None:
 
 def run_automation_processes_menu() -> None:
     while True:
-        print("\nAutomation Processes")
+        print("\nAutomated Processes")
         print()
-        print("    1. Title Lookup Refresh (weekly)")
-        print("    2. Cross Gap Report (weekly)")
-        print("    3. General Editorial Data Variations (weekly Monday)")
-        print("    4. Export Reports Query & Pivot Refresh (weekly Sunday)")
-        print("    5. Back to main menu")
+        print("    01. Cross Gap")
+        print("    02. General Editorial Data Variations")
+        print("    03. Export Reports Query & Pivot Refresh")
+        print("    04. Title Lookup Refresh")
+        print()
+        print("    99. Back to main menu")
         print()
         try:
-            subchoice = input("Choose an option: ").strip().lower()
+            subchoice = normalize_menu_choice(input("Choose an option: "))
         except KeyboardInterrupt:
             print("\nReturning to main menu.")
             return
 
         if subchoice == "1":
-            try:
-                run_title_lookup_refresh_menu()
-            except FileNotFoundError as e:
-                print(f"Unable to locate the Title Lookup workbook: {e}")
-            continue
-
-        if subchoice == "2":
             run_cross_gap_automation_menu()
             continue
 
-        if subchoice == "3":
+        if subchoice == "2":
             run_python_process(
                 "General Editorial Data Variations Automation Status",
                 process_paths.repo_path("tools", "gen_editorial_automation.py"),
                 extra_args=["status"],
             )
-            input("\nPress Enter to return to Automation Processes...")
+            input("\nPress Enter to return to Automated Processes...")
             continue
 
-        if subchoice == "4":
+        if subchoice == "3":
             run_python_process(
                 "Export Reports Query & Pivot Refresh",
                 process_paths.repo_path("tools", "export_reports_automation.py"),
@@ -864,7 +869,14 @@ def run_automation_processes_menu() -> None:
             )
             continue
 
-        if subchoice in {"5", "b", "back", "return", "menu"}:
+        if subchoice == "4":
+            try:
+                run_title_lookup_refresh_menu()
+            except FileNotFoundError as e:
+                print(f"Unable to locate the Title Lookup workbook: {e}")
+            continue
+
+        if subchoice in {"99", "b", "back", "return", "menu"}:
             return
 
         print("Invalid choice. Please select a valid option.")
@@ -1130,22 +1142,38 @@ def confirm_bn_rolling_reports_files() -> Path | None:
 
 def run_program(choice):
     if choice == "1":
-        run_amazon_menu()
+        run_ssr_daily_summary_menu()
         return
 
     if choice == "2":
-        run_retailer_rolling_reports_menu()
+        run_weekly_reporting_menu()
         return
 
     if choice == "3":
-        run_sales_operational_reports_menu()
+        run_monthend_reporting_menu()
         return
 
     if choice == "4":
-        run_data_automation_tools_menu()
+        run_automation_processes_menu()
         return
 
     if choice == "5":
+        run_amazon_menu()
+        return
+
+    if choice == "6":
+        run_retailer_rolling_reports_menu()
+        return
+
+    if choice == "7":
+        run_adhoc_reporting_menu()
+        return
+
+    if choice == "8":
+        run_data_automation_tools_menu()
+        return
+
+    if choice == "9":
         run_admin_utilities_menu()
         return
 
@@ -1222,10 +1250,12 @@ def run_readerlink_rolling_reports() -> None:
         print("    2. Show totals for the last 4 cached Readerlink weeks")
         print("    3. Create the Readerlink Rolling Report")
         print("    4. Retrieve Data Source Instructions")
-        print("    0. Back")
+        print()
+        print("    99. Back to main menu")
+        print()
         choice = input("Choose an action: ").strip().lower()
 
-        if choice in {"0", "b", "back"}:
+        if choice in {"99", "b", "back", "return", "menu"}:
             return
         if choice == "1":
             run_python_process(
@@ -1288,9 +1318,91 @@ def open_main_venv_shell() -> None:
         print(f"Unable to open the main venv shell: {e}")
 
 
+def run_monthend_reporting_menu() -> None:
+    while True:
+        print("\nMonthEnd Reporting")
+        print()
+        print("    01. Barnes & Noble Monthly Coop (Ailing)")
+        print("    02. Monthly Top Customers")
+        print("    03. Inventory Obsolescence Manager")
+        print()
+        print("    99. Back to main menu")
+        print()
+        try:
+            choice = normalize_menu_choice(input("Choose an option: "))
+        except KeyboardInterrupt:
+            print("\nReturning to main menu.")
+            return
+
+        if choice == "1":
+            run_python_process(
+                "Barnes & Noble Monthly Coop",
+                process_paths.repo_path("monthend", "bn_monthly_coop.py"),
+            )
+            continue
+
+        if choice == "2":
+            run_python_process(
+                "Monthly Top Customers",
+                process_paths.repo_path("Monthly_Top_Customers", "main.py"),
+            )
+            continue
+
+        if choice == "3":
+            run_inventory_obsolescence_manager_menu()
+            continue
+
+        if choice in {"99", "back", "b", "return", "menu"}:
+            return
+
+        print("Invalid choice. Please select a valid option.")
+
+
+def run_weekly_reporting_menu() -> None:
+    while True:
+        print("\nWeekly Reporting")
+        print()
+        print("    01. Reprint Indicator Report Updater")
+        print("    02. Frontlist Supercharged Data")
+        print()
+        print("    99. Back to main menu")
+        print()
+        try:
+            choice = normalize_menu_choice(input("Choose an option: "))
+        except KeyboardInterrupt:
+            print("\nReturning to main menu.")
+            return
+
+        if choice == "1":
+            run_python_process(
+                "Reprint Indicator Report Updater",
+                process_paths.REPRINT_INDICATOR_AUTOMATION_SCRIPT,
+                python_executable=get_excel_automation_python(),
+            )
+            continue
+
+        if choice == "2":
+            try:
+                if not confirm_frontlist_supercharged_files():
+                    continue
+            except FileNotFoundError as e:
+                print(f"Unable to locate the Frontlist Supercharged source files: {e}")
+                continue
+            run_python_process(
+                "Frontlist Supercharged Data",
+                process_paths.repo_path("FLTracking_Supercharged", "main.py"),
+            )
+            continue
+
+        if choice in {"99", "back", "b", "return", "menu"}:
+            return
+
+        print("Invalid choice. Please select a valid option.")
+
+
 def run_retailer_rolling_reports_menu() -> None:
     while True:
-        print("\nRetailer Rolling Reports")
+        print("\nRetailer Rolling/Flash Reports")
         print()
         print("Amazon Rolling Reports (Weekly Process)")
         print("    01. Create SQL Sellthrough Upload (XLSX) (step 1)")
@@ -1300,14 +1412,15 @@ def run_retailer_rolling_reports_menu() -> None:
         print("    03. Add new Monthly file to Cache (monthly step 1)")
         print("    04. Run Monthly Rolling Report (monthly step 2)")
         print()
-        print("Other Retailer Rolling Reports")
+        print("Other Retailer Rolling/Flash Reports")
         print("    05. Abrams & Chronicle UK Rolling Reports")
         print("    06. AWBC Rolling Reports")
         print("    07. Barnes & Noble Rolling Reports")
         print("    08. Bookscan Rolling Reports")
         print("    09. Edelweiss Rolling Reports")
-        print("    10. Target NOC Rolling Reports")
+        print("    10. Ingram Weekly Report")
         print("    11. Readerlink Rolling Reports")
+        print("    12. Target NOC Rolling Reports")
         print()
         print("    98. Retrieve Data Source Instructions")
         print()
@@ -1403,11 +1516,21 @@ def run_retailer_rolling_reports_menu() -> None:
             continue
 
         if choice == "10":
-            run_python_process("Target NOC Rolling Reports", process_paths.repo_path("target_rolling_report", "main.py"))
+            run_python_process(
+                "Ingram Weekly Report",
+                process_paths.INGRAM_WEEKLY_REPORT_SCRIPT,
+            )
             continue
 
         if choice == "11":
             run_readerlink_rolling_reports()
+            continue
+
+        if choice == "12":
+            run_python_process(
+                "Target NOC Rolling Reports",
+                process_paths.repo_path("target_rolling_report", "main.py"),
+            )
             continue
         if choice in {"99", "back", "b", "return", "menu"}:
             return
@@ -1415,19 +1538,12 @@ def run_retailer_rolling_reports_menu() -> None:
         print("Invalid choice. Please select a valid option.")
 
 
-def run_sales_operational_reports_menu() -> None:
+def run_adhoc_reporting_menu() -> None:
     while True:
-        print("\nSales / Operational Reports")
+        print("\nAdhoc Reporting")
         print()
-        print("    01. Cross Gap")
-        print("    02. Frontlist Supercharged Data")
-        print("    03. Hachette Orders - Shipping Estimates")
-        print("    04. Monthend Reports")
-        print("    05. Reprint Indicator Report Updater")
-        print("    06. SSR Daily Summary")
-        print("    07. General Editorial Data Variations")
-        print("    08. Monthly Top Customers")
-        print("    09. Ingram Weekly Report")
+        print("    01. XGBoost Model")
+        print("    02. Hachette Orders - Shipping Estimates")
         print()
         print("    99. Back to main menu")
         print()
@@ -1438,57 +1554,16 @@ def run_sales_operational_reports_menu() -> None:
             return
 
         if choice == "1":
-            run_cross_gap_menu()
+            run_python_process(
+                "XGBoost Model",
+                process_paths.repo_path("xgboost_model", "main.py"),
+            )
             continue
 
         if choice == "2":
-            try:
-                if not confirm_frontlist_supercharged_files():
-                    continue
-            except FileNotFoundError as e:
-                print(f"Unable to locate the Frontlist Supercharged source files: {e}")
-                continue
-            run_python_process("Frontlist Supercharged Data", process_paths.repo_path("FLTracking_Supercharged", "main.py"))
-            continue
-
-        if choice == "3":
-            run_python_process("Hachette Orders - Shipping Estimates", process_paths.repo_path("hachette_orders", "main.py"))
-            continue
-
-        if choice == "4":
-            run_python_process("Monthend Reports", process_paths.repo_path("monthend", "main.py"))
-            continue
-
-        if choice == "5":
             run_python_process(
-                "Reprint Indicator Report Updater",
-                process_paths.REPRINT_INDICATOR_AUTOMATION_SCRIPT,
-                python_executable=get_excel_automation_python(),
-            )
-            continue
-
-        if choice == "6":
-            run_ssr_daily_summary_menu()
-            continue
-
-        if choice == "7":
-            run_python_process(
-                "General Editorial Data Variations",
-                process_paths.GEN_EDITORIAL_VARIATIONS_SCRIPT,
-            )
-            continue
-
-        if choice == "8":
-            run_python_process(
-                "Monthly Top Customers",
-                process_paths.repo_path("Monthly_Top_Customers", "main.py"),
-            )
-            continue
-
-        if choice == "9":
-            run_python_process(
-                "Ingram Weekly Report",
-                process_paths.INGRAM_WEEKLY_REPORT_SCRIPT,
+                "Hachette Orders - Shipping Estimates",
+                process_paths.repo_path("hachette_orders", "main.py"),
             )
             continue
 
@@ -1500,13 +1575,10 @@ def run_sales_operational_reports_menu() -> None:
 
 def run_data_automation_tools_menu() -> None:
     while True:
-        print("\nData & Automation Tools")
+        print("\nData Checks")
         print()
-        print("    01. Automation Processes")
-        print("    02. Check Table Updates")
-        print("    03. Inventory Obsolescence Manager")
-        print("    04. Power BI Reports")
-        print("    05. XGBoost Model")
+        print("    01. Check Table Updates")
+        print("    02. Power BI Reports")
         print()
         print("    99. Back to main menu")
         print()
@@ -1517,23 +1589,11 @@ def run_data_automation_tools_menu() -> None:
             return
 
         if choice == "1":
-            run_automation_processes_menu()
-            continue
-
-        if choice == "2":
             run_check_table_updates_menu()
             continue
 
-        if choice == "3":
-            run_inventory_obsolescence_manager_menu()
-            continue
-
-        if choice == "4":
+        if choice == "2":
             run_python_process("Power BI Reports", process_paths.POWER_BI_REPORTS_SCRIPT)
-            continue
-
-        if choice == "5":
-            run_python_process("XGBoost Model", process_paths.repo_path("xgboost_model", "main.py"))
             continue
 
         if choice in {"99", "back", "b", "return", "menu"}:
@@ -1549,7 +1609,7 @@ def run_inventory_obsolescence_manager_menu() -> None:
         print("    01. Consolidate Inventory Manager")
         print("    02. HBG vs Oracle Inventory Comparison")
         print()
-        print("    99. Back to previous menu")
+        print("    99. Back to main menu")
         print()
         try:
             choice = normalize_menu_choice(input("Choose an option: "))
@@ -1613,7 +1673,7 @@ def run_admin_utilities_menu() -> None:
 
 def run_amazon_menu():
     while True:
-        print("\nAmazon")
+        print("\nAmazon Weekly Reporting")
         print()
         print("Purchase Order Report")
         print("    01. PO Archive Manager")
@@ -1702,7 +1762,8 @@ def run_amazon_rolling_reports_menu():
         print("Monthly Process")
         print("    6. Add new Monthly file to Cache")
         print("    7. Run Monthly Rolling Report")
-        print("    8. Back to main menu")
+        print()
+        print("    99. Back to main menu")
         print()
         try:
             subchoice = input("Choose an option: ").strip().lower()
@@ -1848,7 +1909,7 @@ def run_amazon_rolling_reports_menu():
                 print("An error occurred while running amazon_rolling_reports/monthly_rolling_reports.py.")
             continue
 
-        if subchoice in ["9", "back", "b", "exit", "quit", "q"]:
+        if subchoice in ["99", "back", "b", "exit", "quit", "q"]:
             return
 
         print("Invalid choice. Please select a valid option.")
@@ -1878,7 +1939,8 @@ def run_check_rolling_report_tables_menu() -> None:
         print("    3. Barnes & Noble Rolling SQL")
         print("    4. Edelweiss Rolling SQL")
         print("    5. AWBC Rolling SQL")
-        print("    9. Back to Check Table Updates")
+        print()
+        print("    99. Back to main menu")
         print()
         try:
             subchoice = input("Choose an option: ").strip().lower()
@@ -1897,7 +1959,7 @@ def run_check_rolling_report_tables_menu() -> None:
             run_table_check(rolling_choices[subchoice])
             continue
 
-        if subchoice in ["9", "back", "b", "exit", "quit", "q"]:
+        if subchoice in ["99", "back", "b", "exit", "quit", "q"]:
             return
 
         print("Invalid choice. Please select a valid option.")
@@ -1912,7 +1974,8 @@ def run_check_table_updates_menu():
         print("    3. Ebs.Sales Prior 5 Days")
         print("    4. Check Rolling Report Tables")
         print("    5. Freight Costs")
-        print("    9. Back to main menu")
+        print()
+        print("    99. Back to main menu")
         print()
         try:
             subchoice = input("Choose an option: ").strip().lower()
@@ -1932,7 +1995,7 @@ def run_check_table_updates_menu():
             run_table_check("7")
             continue
 
-        if subchoice in ["9", "back", "b", "exit", "quit", "q"]:
+        if subchoice in ["99", "back", "b", "exit", "quit", "q"]:
             return
 
         print("Invalid choice. Please select a valid option.")
@@ -1946,7 +2009,8 @@ def run_ssr_daily_summary_menu():
         print("    2. Run SSR Aggregate Totals")
         print("    3. Run SSR Visualization")
         print("    4. Ebs.Sales Prior 5 Days")
-        print("    5. Back to main menu")
+        print()
+        print("    99. Back to main menu")
         print()
         try:
             subchoice = input("Choose an option: ").strip().lower()
@@ -2005,7 +2069,7 @@ def run_ssr_daily_summary_menu():
                 print("An error occurred while running ssr_daily_summary/ssr_visualizations.py.")
             continue
 
-        if subchoice in ["5", "back", "b", "exit", "quit", "q"]:
+        if subchoice in ["99", "back", "b", "exit", "quit", "q"]:
             return
 
         print("Invalid choice. Please select a valid option.")

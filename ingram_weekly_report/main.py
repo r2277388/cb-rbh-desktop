@@ -185,15 +185,15 @@ def buyer(row: pd.Series) -> str:
     pub = str(row.get("Pub", "")).strip().lower()
     pt = str(row.get("PT", "")).strip().lower()
     if pub == "chronicle":
-        return "Renee" if pt == "ft" else "Diana" if pt == "bk" else "-"
+        return "Renee" if pt == "ft" else "Tyler" if pt == "bk" else "-"
     if pub == "galison":
         return "Renee"
     if pub in {"sierra club", "hardie grant", "hardie grant publishing", "laurence king", "princeton", "creative company", "tourbillon", "levine querido"}:
-        return "Diana" if pub != "sierra club" else "Renee"
+        return "Tyler" if pub != "sierra club" else "Renee"
     return "-"
 
 
-def build_full_list(metadata, sales_cache, hachette, ingram, top_titles) -> pd.DataFrame:
+def build_full_list(metadata, sales_cache, hachette, ingram) -> pd.DataFrame:
     periods = sales_cache[["period_start", "period_end"]].drop_duplicates().sort_values("period_end", ascending=False).head(4)
     report = metadata.copy()
     sales_columns = []
@@ -212,7 +212,7 @@ def build_full_list(metadata, sales_cache, hachette, ingram, top_titles) -> pd.D
     report["QTY Variance"] = report[sales_columns[0]] - report[sales_columns[1]]
     report["Avg 4wk Sales"] = report[sales_columns].sum(axis=1) / 4
     report = report[report[sales_columns].sum(axis=1).gt(0)].copy()
-    report = report.merge(hachette, on="ISBN", how="left").merge(ingram, on="ISBN", how="left").merge(top_titles, on="ISBN", how="left")
+    report = report.merge(hachette, on="ISBN", how="left").merge(ingram, on="ISBN", how="left")
     numeric = ["Ctn Qty", "Frozen", "Available To Sell", "Reprint Quantity"] + INVENTORY_COLUMNS
     for column in numeric:
         report[column] = pd.to_numeric(report.get(column, 0), errors="coerce").fillna(0)
@@ -231,7 +231,6 @@ def build_full_list(metadata, sales_cache, hachette, ingram, top_titles) -> pd.D
         - report["Total Ingram OH & OO"]
     ).clip(lower=0)
     report["Buyer"] = report.apply(buyer, axis=1)
-    report["Top 1500/FL/NYP"] = report["cat"].fillna("Other")
     rename = {
         "Ctn Qty": "Carton Qty", "Frozen": "Total Freezes",
         "Available To Sell": "Hachette Available", "On Hand Total": "Ingram On Hand",
@@ -241,7 +240,7 @@ def build_full_list(metadata, sales_cache, hachette, ingram, top_titles) -> pd.D
     columns = ["Pub", "PT", "FT", "PGRP", "ISBN", "Title", "Price", "PubDate", "QTY Variance"] + sales_columns + [
         "Avg 4wk Sales", "Carton Qty", "Total Freezes", "Hachette Available", "Reprint Quantity",
         "Reprint Due Date", "Ingram On Hand", "Ingram On Order", "Total Ingram OH & OO",
-        "Total Ingram's Customer BO", "Suggested Buy", "Buyer", "Top 1500/FL/NYP",
+        "Total Ingram's Customer BO", "Suggested Buy", "Buyer",
     ]
     return (
         report[columns]
@@ -361,7 +360,7 @@ def write_report(full_list: pd.DataFrame, inventory: pd.DataFrame, output: Path,
         full_ws.set_column(full_list.columns.get_loc("PubDate"), full_list.columns.get_loc("PubDate"), 11, date_format)
         non_numeric = {
             "Pub", "PT", "FT", "PGRP", "ISBN", "Title", "Price", "PubDate",
-            "Reprint Due Date", "Buyer", "Top 1500/FL/NYP",
+            "Reprint Due Date", "Buyer",
         }
         numeric_columns = [column for column in full_list.columns if column not in non_numeric]
         for column in numeric_columns:
@@ -420,7 +419,7 @@ def main() -> int:
     cache = update_sales_cache(sales_path)
     ingram = load_ingram_inventory(ingram_path)
     metadata = load_metadata()
-    full = build_full_list(metadata, cache, load_hachette_inventory(), ingram, load_top_titles())
+    full = build_full_list(metadata, cache, load_hachette_inventory(), ingram)
     write_report(full, build_inventory_tab(ingram, metadata), output, start, end)
     print(f"Saved Ingram weekly report: {output}")
     return 0
