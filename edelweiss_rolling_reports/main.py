@@ -22,6 +22,7 @@ try:
         print_result_summary,
         print_week_check,
         refresh_caches_only,
+        validate_source_workbook,
     )
 except ImportError:
     from rolling_customer_sales import (
@@ -35,6 +36,7 @@ except ImportError:
         print_result_summary,
         print_week_check,
         refresh_caches_only,
+        validate_source_workbook,
     )
 
 
@@ -80,6 +82,14 @@ def confirm_build_from_week_status() -> bool:
     return answer not in {"n", "no"}
 
 
+def validate_source_for_action() -> None:
+    source = validate_source_workbook()
+    print(
+        f"Validated Edelweiss source: {source.workbook.name} "
+        f"through {source.expected_week:%m/%d/%Y}"
+    )
+
+
 def run_menu(refresh_lookback_weeks: int = REFRESH_LOOKBACK_WEEKS) -> None:
     while True:
         print("\nEdelweiss Rolling Reports")
@@ -98,12 +108,14 @@ def run_menu(refresh_lookback_weeks: int = REFRESH_LOOKBACK_WEEKS) -> None:
             continue
 
         if choice == "2":
+            validate_source_for_action()
             print("\nRefreshing Edelweiss caches...")
             result = refresh_caches_only(refresh_lookback_weeks=refresh_lookback_weeks)
             print_cache_refresh_summary(result)
             continue
 
         if choice == "3":
+            validate_source_for_action()
             if not confirm_build_from_week_status():
                 print("Edelweiss rolling report cancelled.")
                 continue
@@ -116,6 +128,7 @@ def run_menu(refresh_lookback_weeks: int = REFRESH_LOOKBACK_WEEKS) -> None:
             continue
 
         if choice == "4":
+            validate_source_for_action()
             if not confirm_build_from_week_status():
                 print("Edelweiss rolling report cancelled.")
                 continue

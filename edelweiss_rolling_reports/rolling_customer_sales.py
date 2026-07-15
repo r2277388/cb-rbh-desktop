@@ -21,6 +21,7 @@ from shared.pg_grouping import apply_pg_grouping
 try:
     from .rolling_paths import (
         edelweiss_rolling_folder,
+        edelweiss_source_folder,
         local_review_dir,
         manual_missing_weeks_file,
         metadata_cache_file,
@@ -39,6 +40,7 @@ try:
 except ImportError:
     from rolling_paths import (
         edelweiss_rolling_folder,
+        edelweiss_source_folder,
         local_review_dir,
         manual_missing_weeks_file,
         metadata_cache_file,
@@ -96,6 +98,14 @@ class DeltaWeekStatus:
     missing_weeks: list[pd.Timestamp]
 
 
+@dataclass
+class SourceWorkbookValidation:
+    workbook: Path
+    filename_date: pd.Timestamp
+    cell_date: pd.Timestamp
+    expected_week: pd.Timestamp
+
+
 def _ensure_cache_dir() -> None:
     sales_cache_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -149,13 +159,100 @@ def check_source_weeks() -> WeekCheckResult:
     if not missing_result.empty and "missing_week" in missing_result.columns:
         missing_result["missing_week"] = pd.to_datetime(missing_result["missing_week"], errors="coerce")
         missing = sorted(missing_result["missing_week"].dropna().tolist())
-    return WeekCheckResult(weeks[0], weeks[-1], missing, weeks[-12:])
+    return WeekCheckResult(weeks[0], weeks[-1], missing, list(reversed(weeks[-5:])))
 
 
 def _expected_next_week(week: pd.Timestamp | None) -> pd.Timestamp | None:
     if week is None:
         return None
     return pd.Timestamp(week) + pd.Timedelta(days=7)
+
+
+def _normalize_source_date(value: object, label: str) -> pd.Timestamp:
+    parsed = pd.to_datetime(value, errors="coerce")
+    if pd.isna(parsed):
+        raise ValueError(f"Could not read an Edelweiss through-date from {label}: {value!r}")
+    return pd.Timestamp(parsed).normalize()
+
+
+def validate_source_workbook(
+    expected_week: pd.Timestamp | None = None,
+) -> SourceWorkbookValidation:
+    workbooks = sorted(
+        (path for pattern in ("*.xls", "*.xlsx") for path in edelweiss_source_folder.glob(pattern) if not path.name.startswith("~$")),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    if not workbooks:
+        raise FileNotFoundError(f"No Edelweiss .xls or .xlsx source file was found in {edelweiss_source_folder}")
+    if len(workbooks) > 1:
+        names = ", ".join(path.name for path in workbooks)
+        raise ValueError(
+            "More than one Edelweiss source workbook was found. Keep only the file "
+            f"for the current update in {edelweiss_source_folder}. Found: {names}"
+        )
+
+    workbook = workbooks[0]
+    filename_match = re.search(
+        r"\bThrough\s+(\d{1,2}[-_]\d{1,2}[-_]\d{2,4})\b", workbook.stem, flags=re.IGNORECASE
+    )
+    if filename_match is None:
+        raise ValueError(
+            "The Edelweiss source filename must include 'Through MM-DD-YY': " f"{workbook.name}"
+        )
+    filename_date = _normalize_source_date(
+        filename_match.group(1).replace("_", "-"), f"the filename {workbook.name}"
+    )
+
+    if workbook.suffix.lower() == ".xlsx":
+        from openpyxl import load_workbook
+
+        book = load_workbook(workbook, read_only=True, data_only=True)
+        try:
+            if "Sales Summary" not in book.sheetnames:
+                raise ValueError(
+                    f"The Edelweiss source is missing the Sales Summary sheet: {workbook.name}"
+                )
+            cell_value = book["Sales Summary"]["I1"].value
+        finally:
+            book.close()
+    else:
+        try:
+            import xlrd
+        except ImportError as exc:
+            raise RuntimeError(
+                "Reading an Edelweiss .xls source requires xlrd. Install the updated "
+                "requirements.txt before running the report."
+            ) from exc
+        book = xlrd.open_workbook(workbook)
+        if "Sales Summary" not in book.sheet_names():
+            raise ValueError(
+                f"The Edelweiss source is missing the Sales Summary sheet: {workbook.name}"
+            )
+        cell_value = book.sheet_by_name("Sales Summary").cell_value(0, 8)
+    cell_date = _normalize_source_date(cell_value, f"cell I1 in {workbook.name}")
+
+    if filename_date != cell_date:
+        raise ValueError(
+            f"Edelweiss source rejected: filename date {filename_date:%m/%d/%Y} "
+            f"does not match cell I1 ({cell_date:%m/%d/%Y}) in {workbook.name}."
+        )
+
+    expected = expected_week if expected_week is not None else get_latest_sql_week()
+    if expected is None:
+        raise ValueError(
+            "Cannot determine the Edelweiss week being updated because SQL does not "
+            "contain a latest week."
+        )
+    expected = pd.Timestamp(expected).normalize()
+    if filename_date != expected:
+        raise ValueError(
+            f"Edelweiss source rejected: this process is updating through "
+            f"{expected:%m/%d/%Y}, but {workbook.name} and cell I1 are through "
+            f"{filename_date:%m/%d/%Y}. Obtain the correct source file before continuing."
+        )
+
+    return SourceWorkbookValidation(workbook, filename_date, cell_date, expected)
 
 
 def get_delta_week_status(
@@ -623,9 +720,13 @@ def print_week_check(result: WeekCheckResult) -> None:
     )
     print(f"Missing SQL weeks: {len(result.missing_weeks)}")
     if result.missing_weeks:
-        print("Missing SQL week list: " + ", ".join(week.strftime("%Y-%m-%d") for week in result.missing_weeks))
+        print("Missing SQL week list:")
+        for week in sorted(result.missing_weeks, reverse=True):
+            print(f"    {week:%Y-%m-%d}")
     if result.latest_weeks:
-        print("Latest weeks present: " + ", ".join(week.strftime("%Y-%m-%d") for week in result.latest_weeks))
+        print("Latest weeks present:")
+        for week in result.latest_weeks:
+            print(f"    {week:%Y-%m-%d}")
 
 
 def print_result_summary(result: RollingBuildResult) -> None:
