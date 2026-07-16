@@ -184,6 +184,13 @@ def update_sales_cache(sales_path: Path) -> pd.DataFrame:
 def buyer(row: pd.Series) -> str:
     pub = str(row.get("Pub", "")).strip().lower()
     pt = str(row.get("PT", "")).strip().lower()
+    publisher_buyers = {
+        "post wave": "Tyler",
+        "quadrille publishing limited": "Tyler",
+        "paperblanks": "Renee",
+    }
+    if pub in publisher_buyers:
+        return publisher_buyers[pub]
     if pub == "chronicle":
         return "Renee" if pt == "ft" else "Tyler" if pt == "bk" else "-"
     if pub == "galison":
@@ -349,7 +356,7 @@ def write_report(full_list: pd.DataFrame, inventory: pd.DataFrame, output: Path,
         full_ws = writer.sheets["Full List"]
         full_ws.freeze_panes(4, 8)
         full_ws.merge_range(
-            0, 0, 0, 3,
+            0, 0, 0, 4,
             f"Chronicle Ingram Full List {start:%m/%d/%y} to {end:%m/%d/%y}",
             title,
         )

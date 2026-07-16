@@ -1400,6 +1400,90 @@ def run_weekly_reporting_menu() -> None:
         print("Invalid choice. Please select a valid option.")
 
 
+def _latest_cache_value(cache_file: Path, column: str):
+    if not cache_file.exists():
+        return None
+    cached = pd.read_parquet(cache_file, columns=[column])
+    if cached.empty:
+        return None
+    values = pd.to_datetime(cached[column], errors="coerce").dropna()
+    return values.max().normalize() if not values.empty else None
+
+
+def show_other_retailer_cache_status() -> None:
+    today = pd.Timestamp.today().normalize()
+    expected_week = today - pd.Timedelta(days=(today.weekday() - 5) % 7)
+    repo_root = Path(__file__).resolve().parent
+
+    weekly_caches = [
+        (
+            "AWBC",
+            repo_root / "awbc_rolling_reports" / "cache" / "awbc_pos_cache.parquet",
+            "Week",
+        ),
+        (
+            "Barnes & Noble",
+            Path(r"F:\ANALYSIS\Finance\DataWarehouse\Atelier BarnesNoble\cache\bn_customer_sales.parquet"),
+            "Week",
+        ),
+        (
+            "Bookscan",
+            Path(r"F:\ANALYSIS\Finance\DataWarehouse\Atelier Bookscan\cache\bookscan_sales.parquet"),
+            "Week",
+        ),
+        (
+            "Edelweiss",
+            Path(r"F:\ANALYSIS\Finance\DataWarehouse\Atelier Edelweiss\cache\edelweiss_sales.parquet"),
+            "Week",
+        ),
+        (
+            "Ingram",
+            Path(r"F:\ANALYSIS\Finance\DataWarehouse\Atelier Ingram\cache\ingram_weekly_sales.parquet"),
+            "period_end",
+        ),
+        (
+            "Readerlink",
+            Path(r"F:\ANALYSIS\Finance\DataWarehouse\Atelier Readerlink\cache\readerlink_weekly_sales.parquet"),
+            "week_end",
+        ),
+        (
+            "Target NOC",
+            process_paths.TARGET_NOC_CACHE_DIR / "target_noc_weekly_sales.parquet",
+            "Week",
+        ),
+    ]
+
+    rows = []
+    uk_cache = process_paths.UK_ROLLING_CACHE_DIR / "uk_period_sellthru.parquet"
+    try:
+        uk = pd.read_parquet(uk_cache, columns=["Period"]) if uk_cache.exists() else pd.DataFrame()
+        if uk.empty:
+            uk_value = "None"
+        else:
+            period = int(uk["Period"].max())
+            uk_value = f"{period // 100} Period {period % 100:02d}"
+        rows.append(("Abrams & Chronicle UK", uk_value, "PERIOD-BASED"))
+    except Exception:
+        rows.append(("Abrams & Chronicle UK", "Unavailable", "UNAVAILABLE"))
+
+    for label, cache_file, column in weekly_caches:
+        try:
+            latest = _latest_cache_value(cache_file, column)
+            if latest is None:
+                rows.append((label, "None", "NEEDS UPDATE"))
+            else:
+                state = "CURRENT" if latest >= expected_week else "NEEDS UPDATE"
+                rows.append((label, latest.strftime("%m/%d/%Y"), state))
+        except Exception:
+            rows.append((label, "Unavailable", "UNAVAILABLE"))
+
+    print("\nOther Retailer Weekly Cache Status")
+    print(f"Weekly target: {expected_week:%m/%d/%Y}")
+    print()
+    for label, latest, state in rows:
+        print(f"    {label:<25} {latest:<16} {state}")
+
+
 def run_retailer_rolling_reports_menu() -> None:
     while True:
         print("\nRetailer Rolling/Flash Reports")
@@ -1415,13 +1499,14 @@ def run_retailer_rolling_reports_menu() -> None:
         print("Other Retailer Rolling/Flash Reports")
         print("    05. Abrams & Chronicle UK Rolling Reports")
         print("    06. AWBC Rolling Reports")
-        print("    07. Barnes & Noble Rolling Reports")
+        print("    07. Barnes & Noble Rolling Reports (Monday)")
         print("    08. Bookscan Rolling Reports")
         print("    09. Edelweiss Rolling Reports")
-        print("    10. Ingram Weekly Report")
+        print("    10. Ingram Flash Report (Tuesday)")
         print("    11. Readerlink Rolling Reports")
         print("    12. Target NOC Rolling Reports")
         print()
+        print("    97. Show Weekly Cache Status")
         print("    98. Retrieve Data Source Instructions")
         print()
         print("    99. Back to main menu")
@@ -1475,6 +1560,10 @@ def run_retailer_rolling_reports_menu() -> None:
                 print(f"Unable to locate the Amazon Monthly Sales files: {e}")
                 continue
             run_python_process("Amazon Monthly Rolling Reports", "amazon_rolling_reports/monthly_rolling_reports.py")
+            continue
+
+        if choice == "97":
+            show_other_retailer_cache_status()
             continue
 
         if choice == "98":
