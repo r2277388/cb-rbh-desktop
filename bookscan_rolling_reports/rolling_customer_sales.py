@@ -30,6 +30,7 @@ try:
         DISTINCT_WEEKS_QUERY,
         LATEST_WEEK_QUERY,
         MISSING_WEEKS_QUERY,
+        RECENT_WEEK_SUMMARY_QUERY,
         SOURCE_METADATA_QUERY,
         build_distinct_weeks_since_query,
         build_sales_query,
@@ -49,6 +50,7 @@ except ImportError:
         DISTINCT_WEEKS_QUERY,
         LATEST_WEEK_QUERY,
         MISSING_WEEKS_QUERY,
+        RECENT_WEEK_SUMMARY_QUERY,
         SOURCE_METADATA_QUERY,
         build_distinct_weeks_since_query,
         build_sales_query,
@@ -120,7 +122,7 @@ class WeekCheckResult:
     min_week: pd.Timestamp | None
     max_week: pd.Timestamp | None
     missing_weeks: list[pd.Timestamp]
-    latest_weeks: list[pd.Timestamp]
+    latest_week_rows: list[dict[str, object]]
 
 
 @dataclass
@@ -319,8 +321,9 @@ def check_source_weeks() -> WeekCheckResult:
             missing_result["missing_week"], errors="coerce"
         )
         missing = sorted(missing_result["missing_week"].dropna().tolist())
-    latest = weeks[-12:]
-    return WeekCheckResult(weeks[0], weeks[-1], missing, latest)
+    recent_result = fetch_data_from_db(engine, RECENT_WEEK_SUMMARY_QUERY)
+    recent_rows = recent_result.to_dict("records") if not recent_result.empty else []
+    return WeekCheckResult(weeks[0], weeks[-1], missing, recent_rows)
 
 
 def get_delta_week_status(
@@ -1056,9 +1059,25 @@ def print_week_check(result: WeekCheckResult) -> None:
     if result.missing_weeks:
         full_list = ", ".join(week.strftime("%Y-%m-%d") for week in reversed(result.missing_weeks))
         print(f"Missing week list: {full_list}")
-    if result.latest_weeks:
-        latest = ", ".join(week.strftime("%Y-%m-%d") for week in result.latest_weeks)
-        print(f"Latest weeks present: {latest}")
+    if result.latest_week_rows:
+        print("Latest weeks present:")
+        filename_width = max(
+            len("FILENAME"),
+            *(len(str(row.get("Filename", ""))) for row in result.latest_week_rows),
+        )
+        print(f"    {'WEEK':<10}  {'FILENAME':<{filename_width}}  {'ROW_CNT':>12}  {'SALES_QTY':>12}")
+        for row in result.latest_week_rows:
+            week = pd.to_datetime(row.get("Week"), errors="coerce")
+            week_text = week.strftime("%Y-%m-%d") if pd.notna(week) else ""
+            filename = str(row.get("Filename", ""))
+            row_count = pd.to_numeric(row.get("Row_Cnt"), errors="coerce")
+            sales_qty = pd.to_numeric(row.get("Sales_Qty"), errors="coerce")
+            row_count_text = f"{row_count:,.0f}" if pd.notna(row_count) else ""
+            sales_qty_text = f"{sales_qty:,.0f}" if pd.notna(sales_qty) else ""
+            print(
+                f"    {week_text:<10}  {filename:<{filename_width}}  "
+                f"{row_count_text:>12}  {sales_qty_text:>12}"
+            )
 
 
 def print_result_summary(result: RollingBuildResult) -> None:

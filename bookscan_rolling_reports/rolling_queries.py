@@ -148,6 +148,21 @@ ORDER BY [Week];
 """
 
 
+RECENT_WEEK_SUMMARY_QUERY = """
+SELECT TOP 10
+    CAST(sbc.[WEEK] AS date) AS [Week],
+    sbc.[FILENAME] AS [Filename],
+    COUNT(sbc.[ISBN]) AS [Row_Cnt],
+    SUM(sbc.[Sales]) AS [Sales_Qty]
+FROM [CBQ2].[cb].[Sellthrough_RollBookscan] sbc
+GROUP BY
+    sbc.[WEEK],
+    sbc.[FILENAME]
+ORDER BY
+    sbc.[WEEK] DESC;
+"""
+
+
 MISSING_WEEKS_QUERY = f"""
 WITH all_weeks AS (
     SELECT DISTINCT CAST([Week] AS date) AS week_end
