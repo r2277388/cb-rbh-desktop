@@ -58,6 +58,7 @@ class TitleGroup:
     name: str
     isbns: tuple[str, ...] = ()
     ip_family_name: str | None = None
+    rollup_ip_families: tuple[str, ...] = ()
     formats: tuple[str, ...] = ()
     supplemental_sales_columns: tuple[SupplementalSalesColumn, ...] = ()
 
@@ -71,6 +72,11 @@ class TitleGroup:
             name=name,
             isbns=tuple(str(value).strip() for value in raw.get("isbns", []) if str(value).strip()),
             ip_family_name=raw.get("ip_family_name"),
+            rollup_ip_families=tuple(
+                str(value).strip()
+                for value in raw.get("rollup_ip_families", [])
+                if str(value).strip()
+            ),
             formats=tuple(str(value).strip() for value in raw.get("formats", []) if str(value).strip()),
             supplemental_sales_columns=tuple(
                 SupplementalSalesColumn.from_dict(value)
@@ -79,8 +85,10 @@ class TitleGroup:
         )
 
     def validate(self) -> None:
-        if not self.isbns and not self.ip_family_name:
-            raise ValueError(f"{self.name} needs either isbns or ip_family_name.")
+        if not self.isbns and not self.ip_family_name and not self.rollup_ip_families:
+            raise ValueError(
+                f"{self.name} needs isbns, ip_family_name, or rollup_ip_families."
+            )
         for column in self.supplemental_sales_columns:
             column.validate(self.name)
 
@@ -117,6 +125,8 @@ def group_to_dict(group: TitleGroup) -> dict[str, Any]:
         raw["isbns"] = list(group.isbns)
     if group.ip_family_name:
         raw["ip_family_name"] = group.ip_family_name
+    if group.rollup_ip_families:
+        raw["rollup_ip_families"] = list(group.rollup_ip_families)
     if group.formats:
         raw["formats"] = list(group.formats)
     if group.supplemental_sales_columns:
@@ -150,7 +160,31 @@ def group_condition(group: TitleGroup, item_alias: str = "i") -> str:
         if group.formats:
             family_condition += f" AND {item_alias}.FORMAT IN ({sql_in(group.formats)})"
         pieces.append(f"({family_condition})")
+    if group.rollup_ip_families:
+        pieces.append(f"{item_alias}.IP_FAMILY_NAME IN ({sql_in(group.rollup_ip_families)})")
     return "(" + " OR ".join(pieces) + ")"
+
+
+def comparison_column_sql(groups: list[TitleGroup], item_alias: str = "i") -> str:
+    lines = ["CASE"]
+    for group in groups:
+        if group.rollup_ip_families:
+            condition = f"{item_alias}.IP_FAMILY_NAME IN ({sql_in(group.rollup_ip_families)})"
+            lines.append(f"        WHEN {condition} THEN {item_alias}.IP_FAMILY_NAME")
+    lines.append(f"        ELSE {item_alias}.ISBN")
+    lines.append("    END")
+    return "\n".join(lines)
+
+
+def comparison_title_sql(groups: list[TitleGroup], item_alias: str = "i") -> str:
+    lines = ["CASE"]
+    for group in groups:
+        if group.rollup_ip_families:
+            condition = f"{item_alias}.IP_FAMILY_NAME IN ({sql_in(group.rollup_ip_families)})"
+            lines.append(f"        WHEN {condition} THEN {item_alias}.IP_FAMILY_NAME")
+    lines.append(f"        ELSE {item_alias}.SHORT_TITLE")
+    lines.append("    END")
+    return "\n".join(lines)
 
 
 def supplemental_sales_condition(
@@ -183,6 +217,8 @@ def all_group_conditions(groups: list[TitleGroup], item_alias: str = "i") -> str
 
 def build_sales_query(groups: list[TitleGroup]) -> str:
     family_case = family_case_sql(groups)
+    comparison_column = comparison_column_sql(groups)
+    comparison_title = comparison_title_sql(groups)
     where_conditions = all_group_conditions(groups)
     return f"""
 WITH OSD AS (
@@ -201,8 +237,8 @@ SELECT
     sr.SALESREP_NUMBER AS Rep_Num,
     sr.NAME AS Rep,
     osd.osd AS OSD,
-    i.ISBN,
-    i.SHORT_TITLE AS Title,
+    {comparison_column} AS ISBN,
+    {comparison_title} AS Title,
     SUM(sd.salesqty) AS SalesQty,
     {family_case} AS Family,
     'Sales + OO' AS ValueHeader
@@ -231,8 +267,8 @@ GROUP BY
     sr.SALESREP_NUMBER,
     sr.NAME,
     osd.osd,
-    i.ISBN,
-    i.SHORT_TITLE,
+    {comparison_column},
+    {comparison_title},
     {family_case};
 """.strip()
 
@@ -276,6 +312,8 @@ GROUP BY
 
 def build_orders_query(groups: list[TitleGroup]) -> str:
     family_case = family_case_sql(groups)
+    comparison_column = comparison_column_sql(groups)
+    comparison_title = comparison_title_sql(groups)
     where_conditions = all_group_conditions(groups)
     return f"""
 WITH OSD AS (
@@ -294,8 +332,8 @@ SELECT
     sr.SALESREP_NUMBER AS Rep_Num,
     sr.NAME AS Rep,
     osd.osd AS OSD,
-    i.ISBN,
-    i.short_title AS Title,
+    {comparison_column} AS ISBN,
+    {comparison_title} AS Title,
     SUM(ho.quantity) AS OrderUnits,
     {family_case} AS Family,
     'Sales + OO' AS ValueHeader
@@ -330,8 +368,8 @@ GROUP BY
     sr.SALESREP_NUMBER,
     sr.NAME,
     osd.osd,
-    i.ISBN,
-    i.short_title,
+    {comparison_column},
+    {comparison_title},
     {family_case};
 """.strip()
 
@@ -456,6 +494,10 @@ def print_groupings(config_path: Path = process_paths.CROSS_GAP_CONFIG_FILE) -> 
             format_text = ", ".join(group.formats) if group.formats else "Any"
             print(f"   IP family: {group.ip_family_name}")
             print(f"   Format(s): {format_text}")
+        if group.rollup_ip_families:
+            print("   Rolled-up IP family columns:")
+            for family_name in group.rollup_ip_families:
+                print(f"      {family_name}")
 
 
 def parse_isbn_text(isbn_text: str) -> tuple[str, ...]:
@@ -615,7 +657,11 @@ def family_metadata(group: TitleGroup, group_df: pd.DataFrame) -> pd.DataFrame:
         .drop_duplicates(subset=["ISBN"])
         .sort_values(["OSD", "Title", "ISBN"], na_position="last")
     )
-    configured_order = [*group.isbns, *(column.label for column in group.supplemental_sales_columns)]
+    configured_order = [
+        *group.rollup_ip_families,
+        *group.isbns,
+        *(column.label for column in group.supplemental_sales_columns),
+    ]
     if not configured_order:
         return metadata
 

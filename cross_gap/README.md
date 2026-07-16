@@ -21,6 +21,18 @@ Or a family-based rule:
 }
 ```
 
+Or compare whole IP families as rolled-up columns. Sales and open orders for every
+ISBN in each family are summed under the configured family name:
+
+```json
+{
+  "name": "HG Star Child Series",
+  "rollup_ip_families": ["Star Child", "HG Seeing Stars"]
+}
+```
+
+The configured order controls the left-to-right comparison-column order.
+
 The same group definitions are used for both the sales query and the Hachette orders query.
 
 Groups can also define supplemental sales-only columns. These columns are added to that
