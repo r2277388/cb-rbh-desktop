@@ -24,12 +24,10 @@ BN = F / "Atelier BarnesNoble" / "cache"
 BN_SALES, BN_INV = BN / "bn_customer_sales.parquet", BN / "bn_inventory_snapshots.parquet"
 ED = F / "Atelier Edelweiss" / "cache"
 ED_SALES, ED_META = ED / "edelweiss_sales.parquet", ED / "edelweiss_metadata.parquet"
-RL = F / "Atelier Readerlink" / "cache" / "readerlink_weekly_sales.parquet"
+RL = F / "Atelier Readerlink" / "cache" / "readerlink_pos_history.parquet"
 RL_STORE = F / "Weekly reports" / "2026" / "Readerlink" / "OH_Store_TitlePerformanceReport"
 TG = process_paths.TARGET_NOC_CACHE_DIR
 TG_SALES, TG_META, TG_INV = TG / "target_noc_weekly_sales.parquet", TG / "target_noc_metadata.parquet", TG / "target_noc_inventory.parquet"
-IG = F / "Atelier Ingram"
-IG_SALES, IG_INV = IG / "cache" / "ingram_weekly_sales.parquet", IG / "Ingram_OH_OO"
 DATE_RE = re.compile(r"^\d{2}-\d{2}-\d{4}$")
 ACCOUNTING = '_(* #,##0_);_(* (#,##0);_(* "-"_);_(@_)'
 
@@ -54,7 +52,14 @@ def grouped(df: pd.DataFrame, mask: pd.Series, value: str) -> pd.Series:
     return df.loc[mask].groupby("ISBN")[value].sum()
 
 
-def weekly_metrics(df: pd.DataFrame, *, date_col: str, value_col: str, include_last_year: bool = True):
+def weekly_metrics(
+    df: pd.DataFrame,
+    *,
+    date_col: str,
+    value_col: str,
+    include_last_year: bool = True,
+    as_of: pd.Timestamp | None = None,
+):
     work = df[["ISBN", date_col, value_col]].copy()
     work["ISBN"] = work["ISBN"].map(normalize_isbn)
     work[date_col] = pd.to_datetime(work[date_col], errors="coerce").dt.normalize()
@@ -63,7 +68,7 @@ def weekly_metrics(df: pd.DataFrame, *, date_col: str, value_col: str, include_l
     if work.empty:
         raise ValueError(f"No usable rows for {date_col}/{value_col}")
     latest = work[date_col].max()
-    current = bookscan_week(latest)
+    current = bookscan_week(as_of if as_of is not None else latest)
     parts = bookscan_parts(work[date_col])
     frames = [
         grouped(work, work[date_col].eq(latest), value_col).rename("Weekly"),
@@ -136,12 +141,15 @@ def latest_xlsx(folder: Path) -> Path:
 
 def target_metrics():
     target = pd.read_parquet(TG_SALES, columns=["ISBN", "Week", "Units"])
-    tm, td = weekly_metrics(target, date_col="Week", value_col="Units", include_last_year=False)
     reader = pd.read_parquet(RL, columns=["isbn", "week_end", "master_chain", "cy_pos_units"]).rename(
         columns={"isbn": "ISBN", "week_end": "Week", "cy_pos_units": "Units"})
     chains = reader.master_chain.astype("string").str.strip().str.upper()
     reader = reader[chains.isin({"TARGET", "TARGET STORES"})]
-    rm, rd = weekly_metrics(reader, date_col="Week", value_col="Units", include_last_year=False)
+    td = pd.to_datetime(target["Week"]).max()
+    rd = pd.to_datetime(reader["Week"]).max()
+    target_as_of = max(td, rd)
+    tm, _ = weekly_metrics(target, date_col="Week", value_col="Units", as_of=target_as_of)
+    rm, _ = weekly_metrics(reader, date_col="Week", value_col="Units", as_of=target_as_of)
     result = tm.add(rm, fill_value=0)
 
     meta = pd.read_parquet(TG_META, columns=["DPCI", "ISBN"])
@@ -160,15 +168,6 @@ def target_metrics():
     # Filled from hachette.HachetteOrders after the shared SQL query is joined.
     result["On Order (NOC)"] = 0
     return result.fillna(0), td, rd, store_file
-
-
-def ingram_metrics():
-    sales = pd.read_parquet(IG_SALES, columns=["ISBN", "period_end", "gross_qty"]).rename(columns={"period_end": "Week", "gross_qty": "qty"})
-    result, latest = weekly_metrics(sales, date_col="Week", value_col="qty", include_last_year=False)
-    inv_file = latest_xlsx(IG_INV)
-    inv = pd.read_excel(inv_file, usecols=["EAN", "On Hand Total", "On Order Total"], dtype={"EAN": str})
-    inv["ISBN"], inv["On Hand"], inv["On Order"] = inv.EAN.map(normalize_isbn), num(inv["On Hand Total"]), num(inv["On Order Total"])
-    return result.join(inv.groupby("ISBN")[["On Hand", "On Order"]].sum(), how="outer").fillna(0), latest, inv_file
 
 
 ITEM_SQL = """
@@ -233,7 +232,6 @@ def amazon_date():
 
 def source_rows():
     store = latest_xlsx(RL_STORE) if RL_STORE.exists() else RL_STORE
-    ingram_inv = latest_xlsx(IG_INV) if IG_INV.exists() else IG_INV
     ad = amazon_date()
     return [
         ("Amazon customer orders", AMZ_CO, ad, ""), ("Amazon units shipped", AMZ_US, ad, ""),
@@ -241,12 +239,10 @@ def source_rows():
         ("Barnes & Noble inventory", BN_INV, max_date(BN_INV, "Week"), ""),
         ("Edelweiss sales", ED_SALES, max_date(ED_SALES, "Week"), ""),
         ("Edelweiss inventory", ED_META, max_date(ED_SALES, "Week"), ""),
-        ("Readerlink Target sales", RL, max_date(RL, "week_end"), ""),
+        ("Readerlink Target-tab history", RL, max_date(RL, "week_end"), ""),
         ("Readerlink Target store OH", store, None, ""),
         ("Target NOC sales", TG_SALES, max_date(TG_SALES, "Week"), ""),
-        ("Target NOC inventory", TG_INV, max_date(TG_INV, "Week"), "no on-order field in cache"),
-        ("Ingram sales", IG_SALES, max_date(IG_SALES, "period_end"), ""),
-        ("Ingram inventory", ingram_inv, None, ""),
+        ("Target NOC inventory", TG_INV, max_date(TG_INV, "Week"), "open orders use live SQL"),
     ]
 
 
@@ -278,50 +274,47 @@ def build_dataframe():
     ed, ed_d = edelweiss_metrics()
     print("Loading Target and Readerlink caches...", flush=True)
     target, target_noc_d, readerlink_d, store_file = target_metrics()
-    print("Loading Ingram cache and inventory...", flush=True)
-    ingram, ingram_d, ingram_file = ingram_metrics()
 
     all_data = prefixed(amazon, "Amazon").join(prefixed(bn, "BN"), how="outer")
-    for frame, prefix in [(ed, "Edelweiss"), (target, "Target"), (ingram, "Ingram")]:
+    for frame, prefix in [(ed, "Edelweiss"), (target, "Target")]:
         all_data = all_data.join(prefixed(frame, prefix), how="outer")
     all_data = all_data.fillna(0)
     totals = {
-        "Weekly": ["Amazon Units Shipped", "BN Weekly", "Edelweiss Weekly", "Target Weekly", "Ingram Weekly"],
-        "YTD": ["Amazon Units YTD", "BN YTD", "Edelweiss YTD", "Target YTD", "Ingram YTD"],
-        "LYTD": ["Amazon Units LYTD", "BN LYTD", "Edelweiss LYTD", "Target LYTD", "Ingram LYTD"],
-        "Last Year": ["Amazon Units Last Year", "BN Last Year", "Edelweiss Last Year"],
+        "Weekly": ["Amazon Units Shipped", "BN Weekly", "Edelweiss Weekly", "Target Weekly"],
+        "YTD": ["Amazon Units YTD", "BN YTD", "Edelweiss YTD", "Target YTD"],
+        "LYTD": ["Amazon Units LYTD", "BN LYTD", "Edelweiss LYTD", "Target LYTD"],
+        "Last Year": ["Amazon Units Last Year", "BN Last Year", "Edelweiss Last Year", "Target Last Year"],
     }
     for metric, columns in totals.items():
         for column in columns:
             if column not in all_data:
                 all_data[column] = 0
         all_data[f"Total {metric}"] = all_data[columns].sum(axis=1)
+    all_data["Total YOY"] = all_data["Total YTD"] - all_data["Total LYTD"]
     all_data = all_data[all_data["Total YTD"].ne(0) | all_data["Total LYTD"].ne(0)]
     all_data = item_and_sell_in().join(all_data, how="inner")
     all_data["Target On Order (NOC)"] = all_data["TargetNOCOpenOrder"]
-    for account, weekly, ytd in [("Amazon", "Amazon Units Shipped", "Amazon Units YTD"), ("BN", "BN Weekly", "BN YTD"), ("Edelweiss", "Edelweiss Weekly", "Edelweiss YTD")]:
+    for account, weekly, ytd in [("Amazon", "Amazon Units Shipped", "Amazon Units YTD"), ("BN", "BN Weekly", "BN YTD"), ("Edelweiss", "Edelweiss Weekly", "Edelweiss YTD"), ("Target", "Target Weekly", "Target YTD")]:
         all_data[f"{account} % Total Weekly"] = all_data[weekly].div(all_data["Total Weekly"].where(all_data["Total Weekly"].ne(0))).fillna(0)
         all_data[f"{account} % Total YTD"] = all_data[ytd].div(all_data["Total YTD"].where(all_data["Total YTD"].ne(0))).fillna(0)
 
     sources = [
         "Pub", "PT", "Cat", "PGRP", None, "Title", "Price", "PubDate",
-        "Total Weekly", "Total YTD", "Total LYTD", "Total Last Year",
+        "Total Weekly", "Total YTD", "Total LYTD", "Total YOY", "Total Last Year",
         "Amazon Customer Order", "Amazon Units Shipped", "Amazon Units YTD", "Amazon Units LYTD", "Amazon Units Last Year",
         "Amazon % Total Weekly", "Amazon % Total YTD", "Amazon On Hand", "Amazon On Order",
         "BN Weekly", "BN YTD", "BN LYTD", "BN Last Year", "BN % Total Weekly", "BN % Total YTD", "BN On Hand", "BN On Order",
         "Edelweiss Weekly", "Edelweiss YTD", "Edelweiss LYTD", "Edelweiss Last Year", "Edelweiss % Total Weekly", "Edelweiss % Total YTD", "Edelweiss On Hand", "Edelweiss On Order",
-        "Target Weekly", "Target YTD", "Target LYTD", "Target On Hand", "Target On Order (NOC)",
-        "Ingram Weekly", "Ingram YTD", "Ingram LYTD", "Ingram On Hand", "Ingram On Order",
+        "Target Weekly", "Target YTD", "Target LYTD", "Target Last Year", "Target % Total Weekly", "Target % Total YTD", "Target On Hand", "Target On Order (NOC)",
         "YTD", "LYTD", "FYLY", "LTD",
     ]
     output = pd.DataFrame(index=all_data.index)
     for index, source in enumerate(sources):
         output[index] = all_data.index if source is None else all_data[source]
-    output = output.sort_values([0, 3, 5, 4], kind="stable").reset_index(drop=True)
+    output = output.sort_values([8, 0, 3, 5, 4], ascending=[False, True, True, True, True], kind="stable").reset_index(drop=True)
     freshness = {
         "Amazon": amazon_d, "B&N": bn_d, "Edelweiss": ed_d,
-        "Target": f"NOC {target_noc_d:%m/%d/%Y}; RL {readerlink_d:%m/%d/%Y}; OH {datetime.fromtimestamp(store_file.stat().st_mtime):%m/%d/%Y}; OO live",
-        "Ingram": f"Sales {ingram_d:%m/%d/%Y}; inventory file {datetime.fromtimestamp(ingram_file.stat().st_mtime):%m/%d/%Y}",
+        "Target": max(target_noc_d, readerlink_d),
         "Sell-In": pd.Timestamp.today().normalize(),
     }
     return output, freshness
@@ -329,20 +322,22 @@ def build_dataframe():
 
 HEADERS = [
     "Pub", "PT", "Cat", "PGRP", "ISBN", "Title", "Price", "PubDate",
-    "Weekly", "YTD", "LYTD", "Last Year",
+    "Weekly", "YTD", "LYTD", "YOY", "Last Year",
     "Customer Order", "Units Shipped", "Units YTD", "Units LYTD", "Units Last Year", "% Total Weekly", "% Total YTD", "On Hand", "On Order",
     "Weekly", "YTD", "LYTD", "Last Year", "% Total Weekly", "% Total YTD", "On Hand", "On Order",
     "Weekly", "YTD", "LYTD", "Last Year", "% Total Weekly", "% Total YTD", "On Hand", "On Order",
-    "Weekly", "YTD", "LYTD", "On Hand", "On Order (NOC)",
-    "Weekly", "YTD", "LYTD", "On Hand", "On Order",
+    "Weekly", "YTD", "LYTD", "Last Year", "% Total Weekly", "% Total YTD", "On Hand", "On Order (NOC)",
     "YTD", "LYTD", "FYLY", "LTD",
 ]
 GROUPS = [
-    ("TOTAL SELL-THROUGH", 8, 11, "#B4C6E7"), ("AMAZON", 12, 20, "#F4B183"),
-    ("B&N", 21, 28, "#FFE699"), ("EDELWEISS", 29, 36, "#C6E0B4"),
-    ("TARGET", 37, 41, "#D9EAD3"), ("INGRAM", 42, 46, "#D9E1F2"),
-    ("TOTAL SELL-IN", 47, 50, "#D9D2E9"),
+    ("TOTAL SELL-THROUGH", 8, 12, "#EBF1DE"), ("AMAZON", 13, 21, "#FDE9D9"),
+    ("B&N", 22, 29, "#EBF1DE"), ("EDELWEISS", 30, 37, "#FDE9D9"),
+    ("TARGET", 38, 45, "#EBF1DE"), ("TOTAL SELL-IN", 46, 49, "#DDD9C4"),
 ]
+
+
+def report_through_date(freshness):
+    return max(freshness[key] for key in ("Amazon", "B&N", "Edelweiss", "Target"))
 
 
 def save_workbook(report, freshness, output_path: Path):
@@ -352,66 +347,96 @@ def save_workbook(report, freshness, output_path: Path):
         book = writer.book
         sheet = book.add_worksheet("Full List")
         writer.sheets["Full List"] = sheet
-        title = book.add_format({"bold": True, "font_size": 14, "bg_color": "#D9EAD3", "border": 1})
-        label = book.add_format({"bold": True, "bg_color": "#DDD9C4", "border": 1})
+        title = book.add_format({"bold": True, "bg_color": "#DCE6F1", "align": "center_across"})
+        metadata_block = book.add_format({"bg_color": "#DCE6F1"})
+        label = book.add_format({"bold": True, "bg_color": "#EEECE1"})
         number = book.add_format({"num_format": ACCOUNTING})
         percent = book.add_format({"num_format": "0.0%"})
+        total_number = book.add_format({"num_format": ACCOUNTING, "bg_color": "#EEECE1"})
+        total_percent = book.add_format({"num_format": "0.0%", "bg_color": "#EEECE1"})
         money = book.add_format({"num_format": "$#,##0.00"})
         date_fmt = book.add_format({"num_format": "mm/dd/yyyy"})
-        dates = [v for v in freshness.values() if isinstance(v, pd.Timestamp)]
-        week = bookscan_week(max(dates) if dates else pd.Timestamp.today())
-        sheet.write(3, 0, f"Chronicle X-Gap {week.week_start:%m/%d/%y} to {week.week_end:%m/%d/%y}", title)
-        freshness_keys = {"AMAZON": "Amazon", "B&N": "B&N", "EDELWEISS": "Edelweiss", "TARGET": "Target", "INGRAM": "Ingram", "TOTAL SELL-IN": "Sell-In"}
-        header_formats = {}
-        for group, start, end, color in GROUPS:
-            fmt = book.add_format({"bold": True, "bg_color": color, "border": 1, "align": "center", "valign": "vcenter", "text_wrap": True})
-            sheet.merge_range(3, start, 3, end, group, fmt)
-            if group in freshness_keys:
-                value = freshness[freshness_keys[group]]
-                text = f"Through {value:%m/%d/%Y}" if isinstance(value, pd.Timestamp) else str(value)
-                sheet.merge_range(4, start, 4, end, text, fmt)
+        report_through = report_through_date(freshness)
+
+        def center_across(row, start, end, text, fmt):
+            sheet.write(row, start, text, fmt)
+            for column in range(start + 1, end + 1):
+                sheet.write_blank(row, column, None, fmt)
+
+        def grouped_center_across(row, start, end, text, color, *, top=False, bottom=False):
             for column in range(start, end + 1):
-                header_formats[column] = fmt
-        base_header = book.add_format({"bold": True, "bg_color": "#F2F2F2", "border": 1, "align": "center"})
+                properties = {
+                    "bold": True,
+                    "bg_color": color,
+                    "align": "center_across",
+                    "valign": "vcenter",
+                }
+                if top:
+                    properties["top"] = 1
+                if bottom:
+                    properties["bottom"] = 1
+                if column == start:
+                    properties["left"] = 1
+                if column == end:
+                    properties["right"] = 1
+                fmt = book.add_format(properties)
+                if column == start:
+                    sheet.write(row, column, text, fmt)
+                else:
+                    sheet.write_blank(row, column, None, fmt)
+
+        for row in (3, 4):
+            for column in range(8):
+                sheet.write_blank(row, column, None, metadata_block)
+        center_across(3, 0, 4, f"Chronicle X-Gap through {report_through:%m/%d/%Y}", title)
+        freshness_keys = {"AMAZON": "Amazon", "B&N": "B&N", "EDELWEISS": "Edelweiss", "TARGET": "Target", "TOTAL SELL-IN": "Sell-In"}
+        for group, start, end, color in GROUPS:
+            grouped_center_across(3, start, end, group, color, top=True)
+            if group == "TOTAL SELL-THROUGH" or group in freshness_keys:
+                value = report_through if group == "TOTAL SELL-THROUGH" else freshness[freshness_keys[group]]
+                text = f"Report Run Date {value:%m/%d/%Y}" if group == "TOTAL SELL-IN" else f"Through Week Ending {value:%m/%d/%Y}"
+                grouped_center_across(4, start, end, text, color, bottom=True)
+        base_header = book.add_format({"bg_color": "#EBF1DE", "border": 1, "align": "center", "valign": "vcenter", "text_wrap": True})
+        metric_header = book.add_format({"bg_color": "#DCE6F1", "border": 1, "align": "center", "valign": "vcenter", "text_wrap": True})
         for column, text in enumerate(HEADERS):
-            sheet.write(5, column, text, header_formats.get(column, base_header))
+            sheet.write(5, column, text, base_header if column < 8 else metric_header)
         for row, values in enumerate(report.itertuples(index=False, name=None), start=6):
             for column, value in enumerate(values):
-                fmt = money if column == 6 else date_fmt if column == 7 else percent if column in {17,18,25,26,33,34} else number if column >= 8 else None
+                fmt = money if column == 6 else date_fmt if column == 7 else percent if column in {18,19,26,27,34,35,42,43} else number if column >= 8 else None
                 if pd.isna(value):
                     sheet.write_blank(row, column, None, fmt)
                 else:
                     sheet.write(row, column, value, fmt)
         sheet.write(0, 7, "Total", label)
         sheet.write(1, 7, "Subtotal", label)
-        ratio_columns = {17: (13, 8), 18: (14, 9), 25: (21, 8), 26: (22, 9), 33: (29, 8), 34: (30, 9)}
+        ratio_columns = {18: (14, 8), 19: (15, 9), 26: (22, 8), 27: (23, 9), 34: (30, 8), 35: (31, 9), 42: (38, 8), 43: (39, 9)}
         for column in range(8, len(HEADERS)):
             letter = xl_col_to_name(column)
             if column in ratio_columns:
                 numerator, denominator = ratio_columns[column]
                 n, d = xl_col_to_name(numerator), xl_col_to_name(denominator)
-                sheet.write_formula(0, column, f"=IFERROR({n}1/{d}1,0)", percent)
-                sheet.write_formula(1, column, f"=IFERROR({n}2/{d}2,0)", percent)
+                sheet.write_formula(0, column, f"=IFERROR({n}1/{d}1,0)", total_percent)
+                sheet.write_formula(1, column, f"=IFERROR({n}2/{d}2,0)", total_percent)
             else:
-                sheet.write_formula(0, column, f"=SUM({letter}7:{letter}{last_row})", number)
-                sheet.write_formula(1, column, f"=SUBTOTAL(9,{letter}7:{letter}{last_row})", number)
+                sheet.write_formula(0, column, f"=SUM({letter}7:{letter}{last_row})", total_number)
+                sheet.write_formula(1, column, f"=SUBTOTAL(9,{letter}7:{letter}{last_row})", total_number)
         sheet.autofilter(5, 0, max(5, last_row - 1), len(HEADERS) - 1)
-        sheet.freeze_panes(6, 7)
+        sheet.freeze_panes(6, 8)
         sheet.set_row(5, 32)
         sheet.set_column(0, 4, 13)
         sheet.set_column(5, 5, 38)
         sheet.set_column(6, 7, 12)
         sheet.set_column(8, len(HEADERS) - 1, 12)
+        sheet.set_zoom(75)
         sheet.hide_gridlines(2)
     print(f"Saved X-Gap report: {output_path}")
 
 
 def output_path(freshness):
-    dates = [v for v in freshness.values() if isinstance(v, pd.Timestamp)]
-    latest = max(dates) if dates else pd.Timestamp.today().normalize()
+    latest = report_through_date(freshness)
     week = bookscan_week(latest)
     folder = process_paths.x_gap_output_folder(latest.to_pydatetime())
-    return folder / f"Week {week.week} - {week.year} X-Gap ({week.week_end:%m%d%y}).xlsx"
+    return folder / f"Week {week.week} - {week.year} New X-Gap ({week.week_end:%m%d%y}).xlsx"
 
 
 def run(destination: Path | None = None):
