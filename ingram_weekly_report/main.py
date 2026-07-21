@@ -218,11 +218,17 @@ def build_full_list(metadata, sales_cache, hachette, ingram) -> pd.DataFrame:
         sales_columns.append(column)
     report["QTY Variance"] = report[sales_columns[0]] - report[sales_columns[1]]
     report["Avg 4wk Sales"] = report[sales_columns].sum(axis=1) / 4
-    report = report[report[sales_columns].sum(axis=1).gt(0)].copy()
-    report = report.merge(hachette, on="ISBN", how="left").merge(ingram, on="ISBN", how="left")
+    report = report.merge(ingram, on="ISBN", how="outer").merge(hachette, on="ISBN", how="left")
+    report["Title"] = report["Title"].fillna(report.get("Ingram Title")).fillna("")
     numeric = ["Ctn Qty", "Frozen", "Available To Sell", "Reprint Quantity"] + INVENTORY_COLUMNS
     for column in numeric:
         report[column] = pd.to_numeric(report.get(column, 0), errors="coerce").fillna(0)
+    for column in sales_columns:
+        report[column] = pd.to_numeric(report[column], errors="coerce").fillna(0)
+    report["QTY Variance"] = report[sales_columns[0]] - report[sales_columns[1]]
+    report["Avg 4wk Sales"] = report[sales_columns].sum(axis=1) / 4
+    activity_columns = sales_columns + numeric
+    report = report[report[activity_columns].ne(0).any(axis=1)].copy()
     report["Total Ingram OH & OO"] = report["On Hand Total"] + report["On Order Total"]
     report["Total Demand last 4 weeks"] = report[
         [
@@ -298,7 +304,7 @@ def write_report(full_list: pd.DataFrame, inventory: pd.DataFrame, output: Path,
         })
         title = workbook.add_format({
             "bold": True, "font_size": 14, "bg_color": "#FCD5B4",
-            "align": "left", "valign": "vcenter",
+            "align": "center_across", "valign": "vcenter",
         })
         accounting = workbook.add_format({
             "num_format": '_(* #,##0_);_(* (#,##0);_(* "-"_);_(@_)'
@@ -355,11 +361,13 @@ def write_report(full_list: pd.DataFrame, inventory: pd.DataFrame, output: Path,
 
         full_ws = writer.sheets["Full List"]
         full_ws.freeze_panes(4, 8)
-        full_ws.merge_range(
-            0, 0, 0, 4,
+        full_ws.write(
+            0, 0,
             f"Chronicle Ingram Full List {start:%m/%d/%y} to {end:%m/%d/%y}",
             title,
         )
+        for column in range(1, 5):
+            full_ws.write_blank(0, column, None, title)
         full_ws.set_column(0, len(full_list.columns) - 1, 12)
         full_ws.set_column(full_list.columns.get_loc("ISBN"), full_list.columns.get_loc("ISBN"), 14, isbn_format)
         full_ws.set_column(full_list.columns.get_loc("Title"), full_list.columns.get_loc("Title"), 37.57)
