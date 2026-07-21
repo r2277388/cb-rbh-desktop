@@ -77,6 +77,15 @@ TARGET_NOC_INVENTORY_FOLDER = Path(
     r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Target NOC\TargetNOC_Inventory"
 )
 TARGET_NOC_CACHE_DIR = Path(r"F:\ANALYSIS\Finance\DataWarehouse\Atelier TargetNOC\cache")
+X_GAP_OUTPUT_ROOT = Path(r"G:\SALES")
+X_GAP_REFERENCE_WORKBOOK = repo_path(
+    "X_GapReport", "Week 25 - 2026 New X-Gap (062026).xlsx"
+)
+
+
+def x_gap_output_folder(for_date: datetime | None = None) -> Path:
+    year = (for_date or datetime.now()).year
+    return X_GAP_OUTPUT_ROOT / f"{year} Sales Reports" / "Sell-Through Reporting" / "X-Gap"
 BOOKSCAN_WEEKLY_REPORT_FOLDER = Path(
     r"G:\SALES\2026 Sales Reports\Sell-Through Reporting\Bookscan"
 )

@@ -1505,6 +1505,7 @@ def run_retailer_rolling_reports_menu() -> None:
         print("    10. Ingram Flash Report (Tuesday)")
         print("    11. Readerlink Rolling Reports")
         print("    12. Target NOC Rolling Reports")
+        print("    13. X-Gap Report")
         print()
         print("    97. Show Weekly Cache Status")
         print("    98. Retrieve Data Source Instructions")
@@ -1619,6 +1620,12 @@ def run_retailer_rolling_reports_menu() -> None:
             run_python_process(
                 "Target NOC Rolling Reports",
                 process_paths.repo_path("target_rolling_report", "main.py"),
+            )
+            continue
+        if choice == "13":
+            run_python_process(
+                "X-Gap Report",
+                process_paths.repo_path("x_gap_report", "main.py"),
             )
             continue
         if choice in {"99", "back", "b", "return", "menu"}:
@@ -2193,7 +2200,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
 
