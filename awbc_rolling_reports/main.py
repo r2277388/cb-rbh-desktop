@@ -18,6 +18,13 @@ from amazon_rolling_reports.functions import build_column_totals, save_to_excel
 from shared.bookscan_calendar import bookscan_parts, bookscan_week
 from shared.pg_grouping import apply_pg_grouping
 
+warnings.filterwarnings(
+    "ignore",
+    message="Cannot parse header or footer.*",
+    category=UserWarning,
+    module=r"openpyxl\.worksheet\.header_footer",
+)
+
 MODULE_DIR = Path(__file__).resolve().parent
 SAMPLE_WORKBOOK = MODULE_DIR / "Week 26 - 2026 Rolling AWBC (062726).xlsx"
 SOURCE_FOLDER = Path(r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\AWBC")

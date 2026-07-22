@@ -471,6 +471,46 @@ def confirm_amazon_rolling_reports_run_files() -> bool:
         print("Invalid choice. Please select a valid option.")
 
 
+def confirm_awbc_rolling_reports_source() -> bool:
+    source_folder = Path(
+        r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\AWBC"
+    )
+    latest_source = get_latest_matching_file(source_folder, "*AWBC.xlsx")
+    lines = [
+        "AWBC (BAMM) WEEKLY SOURCE CHECK",
+        "",
+        "Before continuing, have you:",
+        "  1. Saved the new Books-A-Million email workbook in the AWBC source folder?",
+        "  2. Submitted the new week's AWBC data to SQL?",
+        "",
+        f"Latest source file: {latest_source}",
+        "",
+        "This report automatically adds newer source files to its cache.",
+        "No separate cache-update step is required.",
+        "SQL submission is separate; this report reads the Excel source file.",
+    ]
+    width = max(len(line) for line in lines)
+
+    while True:
+        print()
+        print("+" + "-" * (width + 2) + "+")
+        for line in lines:
+            print(f"| {line:<{width}} |")
+        print("+" + "-" * (width + 2) + "+")
+        print()
+        print("    1. Yes - continue")
+        print("    2. No - return to the retailer menu")
+        print()
+        choice = input("Choose an option: ").strip().lower()
+
+        if choice in {"1", "y", "yes", "continue", "c"}:
+            return True
+        if choice in {"2", "n", "no", "back", "b", "return"}:
+            return False
+
+        print("Invalid choice. Please select 1 or 2.")
+
+
 def confirm_amazon_monthly_sales_files() -> bool:
     script_path = process_paths.AMAZON_MONTHLY_SALES_SCRIPT
     source_root = process_paths.AMAZON_MONTHLY_SALES_ROOT
@@ -1601,6 +1641,8 @@ def run_retailer_rolling_reports_menu() -> None:
             continue
 
         if choice == "6":
+            if not confirm_awbc_rolling_reports_source():
+                continue
             run_python_process("AWBC Rolling Reports", process_paths.AWBC_ROLLING_REPORTS_SCRIPT)
             continue
 
@@ -2222,7 +2264,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
 
