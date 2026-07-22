@@ -32,6 +32,11 @@ FROZEN_QUANTITIES_FILE = Path(r"G:\OPS\Inventory\Daily\Finance_Only\Frozen Quant
 
 POS_HISTORY_CACHE = CACHE_DIR / "readerlink_pos_history.parquet"
 LATEST_INVENTORY_CACHE = CACHE_DIR / "readerlink_latest_inventory.parquet"
+INVENTORY_HISTORY_CACHE = CACHE_DIR / "readerlink_inventory_history.parquet"
+STORE_INVENTORY_CACHE = CACHE_DIR / "readerlink_store_inventory_history.parquet"
+METADATA_HISTORY_CACHE = CACHE_DIR / "readerlink_metadata_history.parquet"
+HBG_INVENTORY_HISTORY_CACHE = CACHE_DIR / "readerlink_hbg_inventory_history.parquet"
+FREEZES_HISTORY_CACHE = CACHE_DIR / "readerlink_freezes_history.parquet"
 STORE_INVENTORY_DIR = Path(
     r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Readerlink\OH_Store_TitlePerformanceReport"
 )
@@ -231,8 +236,39 @@ def load_readerlink_freezes() -> pd.DataFrame:
     return df.groupby("ISBN", as_index=False)[["RL Freezes"]].sum()
 
 
-def load_readerlink_inventory() -> pd.DataFrame:
-    df = pd.read_parquet(LATEST_INVENTORY_CACHE)
+def load_or_create_weekly_snapshot(
+    cache_path: Path,
+    week: pd.Timestamp,
+    live_loader,
+) -> pd.DataFrame:
+    snapshot_week = pd.Timestamp(week).normalize()
+    history = pd.read_parquet(cache_path) if cache_path.exists() else pd.DataFrame()
+    if not history.empty and "snapshot_week" in history.columns:
+        history["snapshot_week"] = pd.to_datetime(history["snapshot_week"]).dt.normalize()
+        cached = history[history["snapshot_week"].eq(snapshot_week)].copy()
+        if not cached.empty:
+            return cached.drop(columns=["snapshot_week"])
+
+    current = live_loader().copy()
+    snapshot = current.copy()
+    snapshot.insert(0, "snapshot_week", snapshot_week)
+    if not history.empty:
+        history = history[~history["snapshot_week"].eq(snapshot_week)]
+        snapshot = pd.concat([history, snapshot], ignore_index=True, sort=False)
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    snapshot.to_parquet(cache_path, index=False)
+    print(f"Archived Readerlink weekly input snapshot: {cache_path.name} ({snapshot_week:%m/%d/%Y})")
+    return current
+
+
+def load_readerlink_inventory(week: pd.Timestamp | None = None) -> pd.DataFrame:
+    cache_path = INVENTORY_HISTORY_CACHE if INVENTORY_HISTORY_CACHE.exists() else LATEST_INVENTORY_CACHE
+    df = pd.read_parquet(cache_path)
+    if week is not None and "week_end" in df.columns:
+        df["week_end"] = pd.to_datetime(df["week_end"]).dt.normalize()
+        selected = df[df["week_end"].eq(pd.Timestamp(week).normalize())]
+        if not selected.empty:
+            df = selected.copy()
     df = df.rename(
         columns={
             "isbn": "ISBN",
@@ -256,10 +292,28 @@ def latest_store_inventory_file() -> Path:
     return max(files, key=lambda path: path.stat().st_mtime)
 
 
-def load_store_inventory(source_path: Path | None = None) -> pd.DataFrame:
-    path = source_path or latest_store_inventory_file()
-    required = ["MASTER CHAIN", "EAN", "TOTAL OH UNITS"]
-    df = pd.read_excel(path, sheet_name="Export", usecols=required, dtype={"EAN": str})
+def load_store_inventory(
+    source_path: Path | None = None, week: pd.Timestamp | None = None
+) -> pd.DataFrame:
+    if source_path is None and STORE_INVENTORY_CACHE.exists():
+        df = pd.read_parquet(STORE_INVENTORY_CACHE)
+        df["week_end"] = pd.to_datetime(df["week_end"])
+        requested_week = pd.Timestamp(week).normalize() if week is not None else df["week_end"].max()
+        selected = df[df["week_end"].eq(requested_week)]
+        df = (selected if not selected.empty else df[df["week_end"].eq(df["week_end"].max())]).copy()
+        df = df.rename(
+            columns={
+                "master_chain": "MASTER CHAIN",
+                "isbn": "EAN",
+                "store_oh_units": "TOTAL OH UNITS",
+            }
+        )
+    else:
+        path = source_path or latest_store_inventory_file()
+        required = ["MASTER CHAIN", "EAN", "TOTAL OH UNITS"]
+        df = pd.read_excel(
+            path, sheet_name="Export", usecols=required, dtype={"EAN": str}
+        )
     df["ISBN"] = df["EAN"].map(normalize_isbn)
     df["sheet_chain"] = df["MASTER CHAIN"].map(sheet_chain_filter_name)
     df["OH_Store"] = pd.to_numeric(df["TOTAL OH UNITS"], errors="coerce").fillna(0)
@@ -763,23 +817,23 @@ def build_criteria_sheet(latest_week: pd.Timestamp) -> pd.DataFrame:
         ),
         (
             "Inventory source",
-            f"Readerlink OH_DC and OO come from the latest Readerlink inventory cache built from {LATEST_INVENTORY_CACHE}. OH_DC = RDS DC INVENTORY OH; OO = RDS OPEN PO QUANTITY.",
+            f"Readerlink OH_DC and OO use the report week's snapshot in {INVENTORY_HISTORY_CACHE}. OH_DC = RDS DC INVENTORY OH; OO = RDS OPEN PO QUANTITY. {LATEST_INVENTORY_CACHE} is retained as a latest-week compatibility cache.",
         ),
         (
             "Store inventory source",
-            f"OH_Store comes from the latest Excel workbook in {STORE_INVENTORY_DIR}. It is grouped by MASTER CHAIN and EAN for account tabs, and across all master chains for Summary - All Accounts. OH_ALL = OH_DC + OH_Store.",
+            f"OH_Store comes from the latest weekly snapshot in {STORE_INVENTORY_CACHE}, built from Excel workbooks in {STORE_INVENTORY_DIR}. It is grouped by MASTER CHAIN and EAN for account tabs, and across all master chains for Summary - All Accounts. OH_ALL = OH_DC + OH_Store.",
         ),
         (
             "HBG availability",
-            f"HBG_Avail comes from {HBG_INVENTORY_FILE}, field Available To Sell, grouped by ISBN.",
+            f"HBG_Avail uses the report week's snapshot in {HBG_INVENTORY_HISTORY_CACHE}, originally read from {HBG_INVENTORY_FILE}, field Available To Sell, grouped by ISBN.",
         ),
         (
             "RL Freezes",
-            f"RL Freezes comes from {FROZEN_QUANTITIES_FILE}. Included rows require Reason = Readerlink and Requestor in Tracy, Tracy V, Tracy Vega, or Tracy V. Value = Current Stock Freeze + Future Reserve Qty, grouped by ISBN.",
+            f"RL Freezes uses the report week's snapshot in {FREEZES_HISTORY_CACHE}, originally read from {FROZEN_QUANTITIES_FILE}. Included rows require Reason = Readerlink and Requestor in Tracy, Tracy V, Tracy Vega, or Tracy V. Value = Current Stock Freeze + Future Reserve Qty, grouped by ISBN.",
         ),
         (
             "Title metadata",
-            "Pub, pt, ft, pgrp, ISBN, Title, Price, and PubDate come from ebs.item. PubDate uses AMORTIZATION_DATE with fallback to the On Sale Date task table when AMORTIZATION_DATE is blank.",
+            f"Pub, pt, ft, pgrp, ISBN, Title, Price, and PubDate use the report week's snapshot in {METADATA_HISTORY_CACHE}, originally queried from ebs.item. PubDate uses AMORTIZATION_DATE with fallback to the On Sale Date task table when AMORTIZATION_DATE is blank.",
         ),
         (
             "Metadata filter",
@@ -843,11 +897,17 @@ def main() -> None:
     display_year_cols = older_year_columns(pos_history, latest_week)
     output_path = args.output or output_file_for(latest_week)
     print_report_inputs(pos_history, latest_week, output_path)
-    metadata = load_metadata()
-    hbg_inventory = load_hbg_inventory()
-    readerlink_freezes = load_readerlink_freezes()
-    readerlink_inventory = load_readerlink_inventory()
-    store_inventory = load_store_inventory()
+    metadata = load_or_create_weekly_snapshot(
+        METADATA_HISTORY_CACHE, latest_week, load_metadata
+    )
+    hbg_inventory = load_or_create_weekly_snapshot(
+        HBG_INVENTORY_HISTORY_CACHE, latest_week, load_hbg_inventory
+    )
+    readerlink_freezes = load_or_create_weekly_snapshot(
+        FREEZES_HISTORY_CACHE, latest_week, load_readerlink_freezes
+    )
+    readerlink_inventory = load_readerlink_inventory(latest_week)
+    store_inventory = load_store_inventory(week=latest_week)
 
     sheets: dict[str, pd.DataFrame] = {}
     for sheet_name in ["Summary - All Accounts"] + TRACKED_CHAINS + ["All Other Accounts"]:

@@ -471,24 +471,7 @@ def confirm_amazon_rolling_reports_run_files() -> bool:
         print("Invalid choice. Please select a valid option.")
 
 
-def confirm_awbc_rolling_reports_source() -> bool:
-    source_folder = Path(
-        r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\AWBC"
-    )
-    latest_source = get_latest_matching_file(source_folder, "*AWBC.xlsx")
-    lines = [
-        "AWBC (BAMM) WEEKLY SOURCE CHECK",
-        "",
-        "Before continuing, have you:",
-        "  1. Saved the new Books-A-Million email workbook in the AWBC source folder?",
-        "  2. Submitted the new week's AWBC data to SQL?",
-        "",
-        f"Latest source file: {latest_source}",
-        "",
-        "This report automatically adds newer source files to its cache.",
-        "No separate cache-update step is required.",
-        "SQL submission is separate; this report reads the Excel source file.",
-    ]
+def confirm_source_check(lines: list[str]) -> bool:
     width = max(len(line) for line in lines)
 
     while True:
@@ -509,6 +492,115 @@ def confirm_awbc_rolling_reports_source() -> bool:
             return False
 
         print("Invalid choice. Please select 1 or 2.")
+
+
+def latest_source_file(folder: Path, patterns: tuple[str, ...]) -> Path | None:
+    if not folder.exists():
+        return None
+    files = [
+        path
+        for pattern in patterns
+        for path in folder.glob(pattern)
+        if path.is_file() and not path.name.startswith("~$")
+    ]
+    return max(files, key=lambda path: path.stat().st_mtime) if files else None
+
+
+def confirm_awbc_rolling_reports_source() -> bool:
+    source_folder = Path(
+        r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\AWBC"
+    )
+    latest_source = latest_source_file(source_folder, ("*AWBC.xlsx",))
+    return confirm_source_check([
+        "AWBC (BAMM) WEEKLY SOURCE CHECK",
+        "",
+        "Before continuing, have you:",
+        "  1. Saved the new Books-A-Million email workbook in the AWBC source folder?",
+        "  2. Submitted the new week's AWBC data to SQL?",
+        "",
+        f"Latest source file: {latest_source or 'None found'}",
+        "",
+        "This report automatically adds newer source files to its cache.",
+        "No separate cache-update step is required.",
+        "SQL submission is separate; this report reads the Excel source file.",
+    ])
+
+
+def confirm_uk_rolling_reports_source() -> bool:
+    folder = process_paths.UK_ROLLING_SOURCE_FOLDER
+    sales = latest_source_file(folder, ("OPPSSALX*.txt",))
+    reserve = latest_source_file(folder, ("SMPSTKRES*.txt",))
+    midas = latest_source_file(folder, ("*.xlsx",))
+    return confirm_source_check([
+        "ABRAMS & CHRONICLE UK SOURCE CHECK",
+        "",
+        "Before refreshing the UK report, have you added the newest source files",
+        "and confirmed that the UK period sellthrough is available in SQL?",
+        "",
+        f"Latest sales text file:   {sales or 'None found'}",
+        f"Latest reserve text file: {reserve or 'None found'}",
+        f"Latest Midas workbook:    {midas or 'None found'}",
+        "",
+        "The UK process automatically refreshes its caches from these sources and SQL.",
+    ])
+
+
+def confirm_readerlink_source() -> bool:
+    folder = Path(r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Readerlink")
+    inventory_folder = folder / "Inventory"
+    store_inventory_folder = folder / "OH_Store_TitlePerformanceReport"
+    sales = latest_source_file(folder, ("*.xlsx",))
+    inventory = latest_source_file(inventory_folder, ("*.xlsx",))
+    store_inventory = latest_source_file(store_inventory_folder, ("*.xlsx",))
+    hbg_inventory = process_paths.INVENTORY_DAILY_FINANCE_ONLY_FOLDER / "Inventory Detail.xlsx"
+    frozen_quantities = process_paths.INVENTORY_DAILY_FINANCE_ONLY_FOLDER / "Frozen Quantities.xlsx"
+    return confirm_source_check([
+        "READERLINK WEEKLY SOURCE CHECK",
+        "",
+        "Have you saved the newest Readerlink sales, DC inventory, and store OH workbooks?",
+        "",
+        f"Latest sales workbook:        {sales or 'None found'}",
+        f"Latest DC inventory workbook: {inventory or 'None found'}",
+        f"Latest store OH workbook:     {store_inventory or 'None found'}",
+        f"HBG Inventory Detail:         {hbg_inventory}",
+        f"Readerlink Frozen Quantities: {frozen_quantities}",
+        "",
+        "Cache Update automatically ingests newer sales, DC inventory, and store OH files.",
+        "Store OH is retained as dated history; the report reads its latest cached snapshot.",
+        "The report also reads HBG inventory, Readerlink freezes, and SQL metadata live.",
+    ])
+
+
+def confirm_target_noc_source() -> bool:
+    sales = latest_source_file(
+        process_paths.TARGET_NOC_SALES_FOLDER, ("*.csv", "*.xlsx", "*.xls")
+    )
+    inventory = latest_source_file(
+        process_paths.TARGET_NOC_INVENTORY_FOLDER, ("*.csv", "*.xlsx", "*.xls")
+    )
+    return confirm_source_check([
+        "TARGET NOC WEEKLY SOURCE CHECK",
+        "",
+        "Before updating Target NOC, have you saved the newest sales and inventory files?",
+        "",
+        f"Latest sales source:     {sales or 'None found'}",
+        f"Latest inventory source: {inventory or 'None found'}",
+        "",
+        "Target NOC automatically refreshes its caches when you choose Full Refresh.",
+    ])
+
+
+def confirm_x_gap_sources() -> bool:
+    return confirm_source_check([
+        "X-GAP UPSTREAM CACHE CHECK",
+        "",
+        "X-Gap does not ingest weekly source files directly.",
+        "Before continuing, have you updated the required retailer caches?",
+        "",
+        "  Amazon, Barnes & Noble, Edelweiss, Readerlink, and Target NOC",
+        "",
+        "Use option 97 in the retailer menu to review cache freshness.",
+    ])
 
 
 def confirm_amazon_monthly_sales_files() -> bool:
@@ -1298,6 +1390,8 @@ def run_readerlink_rolling_reports() -> None:
         if choice in {"99", "b", "back", "return", "menu"}:
             return
         if choice == "1":
+            if not confirm_readerlink_source():
+                continue
             run_python_process(
                 "Readerlink Cache Update",
                 process_paths.repo_path("readerlink_rolling_reports", "build_cache.py"),
@@ -1313,6 +1407,8 @@ def run_readerlink_rolling_reports() -> None:
             )
             continue
         if choice == "3":
+            if not confirm_readerlink_source():
+                continue
             run_python_process(
                 "Readerlink Rolling Reports",
                 process_paths.repo_path("readerlink_rolling_reports", "main.py"),
@@ -1634,6 +1730,8 @@ def run_retailer_rolling_reports_menu() -> None:
             continue
 
         if choice == "5":
+            if not confirm_uk_rolling_reports_source():
+                continue
             run_python_process(
                 "Abrams & Chronicle UK Rolling Reports",
                 process_paths.repo_path("Abrams_Chronicle_rollling_reports", "main.py"),
@@ -1681,12 +1779,16 @@ def run_retailer_rolling_reports_menu() -> None:
             continue
 
         if choice == "12":
+            if not confirm_target_noc_source():
+                continue
             run_python_process(
                 "Target NOC Rolling Reports",
                 process_paths.repo_path("target_rolling_report", "main.py"),
             )
             continue
         if choice == "13":
+            if not confirm_x_gap_sources():
+                continue
             run_python_process(
                 "X-Gap Report",
                 process_paths.repo_path("x_gap_report", "main.py"),
@@ -2264,9 +2366,5 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
 
 

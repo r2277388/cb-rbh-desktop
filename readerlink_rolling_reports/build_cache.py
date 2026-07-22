@@ -35,9 +35,14 @@ SALES_SOURCE_DIRS = [
 INVENTORY_SOURCE_DIR = (
     Path(r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Readerlink\Inventory")
 )
+STORE_INVENTORY_SOURCE_DIR = Path(
+    r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Readerlink\OH_Store_TitlePerformanceReport"
+)
 HISTORICAL_ROLLING_FILE = BASE_DIR / "Week 23 - 2026 Rolling Readerlink (060626).xlsx"
 WEEKLY_SALES_CACHE = CACHE_DIR / "readerlink_weekly_sales.parquet"
 LATEST_INVENTORY_CACHE = CACHE_DIR / "readerlink_latest_inventory.parquet"
+INVENTORY_HISTORY_CACHE = CACHE_DIR / "readerlink_inventory_history.parquet"
+STORE_INVENTORY_CACHE = CACHE_DIR / "readerlink_store_inventory_history.parquet"
 PRE2024_HISTORY_CACHE = CACHE_DIR / "readerlink_pre2024_pos_history.parquet"
 POS_HISTORY_CACHE = CACHE_DIR / "readerlink_pos_history.parquet"
 
@@ -53,7 +58,9 @@ OPTIONAL_SALES_COLUMNS = ["TITLE", "AUTHOR NAME", "ONSALE DATE", "MSRP"]
 INVENTORY_COLUMNS = ["ITEM", "RDS DC INVENTORY OH", "RDS OPEN PO QUANTITY"]
 OPTIONAL_INVENTORY_COLUMNS = ["TITLE", "AUTHOR NAME", "MSRP", "ONSALE DATE"]
 
-FILENAME_DATE_RE = re.compile(r"\b(\d{2})\s+(\d{4})\s+(\d{6})\s+Readerlink\b", re.IGNORECASE)
+FILENAME_DATE_RE = re.compile(
+    r"\b(\d{2})\s+(\d{4})\s+(\d{6})\s+Readerlink(?:\b|_)", re.IGNORECASE
+)
 ROLLING_SHEETS_TO_SKIP = {"pgrp_key"}
 PRE_MODERN_HISTORY_CUTOFF = pd.Timestamp("2024-01-01")
 EARLIEST_HISTORICAL_WEEK = pd.Timestamp("2014-01-01")
@@ -135,6 +142,20 @@ def find_inventory_files() -> list[SourceFile]:
         if path.name.startswith("~$"):
             continue
         if "inventory" not in path.name.lower():
+            continue
+        parsed = parse_readerlink_filename(path)
+        if parsed is not None:
+            files.append(parsed)
+    return sorted(files, key=lambda item: (item.week_end, item.path.name))
+
+
+def find_store_inventory_files() -> list[SourceFile]:
+    if not STORE_INVENTORY_SOURCE_DIR.exists():
+        print(f"Warning: missing store inventory folder: {STORE_INVENTORY_SOURCE_DIR}")
+        return []
+    files = []
+    for path in STORE_INVENTORY_SOURCE_DIR.glob("*.xlsx"):
+        if path.name.startswith("~$"):
             continue
         parsed = parse_readerlink_filename(path)
         if parsed is not None:
@@ -278,7 +299,22 @@ def build_incremental_sales_cache(files: list[SourceFile], rebuild_all: bool) ->
 
 
 def read_inventory_file(source: SourceFile) -> pd.DataFrame:
-    df = pd.read_excel(source.path, sheet_name="Export", dtype={"ITEM": str})
+    workbook = pd.ExcelFile(source.path)
+    if "Export" in workbook.sheet_names:
+        df = pd.read_excel(workbook, sheet_name="Export", dtype={"ITEM": str})
+    elif "rem dup" in workbook.sheet_names:
+        df = pd.read_excel(workbook, sheet_name="rem dup", dtype={"EAN": str}).rename(
+            columns={
+                "EAN": "ITEM",
+                "DC_OH_Tot": "RDS DC INVENTORY OH",
+                "DC_OO_Tot": "RDS OPEN PO QUANTITY",
+            }
+        )
+        print(f"Reading legacy Readerlink inventory layout: {source.path.name} [rem dup]")
+    else:
+        raise ValueError(
+            f"Could not find a supported Readerlink inventory sheet in {source.path}"
+        )
     missing = [column for column in INVENTORY_COLUMNS if column not in df.columns]
     if missing:
         raise ValueError(f"{source.path} is missing required inventory columns: {missing}")
@@ -327,6 +363,118 @@ def build_latest_inventory_cache() -> pd.DataFrame:
     latest = files[-1]
     print(f"Reading latest inventory: {latest.path.name}")
     return read_inventory_file(latest)
+
+
+def build_incremental_inventory_history_cache(
+    files: list[SourceFile], rebuild_all: bool
+) -> pd.DataFrame:
+    cached = None
+    if INVENTORY_HISTORY_CACHE.exists() and not rebuild_all:
+        cached = pd.read_parquet(INVENTORY_HISTORY_CACHE)
+        cached["week_end"] = pd.to_datetime(cached["week_end"])
+    cached_weeks = (
+        set(pd.to_datetime(cached["week_end"]).dt.normalize().dropna())
+        if cached is not None
+        else set()
+    )
+    files_to_read = [source for source in files if source.week_end.normalize() not in cached_weeks]
+    if files_to_read:
+        frames = [read_inventory_file(source) for source in files_to_read]
+        new_rows = pd.concat(frames, ignore_index=True)
+        history = new_rows if cached is None else pd.concat([cached, new_rows], ignore_index=True)
+    elif cached is not None:
+        print("DC inventory history cache: no new inventory files to read.")
+        history = cached.copy()
+    else:
+        history = pd.DataFrame()
+    if history.empty:
+        return history
+    history["week_end"] = pd.to_datetime(history["week_end"])
+    return (
+        history.drop_duplicates(subset=["week_end", "isbn"], keep="last")
+        .sort_values(["week_end", "isbn"])
+        .reset_index(drop=True)
+    )
+
+
+def read_store_inventory_file(source: SourceFile) -> pd.DataFrame:
+    required = ["MASTER CHAIN", "EAN", "TOTAL OH UNITS"]
+    df = pd.read_excel(
+        source.path,
+        sheet_name="Export",
+        usecols=required,
+        dtype={"EAN": str},
+    )
+    df = df.rename(
+        columns={
+            "MASTER CHAIN": "master_chain",
+            "EAN": "isbn",
+            "TOTAL OH UNITS": "store_oh_units",
+        }
+    )
+    df["master_chain"] = df["master_chain"].astype("string").str.strip()
+    df["isbn"] = df["isbn"].map(normalize_isbn)
+    df["store_oh_units"] = pd.to_numeric(
+        df["store_oh_units"], errors="coerce"
+    ).fillna(0)
+    df = df[df["isbn"].ne("")]
+    df = df.groupby(["master_chain", "isbn"], as_index=False)["store_oh_units"].sum()
+    df["week_end"] = source.week_end
+    df["readerlink_week"] = source.week_number
+    df["readerlink_year"] = source.year
+    df["source_file"] = source.path.name
+    return df[
+        [
+            "week_end",
+            "readerlink_week",
+            "readerlink_year",
+            "master_chain",
+            "isbn",
+            "store_oh_units",
+            "source_file",
+        ]
+    ].sort_values(["week_end", "master_chain", "isbn"]).reset_index(drop=True)
+
+
+def build_incremental_store_inventory_cache(
+    files: list[SourceFile], rebuild_all: bool
+) -> pd.DataFrame:
+    cached = None
+    if STORE_INVENTORY_CACHE.exists() and not rebuild_all:
+        cached = pd.read_parquet(STORE_INVENTORY_CACHE)
+        cached["week_end"] = pd.to_datetime(cached["week_end"])
+    cached_weeks = (
+        set(pd.to_datetime(cached["week_end"]).dt.normalize().dropna())
+        if cached is not None
+        else set()
+    )
+    files_to_read = [source for source in files if source.week_end.normalize() not in cached_weeks]
+    if not files_to_read:
+        print("Store inventory cache: no new store inventory files to read.")
+        if cached is not None:
+            return cached.copy()
+        return pd.DataFrame(
+            columns=[
+                "week_end",
+                "readerlink_week",
+                "readerlink_year",
+                "master_chain",
+                "isbn",
+                "store_oh_units",
+                "source_file",
+            ]
+        )
+    frames = [read_store_inventory_file(source) for source in files_to_read]
+    new_rows = pd.concat(frames, ignore_index=True)
+    history = new_rows if cached is None else pd.concat([cached, new_rows], ignore_index=True)
+    history["week_end"] = pd.to_datetime(history["week_end"])
+    return (
+        history.drop_duplicates(
+            subset=["week_end", "master_chain", "isbn"], keep="last"
+        )
+        .sort_values(["week_end", "master_chain", "isbn"])
+        .reset_index(drop=True)
+    )
 
 
 def rolling_sheet_to_master_chain(sheet_name: str) -> str:
@@ -455,7 +603,12 @@ def load_or_build_history(skip_history: bool, rebuild_all: bool) -> pd.DataFrame
     return history
 
 
-def print_cache_plan(sales_files: list[SourceFile], inventory_files: list[SourceFile], rebuild_all: bool) -> None:
+def print_cache_plan(
+    sales_files: list[SourceFile],
+    inventory_files: list[SourceFile],
+    store_inventory_files: list[SourceFile],
+    rebuild_all: bool,
+) -> None:
     print("")
     print("Readerlink cache inputs")
     print("-----------------------")
@@ -469,12 +622,17 @@ def print_cache_plan(sales_files: list[SourceFile], inventory_files: list[Source
     print(f"Inventory filenames found: {len(inventory_files):,}")
     if inventory_files:
         print(f"Latest inventory file: {inventory_files[-1].path.name} ({inventory_files[-1].week_end:%m/%d/%Y})")
+    print(f"Store inventory source folder: {STORE_INVENTORY_SOURCE_DIR}")
+    print(f"Store inventory filenames found: {len(store_inventory_files):,}")
+    if store_inventory_files:
+        latest_store = store_inventory_files[-1]
+        print(f"Latest store inventory file: {latest_store.path.name} ({latest_store.week_end:%m/%d/%Y})")
     print(f"Existing sales cache: {'yes' if WEEKLY_SALES_CACHE.exists() else 'no'}")
     print(f"Existing pre-2024 history cache: {'yes' if PRE2024_HISTORY_CACHE.exists() else 'no'}")
     print(f"Mode: {'full rebuild' if rebuild_all else 'incremental weekly update'}")
     if not rebuild_all:
         print("Normal weekly run: prior sales history is read from cache; only uncached weekly sales files are opened.")
-        print("Normal weekly run: Readerlink inventory is refreshed from the latest inventory workbook only.")
+        print("Normal weekly run: uncached DC inventory and store-OH weeks are added to history; the latest DC compatibility cache is also refreshed.")
     print("")
 
 
@@ -533,7 +691,11 @@ def print_recent_week_summary(
     print("")
 
 
-def confirm_latest_files(sales_files: list[SourceFile], inventory_files: list[SourceFile]) -> bool:
+def confirm_latest_files(
+    sales_files: list[SourceFile],
+    inventory_files: list[SourceFile],
+    store_inventory_files: list[SourceFile],
+) -> bool:
     latest_sales = sales_files[-1]
     latest_inventory = inventory_files[-1]
     sales_cached = False
@@ -547,8 +709,10 @@ def confirm_latest_files(sales_files: list[SourceFile], inventory_files: list[So
     print("------------------------------------------")
     print(f"Latest sales file: {latest_sales.path.name} ({latest_sales.week_end:%m/%d/%Y})")
     print(f"Latest inventory file: {latest_inventory.path.name} ({latest_inventory.week_end:%m/%d/%Y})")
+    latest_store = store_inventory_files[-1]
+    print(f"Latest store inventory file: {latest_store.path.name} ({latest_store.week_end:%m/%d/%Y})")
     print(f"Latest sales week already cached: {'yes' if sales_cached else 'no'}")
-    print("The cache update will add any uncached sales weeks and refresh inventory from the latest inventory file.")
+    print("The cache update will add uncached sales and store-OH weeks, and refresh DC inventory from the latest file.")
     while True:
         try:
             choice = input("Add/update Readerlink cache with these files? (y/n): ").strip().lower()
@@ -565,20 +729,35 @@ def confirm_latest_files(sales_files: list[SourceFile], inventory_files: list[So
 def run_add_new_week(skip_history: bool, rebuild_all: bool) -> bool:
     sales_files = find_sales_files()
     inventory_files = find_inventory_files()
+    store_inventory_files = find_store_inventory_files()
     if not sales_files:
         raise FileNotFoundError("No Readerlink sales source files found.")
     if not inventory_files:
         raise FileNotFoundError("No Readerlink inventory source files found.")
+    if not store_inventory_files:
+        raise FileNotFoundError("No Readerlink store inventory source files found.")
 
-    print_cache_plan(sales_files, inventory_files, rebuild_all)
-    if not confirm_latest_files(sales_files, inventory_files):
+    print_cache_plan(sales_files, inventory_files, store_inventory_files, rebuild_all)
+    if not confirm_latest_files(sales_files, inventory_files, store_inventory_files):
         return False
 
     sales = build_incremental_sales_cache(sales_files, rebuild_all)
     save_cache(sales, WEEKLY_SALES_CACHE)
 
-    inventory = build_latest_inventory_cache()
+    inventory_history = build_incremental_inventory_history_cache(
+        inventory_files, rebuild_all
+    )
+    save_cache(inventory_history, INVENTORY_HISTORY_CACHE)
+    latest_inventory_week = pd.to_datetime(inventory_history["week_end"]).max()
+    inventory = inventory_history[
+        pd.to_datetime(inventory_history["week_end"]).eq(latest_inventory_week)
+    ].copy()
     save_cache(inventory, LATEST_INVENTORY_CACHE)
+
+    store_inventory = build_incremental_store_inventory_cache(
+        store_inventory_files, rebuild_all
+    )
+    save_cache(store_inventory, STORE_INVENTORY_CACHE)
 
     history = load_or_build_history(skip_history, rebuild_all)
     combined_pos = build_combined_pos_history(sales, history)

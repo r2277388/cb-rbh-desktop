@@ -25,6 +25,7 @@ BN_SALES, BN_INV = BN / "bn_customer_sales.parquet", BN / "bn_inventory_snapshot
 ED = F / "Atelier Edelweiss" / "cache"
 ED_SALES, ED_META = ED / "edelweiss_sales.parquet", ED / "edelweiss_metadata.parquet"
 RL = F / "Atelier Readerlink" / "cache" / "readerlink_pos_history.parquet"
+RL_STORE_CACHE = F / "Atelier Readerlink" / "cache" / "readerlink_store_inventory_history.parquet"
 RL_STORE = F / "Weekly reports" / "2026" / "Readerlink" / "OH_Store_TitlePerformanceReport"
 TG = process_paths.TARGET_NOC_CACHE_DIR
 TG_SALES, TG_META, TG_INV = TG / "target_noc_weekly_sales.parquet", TG / "target_noc_metadata.parquet", TG / "target_noc_inventory.parquet"
@@ -159,15 +160,23 @@ def target_metrics():
     inv["ISBN"] = inv.ISBN.map(normalize_isbn)
     target_oh = inv.groupby("ISBN")["On Hand"].sum()
 
-    store_file = latest_xlsx(RL_STORE)
-    store = pd.read_excel(store_file, sheet_name="Export", usecols=["MASTER CHAIN", "EAN", "TOTAL OH UNITS"], dtype={"EAN": str})
+    if RL_STORE_CACHE.exists():
+        store = pd.read_parquet(RL_STORE_CACHE)
+        store["week_end"] = pd.to_datetime(store["week_end"])
+        store = store[store["week_end"].eq(store["week_end"].max())].rename(
+            columns={"master_chain": "MASTER CHAIN", "isbn": "EAN", "store_oh_units": "TOTAL OH UNITS"}
+        )
+        store_source = RL_STORE_CACHE
+    else:
+        store_source = latest_xlsx(RL_STORE)
+        store = pd.read_excel(store_source, sheet_name="Export", usecols=["MASTER CHAIN", "EAN", "TOTAL OH UNITS"], dtype={"EAN": str})
     chains = store["MASTER CHAIN"].astype("string").str.strip().str.upper()
     store = store[chains.isin({"TARGET", "TARGET STORES"})].copy()
     store["ISBN"], store["On Hand"] = store.EAN.map(normalize_isbn), num(store["TOTAL OH UNITS"])
     result["On Hand"] = target_oh.add(store.groupby("ISBN")["On Hand"].sum(), fill_value=0)
     # Filled from hachette.HachetteOrders after the shared SQL query is joined.
     result["On Order (NOC)"] = 0
-    return result.fillna(0), td, rd, store_file
+    return result.fillna(0), td, rd, store_source
 
 
 ITEM_SQL = """
@@ -231,7 +240,12 @@ def amazon_date():
 
 
 def source_rows():
-    store = latest_xlsx(RL_STORE) if RL_STORE.exists() else RL_STORE
+    if RL_STORE_CACHE.exists():
+        store = RL_STORE_CACHE
+        store_through = max_date(RL_STORE_CACHE, "week_end")
+    else:
+        store = latest_xlsx(RL_STORE) if RL_STORE.exists() else RL_STORE
+        store_through = None
     ad = amazon_date()
     return [
         ("Amazon customer orders", AMZ_CO, ad, ""), ("Amazon units shipped", AMZ_US, ad, ""),
@@ -240,7 +254,7 @@ def source_rows():
         ("Edelweiss sales", ED_SALES, max_date(ED_SALES, "Week"), ""),
         ("Edelweiss inventory", ED_META, max_date(ED_SALES, "Week"), ""),
         ("Readerlink Target-tab history", RL, max_date(RL, "week_end"), ""),
-        ("Readerlink Target store OH", store, None, ""),
+        ("Readerlink Target store OH", store, store_through, ""),
         ("Target NOC sales", TG_SALES, max_date(TG_SALES, "Week"), ""),
         ("Target NOC inventory", TG_INV, max_date(TG_INV, "Week"), "open orders use live SQL"),
     ]
