@@ -3,10 +3,12 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
+from openpyxl import load_workbook
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
@@ -30,6 +32,28 @@ HEADER_ROW_INDEX = 5
 PRE_DATE_COLUMN_COUNT = 20
 WEEKLY_OUTPUT_START = pd.Timestamp("2019-01-01")
 SOURCE_FILE_RE = re.compile(r"(?P<mmddyy>\d{6})\s+AWBC\.xlsx$", re.IGNORECASE)
+SOURCE_NUMERIC_FIELDS = [
+    "Retail",
+    "Week1Units",
+    "Week2Units",
+    "YTD_Units",
+    "BAM_OnHand",
+    "Warehouse_OnHand",
+    "Qty_OnOrder",
+]
+REPORT_AUDIT_FIELDS = [
+    "BAM OH",
+    "WH OH",
+    "OO Qty",
+    "OH_Avg",
+    "W52",
+    "6Wk Avg",
+    "TYTD",
+    "LYTD",
+    "YTD Var",
+    "LYFY",
+    "LTD",
+]
 
 
 @dataclass(frozen=True)
@@ -156,6 +180,8 @@ def _source_files() -> list[tuple[pd.Timestamp, Path]]:
         return []
     files: list[tuple[pd.Timestamp, Path]] = []
     for path in SOURCE_FOLDER.glob("*AWBC.xlsx"):
+        if path.name.startswith("~$"):
+            continue
         week = _parse_source_week(path)
         if week is not None:
             files.append((week, path))
@@ -231,6 +257,19 @@ def refresh_caches(full_refresh: bool = False) -> tuple[pd.DataFrame, pd.DataFra
         metadata = update_metadata(metadata, source_metadata)
         processed.append(path)
         latest_cache_week = week
+
+    # On-hand and on-order are point-in-time snapshots. Clear values for ISBNs
+    # absent from the newest file so old inventory cannot leak into this week.
+    if latest_cache_week is not None:
+        latest_path = next(
+            (path for week, path in reversed(_source_files()) if week == latest_cache_week),
+            None,
+        )
+        if latest_path is not None:
+            _, latest_metadata = read_weekly_source(latest_path, latest_cache_week)
+            for column in ["BAM_OnHand", "Warehouse_OnHand", "Qty_OnOrder"]:
+                metadata[column] = 0
+            metadata = update_metadata(metadata, latest_metadata)
 
     _write_cache(pos, POS_CACHE_FILE)
     _write_cache(metadata, METADATA_CACHE_FILE)
@@ -449,6 +488,115 @@ def _save_options(report_df: pd.DataFrame, latest_week: pd.Timestamp) -> dict[st
     }
 
 
+def _source_numeric_totals(path: Path) -> dict[str, float]:
+    source = pd.read_excel(path, sheet_name=0, usecols=SOURCE_NUMERIC_FIELDS)
+    return {column: float(_numeric(source[column]).sum()) for column in SOURCE_NUMERIC_FIELDS}
+
+
+def _report_total_row(path: Path) -> dict[object, float]:
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message="Cannot parse header or footer.*", category=UserWarning
+        )
+        workbook = load_workbook(path, read_only=True, data_only=True)
+    try:
+        sheet = workbook.active
+        top_rows = list(sheet.iter_rows(min_row=1, max_row=10, values_only=True))
+        totals = next(
+            (
+                row
+                for row in top_rows
+                if any(value in {"Total", "Grand Total"} for value in row)
+            ),
+            top_rows[0],
+        )
+        headers = next(
+            row
+            for row in top_rows
+            if any(value in {"BAM OH", "BAM O/H"} for value in row)
+            and any(value in {"OO Qty", "O/O"} for value in row)
+        )
+        aliases = {
+            "BAM O/H": "BAM OH",
+            "WH O/H": "WH OH",
+            "O/O": "OO Qty",
+            "O/H Avg Wk": "OH_Avg",
+            "52 WK": "W52",
+            "YTD": "TYTD",
+            "2025": "LYFY",
+            2025: "LYFY",
+        }
+        return {aliases.get(header, header): value for header, value in zip(headers, totals)}
+    finally:
+        workbook.close()
+
+
+def _weekly_total(total_row: dict[object, float], week: pd.Timestamp) -> float:
+    for header, value in total_row.items():
+        if isinstance(header, (pd.Timestamp,)) or hasattr(header, "year"):
+            parsed = pd.Timestamp(header)
+        elif isinstance(header, str):
+            parsed = pd.to_datetime(header, format="%m-%d-%Y", errors="coerce")
+        else:
+            continue
+        if not pd.isna(parsed) and pd.Timestamp(parsed).normalize() == week:
+            return float(value or 0)
+    return 0.0
+
+
+def _total_numeric(value: object) -> float:
+    parsed = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+    return 0.0 if pd.isna(parsed) else float(parsed)
+
+
+def print_five_week_audit() -> None:
+    recent_sources = list(reversed(_source_files()))[:5]
+    if not recent_sources:
+        return
+
+    source_columns: dict[str, dict[str, float]] = {}
+    report_columns: dict[str, dict[str, float]] = {}
+    reconciliation: list[tuple[str, str]] = []
+    direct_fields = {
+        "Week1Units": "Weekly Sales",
+        "BAM_OnHand": "BAM OH",
+        "Warehouse_OnHand": "WH OH",
+        "Qty_OnOrder": "OO Qty",
+    }
+
+    for week, source_path in recent_sources:
+        label = week.strftime("%m/%d/%Y")
+        source_totals = _source_numeric_totals(source_path)
+        source_columns[label] = source_totals
+        report_path = OUTPUT_FOLDER / _format_output_filename(week)
+        if not report_path.exists():
+            reconciliation.append((label, "REPORT MISSING"))
+            continue
+
+        total_row = _report_total_row(report_path)
+        report_totals = {
+            "Weekly Sales": _weekly_total(total_row, week),
+            **{
+                field: _total_numeric(total_row.get(field))
+                for field in REPORT_AUDIT_FIELDS
+            },
+        }
+        report_columns[label] = report_totals
+        matches = all(
+            abs(source_totals[source_field] - report_totals[report_field]) < 0.005
+            for source_field, report_field in direct_fields.items()
+        )
+        reconciliation.append((label, "MATCH" if matches else "MISMATCH"))
+
+    print("\nAWBC source totals - newest week first")
+    print(pd.DataFrame(source_columns).to_string(float_format=lambda value: f"{value:,.2f}"))
+    print("\nAWBC generated-report totals - newest week first")
+    print(pd.DataFrame(report_columns).to_string(float_format=lambda value: f"{value:,.2f}"))
+    print("\nAWBC direct-field reconciliation")
+    for label, status in reconciliation:
+        print(f"    {label}  {status}")
+
+
 def build_awbc_report(full_refresh: bool = False, local_only: bool = False) -> BuildResult:
     pos, metadata, yearly, processed = refresh_caches(full_refresh=full_refresh)
     report, latest_week = build_report_dataframe(pos, metadata, yearly)
@@ -503,6 +651,7 @@ def main() -> None:
         print("No newer AWBC source files needed to be added to cache.")
     print(f"Report shape: {result.report_shape[0]:,} rows x {result.report_shape[1]:,} columns")
     print(f"Saved report: {result.output_file}")
+    print_five_week_audit()
 
 
 if __name__ == "__main__":

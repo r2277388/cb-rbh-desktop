@@ -254,9 +254,16 @@ CONSOLIDATED_INVENTORY_VERTICALIZATION_SCRIPT = repo_path(
 HBG_ORACLE_INVENTORY_COMPARISON_SCRIPT = repo_path(
     "Inventory_Obsolescence", "hbg_oracle_inventory_comparison.py"
 )
-AMAZON_ROLLING_CUSTOMER_ORDERS_PICKLE = repo_path("rr_customer_orders.pkl")
-AMAZON_ROLLING_UNITS_SHIPPED_PICKLE = repo_path("rr_units_shipped.pkl")
-AMAZON_ROLLING_PO_PICKLE = repo_path("latest_amazon_po.pkl")
+AMAZON_ROLLING_CACHE_DIR = Path(
+    r"F:\ANALYSIS\Finance\DataWarehouse\Atelier AmazonRolling\cache"
+)
+AMAZON_ROLLING_CUSTOMER_ORDERS_PICKLE = (
+    AMAZON_ROLLING_CACHE_DIR / "rr_customer_orders.pkl"
+)
+AMAZON_ROLLING_UNITS_SHIPPED_PICKLE = (
+    AMAZON_ROLLING_CACHE_DIR / "rr_units_shipped.pkl"
+)
+AMAZON_ROLLING_PO_PICKLE = AMAZON_ROLLING_CACHE_DIR / "latest_amazon_po.pkl"
 AMAZON_ROLLING_CUSTOMER_ORDERS_QUERY = repo_path(
     "amazon_rolling_reports", "query_co.py"
 )

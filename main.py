@@ -1410,6 +1410,16 @@ def _latest_cache_value(cache_file: Path, column: str):
     return values.max().normalize() if not values.empty else None
 
 
+def _latest_amazon_week(cache_file: Path):
+    if not cache_file.exists():
+        return None
+    cached = pd.read_pickle(cache_file)
+    weekly_columns = pd.to_datetime(
+        pd.Index(cached.columns), format="%m-%d-%Y", errors="coerce"
+    ).dropna()
+    return weekly_columns.max().normalize() if not weekly_columns.empty else None
+
+
 def show_other_retailer_cache_status() -> None:
     today = pd.Timestamp.today().normalize()
     expected_week = today - pd.Timedelta(days=(today.weekday() - 5) % 7)
@@ -1454,6 +1464,18 @@ def show_other_retailer_cache_status() -> None:
     ]
 
     rows = []
+    try:
+        latest = _latest_amazon_week(
+            process_paths.AMAZON_ROLLING_UNITS_SHIPPED_PICKLE
+        )
+        if latest is None:
+            rows.append(("Amazon", "None", "NEEDS UPDATE"))
+        else:
+            state = "CURRENT" if latest >= expected_week else "NEEDS UPDATE"
+            rows.append(("Amazon", latest.strftime("%m/%d/%Y"), state))
+    except Exception:
+        rows.append(("Amazon", "Unavailable", "UNAVAILABLE"))
+
     uk_cache = process_paths.UK_ROLLING_CACHE_DIR / "uk_period_sellthru.parquet"
     try:
         uk = pd.read_parquet(uk_cache, columns=["Period"]) if uk_cache.exists() else pd.DataFrame()
@@ -1477,7 +1499,7 @@ def show_other_retailer_cache_status() -> None:
         except Exception:
             rows.append((label, "Unavailable", "UNAVAILABLE"))
 
-    print("\nOther Retailer Weekly Cache Status")
+    print("\nRetailer Weekly Cache Status")
     print(f"Weekly target: {expected_week:%m/%d/%Y}")
     print()
     for label, latest, state in rows:
@@ -2200,7 +2222,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
 
