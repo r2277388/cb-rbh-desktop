@@ -19,7 +19,7 @@ AMAZON_SQL_UPLOAD_DIR = REPO_ROOT / "amazon_sql_upload"
 if str(AMAZON_SQL_UPLOAD_DIR) not in sys.path:
     sys.path.insert(0, str(AMAZON_SQL_UPLOAD_DIR))
 
-from asin_manual_key import asin_isbn_manual_key  # noqa: E402
+from shared.amazon_metadata import resolve_isbn_series  # noqa: E402
 from asin_removal_list import asins_to_delete_list  # noqa: E402
 from load_catalog import df_catalog  # noqa: E402
 from load_ebs_isbn_key import isbn_key  # noqa: E402
@@ -251,33 +251,24 @@ def add_isbn(df: pd.DataFrame) -> pd.DataFrame:
     df_isbn = safe_load_ebs_isbn_key()
     df_catalog = safe_load_catalog()
 
-    isbn_set = set(df_isbn["ISBN"].dropna().astype(str).unique().tolist())
-    isbn_set.discard("")
-    isbn_set.discard("ISBN")
-
     working = df.copy()
-    existing_isbn = (
+    working["_Existing ISBN"] = (
         working.pop("ISBN").map(normalize_isbn)
         if "ISBN" in working.columns
         else pd.Series("", index=working.index, dtype="string")
     )
-
     merged = working.merge(df_ypticod, on="ASIN", how="left")
     merged = merged.merge(df_catalog, on="ASIN", how="left")
 
-    isbn_col = pd.Series(existing_isbn.to_numpy(), index=merged.index).fillna("")
-    ypticod_values = merged["ISBN"].map(normalize_isbn)
-    mask = isbn_col == ""
-    isbn_col = pd.Series(np.where(mask, ypticod_values, isbn_col), index=merged.index)
-    for fallback_column in ["EAN", "ISBN_Amz", "Model Number"]:
-        fallback_values = merged[fallback_column].map(normalize_isbn)
-        mask = (isbn_col == "") & fallback_values.isin(isbn_set)
-        isbn_col = pd.Series(np.where(mask, fallback_values, isbn_col), index=merged.index)
-
-    merged["ISBN"] = np.where(isbn_col == "", "NO_ISBN", isbn_col)
+    merged["ISBN"] = resolve_isbn_series(
+        merged,
+        df_isbn,
+        ["EAN", "ISBN_Amz", "Model Number"],
+        trusted_columns=["_Existing ISBN", "ISBN"],
+    ).fillna("NO_ISBN")
+    merged = merged.drop(columns=["_Existing ISBN"])
     merged = merged[~merged["ASIN"].isin(asins_to_delete_list)]
     merged = merged[~merged["Product Title"].fillna("").str.lower().str.endswith("anglais")]
-    merged["ISBN"] = merged.apply(lambda row: asin_isbn_manual_key.get(row["ASIN"], row["ISBN"]), axis=1)
     return merged
 
 

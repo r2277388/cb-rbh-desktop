@@ -22,7 +22,7 @@ AMAZON_SQL_UPLOAD_DIR = REPO_ROOT / "amazon_sql_upload"
 if str(AMAZON_SQL_UPLOAD_DIR) not in sys.path:
     sys.path.insert(0, str(AMAZON_SQL_UPLOAD_DIR))
 
-from asin_manual_key import asin_isbn_manual_key  # noqa: E402
+from shared.amazon_metadata import resolve_isbn_series  # noqa: E402
 from loader_asin_mapping import load_asin_mapping  # noqa: E402
 from load_ypticod import load_ypticod  # noqa: E402
 
@@ -490,10 +490,10 @@ def build_summary(
     metadata = load_item_metadata() if metadata is None else metadata
 
     working = df.merge(mapping, on="ASIN", how="left")
-    working["ISBN"] = working.apply(
-        lambda row: asin_isbn_manual_key.get(row["ASIN"], row["ISBN"]),
-        axis=1,
+    resolved = resolve_isbn_series(
+        working, metadata, ["ISBN"]
     )
+    working["ISBN"] = resolved.fillna(working["ISBN"])
     working["ISBN"] = working["ISBN"].map(normalize_isbn)
     working["ISBN"] = working["ISBN"].replace("", "NO ISBN")
     working["campaign"] = (
@@ -537,10 +537,10 @@ def build_campaign_detail(
     metadata = load_item_metadata() if metadata is None else metadata
 
     working = df.merge(mapping, on="ASIN", how="left")
-    working["ISBN"] = working.apply(
-        lambda row: asin_isbn_manual_key.get(row["ASIN"], row["ISBN"]),
-        axis=1,
+    resolved = resolve_isbn_series(
+        working, metadata, ["ISBN"]
     )
+    working["ISBN"] = resolved.fillna(working["ISBN"])
     working["ISBN"] = working["ISBN"].map(normalize_isbn)
     working["ISBN"] = working["ISBN"].replace("", "NO ISBN")
     working = working.merge(metadata, on="ISBN", how="left")

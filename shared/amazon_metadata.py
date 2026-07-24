@@ -73,6 +73,44 @@ def save_asin_isbn_override(
         file.write("\n")
 
 
+def resolve_isbn_series(
+    data: pd.DataFrame,
+    item_metadata: pd.DataFrame,
+    candidate_columns: list[str],
+    trusted_columns: list[str] | None = None,
+    overrides: dict[str, str] | None = None,
+) -> pd.Series:
+    """Resolve ISBNs with one shared priority while preserving the input index."""
+    asins = normalize_identifier_series(data["ASIN"])
+    items = normalize_identifier_series(item_metadata["ISBN"])
+    valid_isbns = set(items.dropna())
+    manual = overrides if overrides is not None else load_asin_isbn_overrides()
+    manual = {
+        normalize_identifier(asin): normalize_identifier(isbn)
+        for asin, isbn in manual.items()
+    }
+
+    resolved = asins.map(manual)
+    for column in trusted_columns or []:
+        if column not in data.columns:
+            continue
+        candidate = normalize_identifier_series(data[column])
+        resolved = resolved.fillna(candidate)
+
+    for column in candidate_columns:
+        if column not in data.columns:
+            continue
+        candidate = normalize_identifier_series(data[column])
+        candidate = candidate.where(candidate.isin(valid_isbns))
+        resolved = resolved.fillna(candidate)
+
+    direct_isbn = asins.where(asins.isin(valid_isbns))
+    resolved = resolved.fillna(direct_isbn)
+    converted_isbn10 = asins.map(isbn10_to_isbn13)
+    converted_isbn10 = converted_isbn10.where(converted_isbn10.isin(valid_isbns))
+    return resolved.fillna(converted_isbn10).astype("string")
+
+
 def build_asin_metadata(
     catalog: pd.DataFrame,
     item_metadata: pd.DataFrame,
@@ -85,25 +123,12 @@ def build_asin_metadata(
         catalog[column] = normalize_identifier_series(catalog[column])
     items["ISBN"] = normalize_identifier_series(items["ISBN"])
     items = items.dropna(subset=["ISBN"]).drop_duplicates("ISBN", keep="first")
-    valid_isbns = set(items["ISBN"].dropna())
-    manual = overrides if overrides is not None else load_asin_isbn_overrides()
-    manual = {
-        normalize_identifier(asin): normalize_identifier(isbn)
-        for asin, isbn in manual.items()
-    }
-
-    resolved = catalog["ASIN"].map(manual)
-    for candidate_column in ["ISBN-13", "EAN", "Model Number"]:
-        candidate = catalog[candidate_column].where(
-            catalog[candidate_column].isin(valid_isbns)
-        )
-        resolved = resolved.fillna(candidate)
-
-    direct_isbn = catalog["ASIN"].where(catalog["ASIN"].isin(valid_isbns))
-    resolved = resolved.fillna(direct_isbn)
-    converted_isbn10 = catalog["ASIN"].map(isbn10_to_isbn13)
-    converted_isbn10 = converted_isbn10.where(converted_isbn10.isin(valid_isbns))
-    resolved = resolved.fillna(converted_isbn10)
+    resolved = resolve_isbn_series(
+        catalog,
+        items,
+        ["ISBN-13", "EAN", "Model Number"],
+        overrides=overrides,
+    )
 
     mapping = pd.DataFrame({"ASIN": catalog["ASIN"], "ISBN": resolved})
     mapping = mapping.dropna(subset=["ASIN"]).drop_duplicates("ASIN", keep="first")
