@@ -9,7 +9,10 @@ CRITERIA_ROWS = [
         "Purpose": "Preserves the current Amazon Vendor Central download.",
         "Criteria / Logic": (
             "Contains every row and field from the newer source workbook without "
-            "ASIN filtering or status comparison."
+            "ASIN filtering or status comparison. ISBN uses the shared Amazon "
+            "resolver: manual overrides, then the latest Catalog's ISBN-13, EAN, "
+            "and Model Number, followed by a direct ISBN or ISBN-10 conversion when "
+            "the ASIN itself is an ISBN. Title and Publisher come from ebs.Item."
         ),
     },
     {
@@ -32,7 +35,9 @@ CRITERIA_ROWS = [
             "six-month download are ignored. Each result includes the current complete "
             "source row plus Change Type, Previous Status, and Previous Status "
             "description. Results are grouped by current Status, with the smallest "
-            "status group first and headers repeated for each group."
+            "status group first and headers repeated for each group. Status and "
+            "Status description appear first, followed by comparison fields and "
+            "the mapped ISBN, Title, and Publisher."
         ),
     },
     {

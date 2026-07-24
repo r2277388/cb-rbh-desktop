@@ -6,8 +6,12 @@ import pandas as pd
 
 
 def build_active_asins(cleaned: pd.DataFrame, as_of_date: datetime) -> pd.DataFrame:
-    start_dates = pd.to_datetime(cleaned["Sell-through start date"], errors="coerce")
-    end_dates = pd.to_datetime(cleaned["Sell-through end date"], errors="coerce")
+    start_dates = pd.to_datetime(
+        cleaned["Sell-through start date"], errors="coerce", format="mixed"
+    )
+    end_dates = pd.to_datetime(
+        cleaned["Sell-through end date"], errors="coerce", format="mixed"
+    )
     as_of = pd.Timestamp(as_of_date.date())
     active_mask = (
         cleaned["Offer state"].astype("string").str.strip().str.casefold().eq("active")
@@ -17,7 +21,10 @@ def build_active_asins(cleaned: pd.DataFrame, as_of_date: datetime) -> pd.DataFr
     )
     active = cleaned.loc[
         active_mask,
-        ["ASIN", "Sell-through start date", "Sell-through end date"],
+        [
+            "ISBN", "Title", "Publisher", "ASIN",
+            "Sell-through start date", "Sell-through end date",
+        ],
     ].copy()
     active["Days Left"] = (end_dates.loc[active.index] - as_of).dt.days
     return active.sort_values(
@@ -47,6 +54,7 @@ def write_grouped_status_changes(
     writer.sheets[sheet_name] = worksheet
     standard_header = _header_format(workbook, "#1F4E78")
     comparison_header = _header_format(workbook, "#E26B0A")
+    metadata_header = _header_format(workbook, "#403151")
     date_format = workbook.add_format({"num_format": "yyyy-mm-dd"})
     worksheet.freeze_panes(1, 0)
 
@@ -64,9 +72,14 @@ def write_grouped_status_changes(
             else changes[changes["Status"].eq(status)]
         )
         for column_number, column_name in enumerate(changes.columns):
-            header_format = (
-                comparison_header if column_number < 3 else standard_header
-            )
+            if column_name in {"ISBN", "Title", "Publisher"}:
+                header_format = metadata_header
+            elif column_name in {
+                "Change Type", "Previous Status", "Previous Status description"
+            }:
+                header_format = comparison_header
+            else:
+                header_format = standard_header
             worksheet.write(output_row, column_number, column_name, header_format)
         worksheet.set_row(output_row, 32)
         output_row += 1

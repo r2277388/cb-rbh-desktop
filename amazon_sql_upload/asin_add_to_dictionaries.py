@@ -1,8 +1,17 @@
 import ast
 from pathlib import Path
+import sys
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from shared.amazon_metadata import (  # noqa: E402
+    load_asin_isbn_overrides,
+    save_asin_isbn_override,
+)
 
 def add_to_removal_list():
     removal_file = SCRIPT_DIR / "asin_removal_list.py"
@@ -28,23 +37,16 @@ def add_to_removal_list():
     print("The ASIN removal list has been updated!")
 
 def add_to_manual_key():
-    manual_file = SCRIPT_DIR / "asin_manual_key.py"
-    # Load current dictionary
-    with open(manual_file, "r") as f:
-        content = f.read()
-    rhs = content.split('=')[1].strip()
-    current_dict = ast.literal_eval(rhs)
+    current_dict = load_asin_isbn_overrides()
     print("Current ASIN/ISBN manual pairs:", current_dict)
     while True:
         asin = input("Enter an ASIN first (or press Enter to finish): ").strip()
         if not asin:
             break
         isbn = input(f"Now enter the associated ISBN for that ASIN {asin}: ").strip()
-        current_dict[asin] = isbn
-    # Write updated dictionary
-    with open(manual_file, "w") as f:
-        f.write(f"asin_isbn_manual_key = {repr(current_dict)}\n")
-    print("Updated asin_manual_key.py!")
+        save_asin_isbn_override(asin, isbn)
+        current_dict[asin.upper()] = isbn
+    print("Updated shared/amazon_asin_isbn_overrides.json!")
 
 def main():
     print("Would you like to add any ASINs to a list of ASINs that should be removed?")

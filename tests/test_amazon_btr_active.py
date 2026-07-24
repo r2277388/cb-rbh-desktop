@@ -8,6 +8,9 @@ def test_active_asins_are_accepted_active_and_within_sell_through_window():
         [
             {
                 "ASIN": "ACTIVE",
+                "ISBN": "9780000000001",
+                "Title": "Active Title",
+                "Publisher": "Chronicle",
                 "Offer state": "Active",
                 "Status": "Accepted",
                 "Sell-through start date": "2026-07-01",
@@ -15,6 +18,9 @@ def test_active_asins_are_accepted_active_and_within_sell_through_window():
             },
             {
                 "ASIN": "ENDED",
+                "ISBN": "9780000000002",
+                "Title": "Ended Title",
+                "Publisher": "Chronicle",
                 "Offer state": "Active",
                 "Status": "Accepted",
                 "Sell-through start date": "2026-06-01",
@@ -22,6 +28,9 @@ def test_active_asins_are_accepted_active_and_within_sell_through_window():
             },
             {
                 "ASIN": "COMPLETED",
+                "ISBN": "9780000000003",
+                "Title": "Completed Title",
+                "Publisher": "Chronicle",
                 "Offer state": "Completed",
                 "Status": "Accepted",
                 "Sell-through start date": "2026-07-01",
@@ -34,3 +43,5 @@ def test_active_asins_are_accepted_active_and_within_sell_through_window():
 
     assert active["ASIN"].tolist() == ["ACTIVE"]
     assert active["Days Left"].tolist() == [8]
+    assert active.columns[:3].tolist() == ["ISBN", "Title", "Publisher"]
+    assert active.loc[0, "Title"] == "Active Title"

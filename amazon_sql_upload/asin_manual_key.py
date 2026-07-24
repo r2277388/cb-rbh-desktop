@@ -1,6 +1,12 @@
-asin_isbn_manual_key = {
-    "B0FBY49YTQ": "0758524449255",
-    "B091BWTS9H": "616430291200",
-    "B091C49LM9": "616430291194",
-    "B07YXXPWDP": "5055923767108",
-}
+"""Backward-compatible access to the shared Amazon ASIN/ISBN overrides."""
+
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from shared.amazon_metadata import load_asin_isbn_overrides  # noqa: E402
+
+asin_isbn_manual_key = load_asin_isbn_overrides()

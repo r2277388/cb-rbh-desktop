@@ -11,9 +11,22 @@ import pandas as pd
 
 try:
     from amazon_btr.criteria import write_criteria_sheet
+    from amazon_btr.metadata import (
+        AMAZON_CATALOG_FOLDER,
+        METADATA_COLUMNS,
+        add_title_metadata,
+        load_item_metadata,
+        load_latest_catalog,
+    )
+    from amazon_btr.missing_metadata import review_unresolved_asins
     from amazon_btr.workbook import build_active_asins, write_grouped_status_changes
 except ModuleNotFoundError:
     from criteria import write_criteria_sheet
+    from metadata import (
+        AMAZON_CATALOG_FOLDER, METADATA_COLUMNS, add_title_metadata,
+        load_item_metadata, load_latest_catalog,
+    )
+    from missing_metadata import review_unresolved_asins
     from workbook import build_active_asins, write_grouped_status_changes
 
 
@@ -164,10 +177,17 @@ def build_status_changes(
         )
 
     output_columns = [
+        "Status",
+        "Status description",
         "Change Type",
         "Previous Status",
         "Previous Status description",
-        *current_cleaned.columns,
+        *METADATA_COLUMNS,
+        *[
+            column
+            for column in current_cleaned.columns
+            if column not in {"Status", "Status description", *METADATA_COLUMNS}
+        ],
     ]
     return pd.DataFrame(change_rows, columns=output_columns)
 
@@ -185,13 +205,26 @@ def _format_worksheet(writer: pd.ExcelWriter, sheet_name: str, data: pd.DataFram
             "valign": "top",
         }
     )
+    metadata_header_format = workbook.add_format(
+        {
+            "bold": True,
+            "font_color": "white",
+            "bg_color": "#403151",
+            "border": 1,
+            "text_wrap": True,
+            "valign": "top",
+        }
+    )
     date_format = workbook.add_format({"num_format": "yyyy-mm-dd"})
     worksheet.freeze_panes(1, 0)
     worksheet.autofilter(0, 0, max(len(data), 1), max(len(data.columns) - 1, 0))
     worksheet.set_row(0, 32)
 
     for column_number, column_name in enumerate(data.columns):
-        worksheet.write(0, column_number, column_name, header_format)
+        worksheet.write(
+            0, column_number, column_name,
+            metadata_header_format if column_name in METADATA_COLUMNS else header_format,
+        )
         values = data[column_name].dropna().astype(str)
         sampled_width = max(
             [len(str(column_name)), *(len(value) for value in values.head(500))]
@@ -205,10 +238,20 @@ def create_report(
     previous_file: Path,
     current_file: Path,
     output_folder: Path = BTR_ROOT_FOLDER,
+    prompt_for_missing: bool = False,
 ) -> tuple[Path, int, int]:
     previous_file = Path(previous_file)
     current_file = Path(current_file)
     raw_current = read_btr_file(current_file)
+    catalog = load_latest_catalog(AMAZON_CATALOG_FOLDER)
+    item_metadata = load_item_metadata()
+    raw_current = add_title_metadata(raw_current, catalog, item_metadata)
+    saved_count = review_unresolved_asins(
+        raw_current, prompt=prompt_for_missing
+    )
+    if saved_count:
+        raw_current = add_title_metadata(raw_current, catalog, item_metadata)
+        review_unresolved_asins(raw_current, prompt=False)
     previous_cleaned = clean_btr_data(read_btr_file(previous_file))
     current_cleaned = clean_btr_data(raw_current)
     changes = build_status_changes(previous_cleaned, current_cleaned)
@@ -243,7 +286,7 @@ def run_latest_report() -> Path:
     print(f"  Previous: {previous_file}")
     print(f"  Current:  {current_file}")
     output_path, cleaned_count, change_count = create_report(
-        previous_file, current_file
+        previous_file, current_file, prompt_for_missing=True
     )
     print(f"\nCreated: {output_path}")
     print(f"Cleaned ASINs: {cleaned_count:,}")
@@ -286,6 +329,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--current", type=Path, help="Newer BTR export workbook.")
     parser.add_argument("--output-folder", type=Path, default=BTR_ROOT_FOLDER)
     parser.add_argument("--show-instructions", action="store_true")
+    parser.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help="Report unresolved ASINs without prompting for manual ISBN overrides.",
+    )
     return parser.parse_args(argv)
 
 
@@ -297,8 +345,14 @@ def main(argv: list[str] | None = None) -> None:
     if bool(args.previous) != bool(args.current):
         raise SystemExit("--previous and --current must be supplied together.")
     if args.previous and args.current:
+        print("\nBTR report comparison:")
+        print(f"  Previous: {args.previous}")
+        print(f"  Current:  {args.current}")
         output_path, cleaned_count, change_count = create_report(
-            args.previous, args.current, args.output_folder
+            args.previous,
+            args.current,
+            args.output_folder,
+            prompt_for_missing=not args.non_interactive,
         )
         print(f"Created: {output_path}")
         print(f"Cleaned ASINs: {cleaned_count:,}")
