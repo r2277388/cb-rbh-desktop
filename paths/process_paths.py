@@ -116,6 +116,8 @@ CURRENT_AMAZON_PREORDERS_FILE = Path(
     r"G:\SALES\Amazon\PREORDERS\2026\current_amaz_preorders.xlsx"
 )
 AMAZON_PREORDERS_OUTPUT_FOLDER = CURRENT_AMAZON_PREORDERS_FILE.parent
+BTR_ROOT_FOLDER = Path(r"G:\SALES\Amazon\BORN TO RUN")
+BTR_SOURCE_FOLDER = BTR_ROOT_FOLDER / "RBH_BTR_FILES"
 BN_RAW_BASE_FOLDER = Path(
     r"F:\ANALYSIS\Finance\DataWarehouse\Weekly reports\2026\Barnes & Noble"
 )
@@ -229,6 +231,7 @@ BOOKSCAN_ROLLING_DP_FOLDERS = {
 
 # Launcher-owned local files
 AMAZON_CUSTOMER_ORDERS_SCRIPT = repo_path("amazon_customer_orders", "main.py")
+AMAZON_BTR_SCRIPT = repo_path("amazon_btr", "main.py")
 AMAZON_SQL_UPLOAD_SCRIPT = repo_path("amazon_sql_upload", "main.py")
 AMAZON_SQL_UPLOAD_MANUAL_KEY_FILE = repo_path("amazon_sql_upload", "asin_manual_key.py")
 AMAZON_SQL_UPLOAD_REMOVAL_LIST_FILE = repo_path(

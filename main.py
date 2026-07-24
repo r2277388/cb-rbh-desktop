@@ -85,7 +85,7 @@ def display_info(choice):
         "2": "Weekly Reporting: Opens Reprint Indicator Report Updater and Frontlist Supercharged Data.",
         "3": "MonthEnd Reporting: Opens Barnes & Noble Monthly Coop, Monthly Top Customers, and Inventory Obsolescence Manager.",
         "4": "Automated Processes: Opens Title Lookup, Cross Gap, General Editorial, and Export Reports automation workflows.",
-        "5": "Amazon Weekly Reporting: Opens Amazon PO, PreOrders, Customer Orders, rolling reports, and AMS workflows.",
+        "5": "Amazon Weekly Reporting: Opens Amazon PO, PreOrders, Customer Orders, BTR, rolling reports, and AMS workflows.",
         "6": "Retailer Rolling/Flash Reports: Opens retailer rolling and flash-report workflows.",
         "7": "Adhoc Reporting: Opens XGBoost Model and Hachette Orders - Shipping Estimates.",
         "8": "Data Checks: Opens Check Table Updates and Power BI Reports.",
@@ -108,6 +108,7 @@ def display_info(choice):
         "108": "Amazon Rolling Reports Monthly Process step 2: Run Monthly Rolling Report. Builds the standalone monthly Amazon rolling report workbooks.",
         "209": "Readerlink Rolling Reports: Opens Readerlink cache update, cache totals, and report creation actions.",
         "109": "Amazon AMS Monthly Campaign Summary: Builds the monthly campaign summary workbook from a selected AMS CSV.",
+        "110": "Amazon Born to Run (BTR): Creates a cleaned weekly review and identifies new ASINs and status changes between the latest two Vendor Central downloads.",
         "94": "Check Table Updates: Runs SQL checks for table freshness and recent weeks for SSR/Amazon/Bookscan tables.",
         "95": "Install Main Venv Requirements: Runs `pip install -r requirements.txt` using the repo's main virtual environment.",
         "96": "Open Main Venv Shell: Opens a PowerShell window with the repo's main virtual environment activated.",
@@ -1950,6 +1951,9 @@ def run_amazon_menu():
         print("AMS Manager")
         print("    05. AMS Manager (monthly)")
         print()
+        print("Born to Run")
+        print("    06. BTR Weekly Review")
+        print()
         print("    99. Back to main menu")
         print()
         try:
@@ -1970,6 +1974,7 @@ def run_amazon_menu():
             "3": ("Amazon (3) PreOrders", "amazon_preorders/main.py"),
             "4": ("Amazon (4) Customer Orders", "amazon_customer_orders/main.py"),
             "5": ("Amazon AMS Manager (monthly)", "amazon_ams/manage_ams.py"),
+            "6": ("Amazon Born to Run (BTR) Weekly Review", "amazon_btr/main.py"),
         }
 
         if subchoice in amazon_reports:
